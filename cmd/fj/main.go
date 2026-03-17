@@ -2,10 +2,24 @@ package main
 
 import (
 	"fmt"
+	"os"
 
-	_ "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
+	"github.com/riadafridishibly/fj/internal/cmdutil"
+	"github.com/riadafridishibly/fj/pkg/cmd/root"
 )
 
 func main() {
-	fmt.Println("Hello, fj cli")
+	f := cmdutil.NewFactory()
+	rootCmd := root.NewCmdRoot(f)
+
+	if err := rootCmd.Execute(); err != nil {
+		if cmdutil.IsFlagError(err) {
+			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+			os.Exit(2)
+		}
+		if err != cmdutil.SilentError {
+			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+		}
+		os.Exit(1)
+	}
 }
