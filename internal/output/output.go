@@ -14,7 +14,7 @@ func NewTabWriter(w io.Writer) *tabwriter.Writer {
 	return tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 }
 
-func PrintJSON(w io.Writer, v interface{}) error {
+func PrintJSON(w io.Writer, v any) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(v)
@@ -66,7 +66,7 @@ func Truncate(s string, maxLen int) string {
 	return s[:maxLen-3] + "..."
 }
 
-func LabelNames(labels interface{}) string {
+func LabelNames(labels any) string {
 	switch v := labels.(type) {
 	case []string:
 		return strings.Join(v, ", ")
@@ -75,7 +75,7 @@ func LabelNames(labels interface{}) string {
 	}
 }
 
-func PrintHeader(w io.Writer, format string, args ...interface{}) {
+func PrintHeader(w io.Writer, format string, args ...any) {
 	fmt.Fprintf(w, format+"\n", args...)
 }
 

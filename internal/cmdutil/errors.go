@@ -9,7 +9,7 @@ import (
 var SilentError = errors.New("SilentError")
 
 // FlagErrorf creates a flag-related error. Cobra will show usage when this is returned.
-func FlagErrorf(format string, args ...interface{}) error {
+func FlagErrorf(format string, args ...any) error {
 	return &FlagError{err: fmt.Errorf(format, args...)}
 }
 
@@ -35,7 +35,7 @@ type AuthError struct {
 	err error
 }
 
-func NewAuthError(format string, args ...interface{}) *AuthError {
+func NewAuthError(format string, args ...any) *AuthError {
 	return &AuthError{err: fmt.Errorf(format, args...)}
 }
 

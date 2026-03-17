@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
@@ -66,10 +67,7 @@ func listRun(opts *listOptions) error {
 		return err
 	}
 
-	pageSize := opts.Limit
-	if pageSize > 50 {
-		pageSize = 50
-	}
+	pageSize := min(opts.Limit, 50)
 
 	listOpt := forgejo.ListIssueOption{
 		ListOptions: forgejo.ListOptions{Page: 1, PageSize: pageSize},
@@ -122,17 +120,17 @@ func listRun(opts *listOptions) error {
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	for _, issue := range allIssues {
-		labels := ""
+		var labels strings.Builder
 		for i, l := range issue.Labels {
 			if i > 0 {
-				labels += ", "
+				labels.WriteString(", ")
 			}
-			labels += l.Name
+			labels.WriteString(l.Name)
 		}
 		fmt.Fprintf(w, "#%d\t%s\t%s\t%s\n",
 			issue.Index,
 			output.Truncate(issue.Title, 60),
-			labels,
+			labels.String(),
 			output.RelativeTimeStr(issue.Created),
 		)
 	}

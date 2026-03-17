@@ -46,7 +46,7 @@ func Remotes() ([]Remote, error) {
 	}
 
 	remoteMap := make(map[string]*Remote)
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		parts := strings.Fields(line)
 		if len(parts) < 3 {
 			continue
@@ -74,8 +74,8 @@ func Remotes() ([]Remote, error) {
 
 func ParseRemoteURL(rawURL string) (*RepoInfo, error) {
 	// Handle SSH URLs: git@host:owner/repo.git
-	if strings.HasPrefix(rawURL, "git@") {
-		rawURL = strings.TrimPrefix(rawURL, "git@")
+	if after, ok := strings.CutPrefix(rawURL, "git@"); ok {
+		rawURL = after
 		parts := strings.SplitN(rawURL, ":", 2)
 		if len(parts) != 2 {
 			return nil, fmt.Errorf("cannot parse SSH URL: %s", rawURL)

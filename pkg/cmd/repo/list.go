@@ -68,10 +68,7 @@ func listRun(opts *listOptions) error {
 		return err
 	}
 
-	pageSize := opts.Limit
-	if pageSize > 50 {
-		pageSize = 50
-	}
+	pageSize := min(opts.Limit, 50)
 
 	var allRepos []*forgejo.Repository
 	page := 1
