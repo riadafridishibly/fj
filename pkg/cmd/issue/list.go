@@ -71,6 +71,7 @@ func listRun(opts *listOptions) error {
 	listOpt := forgejo.ListIssueOption{
 		ListOptions: forgejo.ListOptions{Page: 1, PageSize: pageSize},
 		State:       forgejo.StateType(opts.State),
+		Type:        forgejo.IssueTypeIssue,
 		Labels:      opts.Labels,
 		KeyWord:     opts.Search,
 		CreatedBy:   opts.Author,
@@ -95,12 +96,7 @@ func listRun(opts *listOptions) error {
 		if len(issues) == 0 {
 			break
 		}
-		// Filter out pull requests (Forgejo API includes PRs in issue listing)
-		for _, issue := range issues {
-			if issue.PullRequest == nil {
-				allIssues = append(allIssues, issue)
-			}
-		}
+		allIssues = append(allIssues, issues...)
 		if len(issues) < pageSize {
 			break
 		}
