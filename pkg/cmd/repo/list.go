@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"text/tabwriter"
+	"strings"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 	"github.com/spf13/cobra"
@@ -58,7 +58,7 @@ func listRun(opts *listOptions) error {
 		return err
 	}
 
-	_, hostname, err := cfg.DefaultHost()
+	host, hostname, err := cfg.DefaultHost()
 	if err != nil {
 		return err
 	}
@@ -71,22 +71,27 @@ func listRun(opts *listOptions) error {
 	pageSize := min(opts.Limit, 50)
 
 	var allRepos []*forgejo.Repository
+	var totalCount int
 	page := 1
 	for len(allRepos) < opts.Limit {
 		var repos []*forgejo.Repository
+		var resp *forgejo.Response
 		var err error
 
 		if opts.Owner != "" {
-			repos, _, err = client.ListUserRepos(opts.Owner, forgejo.ListReposOptions{
+			repos, resp, err = client.ListUserRepos(opts.Owner, forgejo.ListReposOptions{
 				ListOptions: forgejo.ListOptions{Page: page, PageSize: pageSize},
 			})
 		} else {
-			repos, _, err = client.ListMyRepos(forgejo.ListReposOptions{
+			repos, resp, err = client.ListMyRepos(forgejo.ListReposOptions{
 				ListOptions: forgejo.ListOptions{Page: page, PageSize: pageSize},
 			})
 		}
 		if err != nil {
 			return fmt.Errorf("listing repositories: %w", err)
+		}
+		if page == 1 {
+			totalCount = cmdutil.TotalCount(resp)
 		}
 		if len(repos) == 0 {
 			break
@@ -124,14 +129,42 @@ func listRun(opts *listOptions) error {
 		return nil
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	for _, r := range allRepos {
-		visibility := "public"
-		if r.Private {
-			visibility = "private"
-		}
-		desc := output.Truncate(r.Description, 50)
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", r.FullName, desc, visibility, output.RelativeTimeStr(r.Updated))
+	// Status line
+	owner := opts.Owner
+	if owner == "" {
+		owner = host.User
 	}
-	return w.Flush()
+	if totalCount > 0 {
+		fmt.Fprintf(os.Stdout, "\nShowing %d of %d repositories in @%s\n\n",
+			len(allRepos), totalCount, owner)
+	} else {
+		fmt.Fprintf(os.Stdout, "\nShowing %d repositories in @%s\n\n",
+			len(allRepos), owner)
+	}
+
+	// Table with headers
+	t := output.NewTable("NAME", "DESCRIPTION", "INFO", "UPDATED")
+	for _, r := range allRepos {
+		var info []string
+		if r.Private {
+			info = append(info, output.Colorize(output.Yellow, "private"))
+		} else {
+			info = append(info, output.Colorize(output.Green, "public"))
+		}
+		if r.Fork {
+			info = append(info, output.Colorize(output.Cyan, "fork"))
+		}
+		if r.Archived {
+			info = append(info, output.Colorize(output.Red, "archived"))
+		}
+
+		t.AddRow(
+			output.Colorize(output.Bold, r.FullName),
+			output.Truncate(r.Description, 60),
+			strings.Join(info, ", "),
+			output.Colorize(output.Gray, output.RelativeTimeStr(r.Updated)),
+		)
+	}
+	t.Render(os.Stdout)
+	return nil
 }

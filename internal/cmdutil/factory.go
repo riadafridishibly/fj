@@ -2,6 +2,7 @@ package cmdutil
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
@@ -126,4 +127,18 @@ func ResolveMilestoneID(client *forgejo.Client, owner, repo, name string) (int64
 		return 0, fmt.Errorf("milestone not found: %s", name)
 	}
 	return ms.ID, nil
+}
+
+// TotalCount extracts the X-Total-Count header from a Forgejo API response.
+// Returns 0 if the header is not present.
+func TotalCount(resp *forgejo.Response) int {
+	if resp == nil || resp.Response == nil {
+		return 0
+	}
+	s := resp.Header.Get("X-Total-Count")
+	if s == "" {
+		return 0
+	}
+	n, _ := strconv.Atoi(s)
+	return n
 }

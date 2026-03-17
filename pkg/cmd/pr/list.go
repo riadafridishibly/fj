@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"text/tabwriter"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 	"github.com/spf13/cobra"
@@ -74,12 +73,16 @@ func listRun(opts *listOptions) error {
 	}
 
 	var allPRs []*forgejo.PullRequest
+	var totalCount int
 	page := 1
 	for len(allPRs) < opts.Limit {
 		listOpt.Page = page
-		prs, _, err := client.ListRepoPullRequests(repo.Owner, repo.Name, listOpt)
+		prs, resp, err := client.ListRepoPullRequests(repo.Owner, repo.Name, listOpt)
 		if err != nil {
 			return fmt.Errorf("listing pull requests: %w", err)
+		}
+		if page == 1 {
+			totalCount = cmdutil.TotalCount(resp)
 		}
 		if len(prs) == 0 {
 			break
@@ -105,23 +108,46 @@ func listRun(opts *listOptions) error {
 		return nil
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	// Status line
+	if totalCount > 0 {
+		fmt.Fprintf(os.Stdout, "\nShowing %d of %d %s pull requests in %s\n\n",
+			len(allPRs), totalCount, opts.State, repo.FullName())
+	} else {
+		fmt.Fprintf(os.Stdout, "\nShowing %d %s pull requests in %s\n\n",
+			len(allPRs), opts.State, repo.FullName())
+	}
+
+	// Table with headers
+	t := output.NewTable("NUMBER", "TITLE", "BRANCH", "STATUS", "UPDATED")
 	for _, pr := range allPRs {
 		status := string(pr.State)
+		statusColor := output.Green
 		if pr.HasMerged {
 			status = "merged"
+			statusColor = output.Magenta
+		} else if pr.State == forgejo.StateClosed {
+			statusColor = output.Red
 		}
+
 		head := ""
 		if pr.Head != nil {
 			head = pr.Head.Ref
 		}
-		fmt.Fprintf(w, "#%d\t%s\t%s\t%s\t%s\n",
-			pr.Index,
+
+		number := fmt.Sprintf("#%d", pr.Index)
+		var updated string
+		if pr.Updated != nil {
+			updated = output.RelativeTimeStr(*pr.Updated)
+		}
+
+		t.AddRow(
+			output.Colorize(statusColor, number),
 			output.Truncate(pr.Title, 50),
-			head,
-			status,
-			output.RelativeTimeStr(*pr.Created),
+			output.Colorize(output.Cyan, head),
+			output.Colorize(statusColor, status),
+			output.Colorize(output.Gray, updated),
 		)
 	}
-	return w.Flush()
+	t.Render(os.Stdout)
+	return nil
 }

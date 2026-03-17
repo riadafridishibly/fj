@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"text/tabwriter"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 	"github.com/spf13/cobra"
@@ -82,12 +81,16 @@ func listRun(opts *listOptions) error {
 	}
 
 	var allIssues []*forgejo.Issue
+	var totalCount int
 	page := 1
 	for len(allIssues) < opts.Limit {
 		listOpt.Page = page
-		issues, _, err := client.ListRepoIssues(repo.Owner, repo.Name, listOpt)
+		issues, resp, err := client.ListRepoIssues(repo.Owner, repo.Name, listOpt)
 		if err != nil {
 			return fmt.Errorf("listing issues: %w", err)
+		}
+		if page == 1 {
+			totalCount = cmdutil.TotalCount(resp)
 		}
 		if len(issues) == 0 {
 			break
@@ -118,7 +121,17 @@ func listRun(opts *listOptions) error {
 		return nil
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	// Status line
+	if totalCount > 0 {
+		fmt.Fprintf(os.Stdout, "\nShowing %d of %d %s issues in %s\n\n",
+			len(allIssues), totalCount, opts.State, repo.FullName())
+	} else {
+		fmt.Fprintf(os.Stdout, "\nShowing %d %s issues in %s\n\n",
+			len(allIssues), opts.State, repo.FullName())
+	}
+
+	// Table with headers
+	t := output.NewTable("NUMBER", "TITLE", "LABELS", "UPDATED")
 	for _, issue := range allIssues {
 		var labels strings.Builder
 		for i, l := range issue.Labels {
@@ -127,12 +140,20 @@ func listRun(opts *listOptions) error {
 			}
 			labels.WriteString(l.Name)
 		}
-		fmt.Fprintf(w, "#%d\t%s\t%s\t%s\n",
-			issue.Index,
+
+		number := fmt.Sprintf("#%d", issue.Index)
+		stateColor := output.Green
+		if issue.State == forgejo.StateClosed {
+			stateColor = output.Red
+		}
+
+		t.AddRow(
+			output.Colorize(stateColor, number),
 			output.Truncate(issue.Title, 60),
-			labels.String(),
-			output.RelativeTimeStr(issue.Created),
+			output.Colorize(output.Cyan, labels.String()),
+			output.Colorize(output.Gray, output.RelativeTimeStr(issue.Updated)),
 		)
 	}
-	return w.Flush()
+	t.Render(os.Stdout)
+	return nil
 }
