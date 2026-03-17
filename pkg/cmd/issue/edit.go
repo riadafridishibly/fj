@@ -13,17 +13,17 @@ import (
 )
 
 type editOptions struct {
-	Factory        *cmdutil.Factory
-	Number         string
-	Title          string
-	Body           string
-	BodyFile       string
-	AddLabels      []string
-	RemoveLabels   []string
-	AddAssignees   []string
+	Factory         *cmdutil.Factory
+	Number          string
+	Title           string
+	Body            string
+	BodyFile        string
+	AddLabels       []string
+	RemoveLabels    []string
+	AddAssignees    []string
 	RemoveAssignees []string
-	Milestone      string
-	JSONOutput     bool
+	Milestone       string
+	JSONOutput      bool
 }
 
 func NewCmdEdit(f *cmdutil.Factory) *cobra.Command {

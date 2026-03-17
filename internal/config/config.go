@@ -100,7 +100,7 @@ func Load() (*Config, error) {
 
 func (c *Config) Save() error {
 	dir := ConfigDir()
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 	data, err := yaml.Marshal(c)
@@ -108,7 +108,7 @@ func (c *Config) Save() error {
 		return err
 	}
 	header := fmt.Sprintf("# fj configuration file\n# yaml-language-server: $schema=%s\n", SchemaPath())
-	if err := os.WriteFile(ConfigPath(), append([]byte(header), data...), 0600); err != nil {
+	if err := os.WriteFile(ConfigPath(), append([]byte(header), data...), 0o600); err != nil {
 		return err
 	}
 	// Also write the JSON schema for editor support
@@ -146,8 +146,8 @@ func (c *Config) TokenForHost(hostname string) (string, error) {
 
 func WriteSchema() error {
 	dir := ConfigDir()
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(SchemaPath(), []byte(SchemaJSON), 0644)
+	return os.WriteFile(SchemaPath(), []byte(SchemaJSON), 0o644)
 }

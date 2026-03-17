@@ -8,9 +8,9 @@ import (
 
 func NewCmdIssue(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "issue <command>",
-		Short: "Manage issues",
-		Long:  "Work with Forgejo issues.",
+		Use:     "issue <command>",
+		Short:   "Manage issues",
+		Long:    "Work with Forgejo issues.",
 		Aliases: []string{"i"},
 	}
 
