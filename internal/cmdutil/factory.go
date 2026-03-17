@@ -2,6 +2,7 @@ package cmdutil
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -87,7 +88,11 @@ func (f *Factory) Client(hostname string) (*forgejo.Client, error) {
 	}
 	_ = protocol // used for git clone URL construction, not API
 
-	baseURL := fmt.Sprintf("https://%s", hostname)
+	scheme := "https"
+	if os.Getenv("FJ_INSECURE") != "" {
+		scheme = "http"
+	}
+	baseURL := fmt.Sprintf("%s://%s", scheme, hostname)
 	return forgejo.NewClient(baseURL, forgejo.SetToken(token))
 }
 
