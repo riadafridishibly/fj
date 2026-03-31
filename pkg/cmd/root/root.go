@@ -1,16 +1,22 @@
 package root
 
 import (
+	"runtime/debug"
+
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
 	authCmd "github.com/riadafridishibly/fj/pkg/cmd/auth"
 	issueCmd "github.com/riadafridishibly/fj/pkg/cmd/issue"
+	labelCmd "github.com/riadafridishibly/fj/pkg/cmd/label"
 	prCmd "github.com/riadafridishibly/fj/pkg/cmd/pr"
 	repoCmd "github.com/riadafridishibly/fj/pkg/cmd/repo"
 )
 
-var Version = "dev"
+var (
+	Version = "dev"
+	Commit  = ""
+)
 
 func NewCmdRoot(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
@@ -34,6 +40,7 @@ func NewCmdRoot(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(authCmd.NewCmdAuth(f))
 	cmd.AddCommand(repoCmd.NewCmdRepo(f))
 	cmd.AddCommand(issueCmd.NewCmdIssue(f))
+	cmd.AddCommand(labelCmd.NewCmdLabel(f))
 	cmd.AddCommand(prCmd.NewCmdPR(f))
 
 	// Version command
@@ -41,9 +48,44 @@ func NewCmdRoot(f *cmdutil.Factory) *cobra.Command {
 		Use:   "version",
 		Short: "Print the version number",
 		Run: func(cmd *cobra.Command, args []string) {
-			cmd.Printf("fj version %s\n", Version)
+			v, c := versionInfo()
+			if c != "" {
+				cmd.Printf("fj version %s (%s)\n", v, c)
+			} else {
+				cmd.Printf("fj version %s\n", v)
+			}
 		},
 	})
 
 	return cmd
+}
+
+func versionInfo() (version, commit string) {
+	version = Version
+	commit = Commit
+
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return version, commit
+	}
+
+	// If version wasn't set via ldflags, use the module version
+	if version == "dev" && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		version = info.Main.Version
+	}
+
+	// If commit wasn't set via ldflags, try vcs.revision from build info
+	if commit == "" {
+		for _, s := range info.Settings {
+			if s.Key == "vcs.revision" {
+				commit = s.Value
+				if len(commit) > 12 {
+					commit = commit[:12]
+				}
+				break
+			}
+		}
+	}
+
+	return version, commit
 }

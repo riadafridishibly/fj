@@ -2,6 +2,7 @@ package cmdutil
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"strconv"
 	"strings"
@@ -101,7 +102,8 @@ func (f *Factory) ClientForRepo(repo Repo) (*forgejo.Client, error) {
 	return f.Client(repo.Host)
 }
 
-// ResolveLabelIDs converts label names to IDs for a repository
+// ResolveLabelIDs converts label names to IDs for a repository.
+// If a label does not exist, it is automatically created.
 func ResolveLabelIDs(client *forgejo.Client, owner, repo string, names []string) ([]int64, error) {
 	if len(names) == 0 {
 		return nil, nil
@@ -118,11 +120,29 @@ func ResolveLabelIDs(client *forgejo.Client, owner, repo string, names []string)
 	for _, name := range names {
 		id, ok := nameToID[strings.ToLower(name)]
 		if !ok {
-			return nil, fmt.Errorf("label not found: %s", name)
+			label, _, err := client.CreateLabel(owner, repo, forgejo.CreateLabelOption{
+				Name:  name,
+				Color: RandomLabelColor(),
+			})
+			if err != nil {
+				return nil, fmt.Errorf("creating label %q: %w", name, err)
+			}
+			id = label.ID
 		}
 		ids = append(ids, id)
 	}
 	return ids, nil
+}
+
+// RandomLabelColor returns a random hex color suitable for labels.
+func RandomLabelColor() string {
+	colors := []string{
+		"#0075ca", "#008672", "#a2eeef", "#d876e3",
+		"#e4e669", "#ee0701", "#fbca04", "#0e8a16",
+		"#c5def5", "#bfdadc", "#f9d0c4", "#d4c5f9",
+		"#bfd4f2", "#c2e0c6",
+	}
+	return colors[rand.IntN(len(colors))]
 }
 
 // ResolveMilestoneID converts a milestone name to its ID
