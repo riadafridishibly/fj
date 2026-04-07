@@ -125,12 +125,23 @@ need_cmd rm
 
 OS="$(resolve_os)"
 ARCH="$(resolve_arch)"
+
+printf 'Detected OS: %s, Arch: %s\n' "$OS" "$ARCH"
+
+# Check for existing installation
+if [ -x "${INSTALL_DIR}/${BIN_NAME}" ]; then
+  CURRENT_VERSION="$("${INSTALL_DIR}/${BIN_NAME}" version 2>/dev/null || printf 'unknown')"
+  printf 'Current version: %s\n' "$CURRENT_VERSION"
+fi
+
 TAG="$(resolve_version)"
 
 if [ -z "$TAG" ]; then
   printf 'error: unable to resolve a release tag from GitHub Releases\n' >&2
   exit 1
 fi
+
+printf 'Installing %s %s to %s\n' "$BIN_NAME" "$TAG" "$INSTALL_DIR"
 
 VERSION_NO_V="${TAG#v}"
 ARCHIVE="${BIN_NAME}_${VERSION_NO_V}_${OS}_${ARCH}.tar.gz"
@@ -140,8 +151,11 @@ BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT INT TERM
 
+printf 'Downloading %s...\n' "$ARCHIVE"
 fetch "${BASE_URL}/${ARCHIVE}" "${TMP_DIR}/${ARCHIVE}"
 fetch "${BASE_URL}/${CHECKSUMS}" "${TMP_DIR}/${CHECKSUMS}"
+
+printf 'Verifying checksum...\n'
 verify_checksum "${TMP_DIR}/${ARCHIVE}" "${TMP_DIR}/${CHECKSUMS}"
 
 mkdir -p "$INSTALL_DIR"
@@ -149,7 +163,7 @@ tar -xzf "${TMP_DIR}/${ARCHIVE}" -C "$TMP_DIR" "$BIN_NAME"
 chmod +x "${TMP_DIR}/${BIN_NAME}"
 mv "${TMP_DIR}/${BIN_NAME}" "${INSTALL_DIR}/${BIN_NAME}"
 
-printf 'installed %s %s to %s/%s\n' "$BIN_NAME" "$TAG" "$INSTALL_DIR" "$BIN_NAME"
+printf 'Successfully installed %s %s to %s/%s\n' "$BIN_NAME" "$TAG" "$INSTALL_DIR" "$BIN_NAME"
 case ":$PATH:" in
   *":${INSTALL_DIR}:"*) ;;
   *)

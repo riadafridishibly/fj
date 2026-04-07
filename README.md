@@ -11,25 +11,25 @@ go install github.com/riadafridishibly/fj/cmd/fj@latest
 Or install a release binary from GitHub Releases:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/riadafridishibly/fj/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/riadafridishibly/fj/dev/scripts/install.sh | sh
 ```
 
 Install to a specific directory (default: `~/.local/bin`):
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/riadafridishibly/fj/main/scripts/install.sh | FJ_INSTALL_DIR=/usr/local/bin sh
+curl -fsSL https://raw.githubusercontent.com/riadafridishibly/fj/dev/scripts/install.sh | FJ_INSTALL_DIR=/usr/local/bin sh
 ```
 
 Install a specific version:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/riadafridishibly/fj/main/scripts/install.sh | FJ_VERSION=v0.1.0 sh
+curl -fsSL https://raw.githubusercontent.com/riadafridishibly/fj/dev/scripts/install.sh | FJ_VERSION=v0.1.0 sh
 ```
 
 Both options can be combined:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/riadafridishibly/fj/main/scripts/install.sh | FJ_INSTALL_DIR=$HOME/bin FJ_VERSION=v0.1.0 sh
+curl -fsSL https://raw.githubusercontent.com/riadafridishibly/fj/dev/scripts/install.sh | FJ_INSTALL_DIR=$HOME/bin FJ_VERSION=v0.1.0 sh
 ```
 
 > **Note:** The install script supports macOS and Linux. For Windows and FreeBSD, download the appropriate binary from [GitHub Releases](https://github.com/riadafridishibly/fj/releases).
