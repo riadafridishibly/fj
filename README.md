@@ -14,12 +14,25 @@ Or install a release binary from GitHub Releases:
 curl -fsSL https://raw.githubusercontent.com/riadafridishibly/fj/main/scripts/install.sh | sh
 ```
 
-Install a specific release or choose a custom directory:
+Install to a specific directory (default: `~/.local/bin`):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/riadafridishibly/fj/main/scripts/install.sh | FJ_INSTALL_DIR=/usr/local/bin sh
+```
+
+Install a specific version:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/riadafridishibly/fj/main/scripts/install.sh | FJ_VERSION=v0.1.0 sh
-curl -fsSL https://raw.githubusercontent.com/riadafridishibly/fj/main/scripts/install.sh | FJ_INSTALL_DIR=/usr/local/bin sh
 ```
+
+Both options can be combined:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/riadafridishibly/fj/main/scripts/install.sh | FJ_INSTALL_DIR=$HOME/bin FJ_VERSION=v0.1.0 sh
+```
+
+> **Note:** The install script supports macOS and Linux. For Windows and FreeBSD, download the appropriate binary from [GitHub Releases](https://github.com/riadafridishibly/fj/releases).
 
 Or build from source:
 
@@ -132,7 +145,7 @@ go test -tags integration -v -timeout 120s ./integration/
 
 ## Releases
 
-Releases should be tag-driven. Push a semantic version tag such as `v0.1.0` and GitHub Actions will build macOS and Linux archives, publish a GitHub Release, and attach SHA-256 checksums.
+Releases should be tag-driven. Push a semantic version tag such as `v0.1.0` and GitHub Actions will build archives for macOS, Linux, Windows, and FreeBSD (amd64 + arm64), publish a GitHub Release, and attach SHA-256 checksums.
 
 ```sh
 git tag -a v0.1.0 -m "v0.1.0"
