@@ -11,6 +11,7 @@ import (
 	labelCmd "github.com/riadafridishibly/fj/pkg/cmd/label"
 	prCmd "github.com/riadafridishibly/fj/pkg/cmd/pr"
 	repoCmd "github.com/riadafridishibly/fj/pkg/cmd/repo"
+	statusCmd "github.com/riadafridishibly/fj/pkg/cmd/status"
 )
 
 var (
@@ -42,6 +43,7 @@ func NewCmdRoot(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(issueCmd.NewCmdIssue(f))
 	cmd.AddCommand(labelCmd.NewCmdLabel(f))
 	cmd.AddCommand(prCmd.NewCmdPR(f))
+	cmd.AddCommand(statusCmd.NewCmdStatus(f))
 
 	// Version command
 	cmd.AddCommand(&cobra.Command{
