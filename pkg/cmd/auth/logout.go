@@ -21,7 +21,7 @@ func NewCmdLogout(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "logout",
 		Short: "Log out of a Forgejo host",
-		Example: `  $ fj auth logout --hostname code.evatix.com
+		Example: `  $ fj auth logout --hostname forgejo.example.com
   $ fj auth logout`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return logoutRun(opts)

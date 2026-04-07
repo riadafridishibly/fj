@@ -24,7 +24,7 @@ func NewCmdStatus(f *cmdutil.Factory) *cobra.Command {
 		Use:   "status",
 		Short: "View authentication status",
 		Example: `  $ fj auth status
-  $ fj auth status --hostname code.evatix.com
+  $ fj auth status --hostname forgejo.example.com
   $ fj auth status --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return statusRun(opts)

@@ -33,16 +33,16 @@ func NewCmdLogin(f *cmdutil.Factory) *cobra.Command {
 The token can be provided via --token flag, piped via stdin with --with-token,
 or set via the FJ_TOKEN environment variable.`,
 		Example: `  # Interactive login
-  $ fj auth login --hostname code.evatix.com
+  $ fj auth login --hostname forgejo.example.com
 
   # Login with token directly
-  $ fj auth login --hostname code.evatix.com --token <token>
+  $ fj auth login --hostname forgejo.example.com --token <token>
 
   # Login with token from stdin
-  $ echo <token> | fj auth login --hostname code.evatix.com --with-token
+  $ echo <token> | fj auth login --hostname forgejo.example.com --with-token
 
   # Login with all options
-  $ fj auth login --hostname code.evatix.com --token <token> --git-protocol ssh`,
+  $ fj auth login --hostname forgejo.example.com --token <token> --git-protocol ssh`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return loginRun(opts)
 		},
@@ -64,7 +64,7 @@ func loginRun(opts *loginOptions) error {
 
 	hostname := opts.Hostname
 	if hostname == "" {
-		hostname, err = promptString("Hostname (e.g. code.evatix.com): ")
+		hostname, err = promptString("Hostname (e.g. forgejo.example.com): ")
 		if err != nil {
 			return err
 		}

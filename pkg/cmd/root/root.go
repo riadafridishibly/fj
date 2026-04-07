@@ -28,7 +28,7 @@ func NewCmdRoot(f *cmdutil.Factory) *cobra.Command {
 		Example: `  $ fj issue list
   $ fj pr create --title "Fix bug" --body "Description"
   $ fj repo view
-  $ fj auth login --hostname code.evatix.com`,
+  $ fj auth login --hostname forgejo.example.com`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 	}
