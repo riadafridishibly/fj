@@ -1,0 +1,43 @@
+version: 2
+
+project_name: fj
+
+before:
+  hooks:
+    - go test ./...
+
+builds:
+  - id: fj
+    main: ./cmd/fj
+    binary: fj
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X github.com/riadafridishibly/fj/pkg/cmd/root.Version={{ .Version }} -X github.com/riadafridishibly/fj/pkg/cmd/root.Commit={{ .ShortCommit }}
+
+archives:
+  - id: default
+    ids:
+      - fj
+    formats:
+      - tar.gz
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+checksum:
+  name_template: fj_{{ .Version }}_checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^ci:'

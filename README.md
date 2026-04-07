@@ -8,6 +8,19 @@ A command-line tool for working with [Forgejo](https://forgejo.org) — like `gh
 go install github.com/riadafridishibly/fj/cmd/fj@latest
 ```
 
+Or install a release binary from GitHub Releases:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/riadafridishibly/fj/main/scripts/install.sh | sh
+```
+
+Install a specific release or choose a custom directory:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/riadafridishibly/fj/main/scripts/install.sh | FJ_VERSION=v0.1.0 sh
+curl -fsSL https://raw.githubusercontent.com/riadafridishibly/fj/main/scripts/install.sh | FJ_INSTALL_DIR=/usr/local/bin sh
+```
+
 Or build from source:
 
 ```sh
@@ -115,4 +128,13 @@ The project includes integration tests that spin up a real Forgejo instance usin
 
 ```sh
 go test -tags integration -v -timeout 120s ./integration/
+```
+
+## Releases
+
+Releases should be tag-driven. Push a semantic version tag such as `v0.1.0` and GitHub Actions will build macOS and Linux archives, publish a GitHub Release, and attach SHA-256 checksums.
+
+```sh
+git tag -a v0.1.0 -m "v0.1.0"
+git push origin v0.1.0
 ```
