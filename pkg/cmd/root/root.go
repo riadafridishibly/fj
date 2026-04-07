@@ -1,6 +1,7 @@
 package root
 
 import (
+	"fmt"
 	"runtime/debug"
 
 	"github.com/spf13/cobra"
@@ -52,9 +53,9 @@ func NewCmdRoot(f *cmdutil.Factory) *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			v, c := versionInfo()
 			if c != "" {
-				cmd.Printf("fj version %s (%s)\n", v, c)
+				fmt.Fprintf(cmd.OutOrStdout(), "fj version %s (%s)\n", v, c)
 			} else {
-				cmd.Printf("fj version %s\n", v)
+				fmt.Fprintf(cmd.OutOrStdout(), "fj version %s\n", v)
 			}
 		},
 	})
