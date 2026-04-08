@@ -68,6 +68,7 @@ type prStatus struct {
 	Title        string `json:"title"`
 	State        string `json:"state"`
 	Mergeable    bool   `json:"mergeable"`
+	Draft        bool   `json:"draft"`
 	Additions    int    `json:"additions"`
 	Deletions    int    `json:"deletions"`
 	ChangedFiles int    `json:"changed_files"`
@@ -192,12 +193,13 @@ func statusRun(opts *statusOptions) error {
 			ps.LocalSHA = localSHA
 			ps.Synced = localSHA != "" && ps.HeadSHA != "" && localSHA == ps.HeadSHA
 
-			// Get additions/deletions via raw API (SDK doesn't expose these fields)
-			additions, deletions, changedFiles, err := fetchPRDiffStats(opts.Factory, repo, branchPR.Index)
+			// Get additions/deletions/draft via raw API (SDK doesn't expose these fields)
+			additions, deletions, changedFiles, draft, err := fetchPRDetails(opts.Factory, repo, branchPR.Index)
 			if err == nil {
 				ps.Additions = additions
 				ps.Deletions = deletions
 				ps.ChangedFiles = changedFiles
+				ps.Draft = draft
 			}
 
 			bs.PR = ps
@@ -265,17 +267,17 @@ func findBranchPR(client *forgejo.Client, repo cmdutil.Repo, branch string) (*fo
 	return nil, nil
 }
 
-// fetchPRDiffStats gets additions/deletions/changed_files via raw API call
+// fetchPRDetails gets additions/deletions/changed_files/draft via raw API call
 // since the Forgejo SDK's PullRequest struct doesn't expose these fields.
-func fetchPRDiffStats(f *cmdutil.Factory, repo cmdutil.Repo, prIndex int64) (additions, deletions, changedFiles int, err error) {
+func fetchPRDetails(f *cmdutil.Factory, repo cmdutil.Repo, prIndex int64) (additions, deletions, changedFiles int, draft bool, err error) {
 	cfg, err := f.Config()
 	if err != nil {
-		return 0, 0, 0, err
+		return 0, 0, 0, false, err
 	}
 
 	token, err := cfg.TokenForHost(repo.Host)
 	if err != nil {
-		return 0, 0, 0, err
+		return 0, 0, 0, false, err
 	}
 
 	scheme := "https"
@@ -288,26 +290,27 @@ func fetchPRDiffStats(f *cmdutil.Factory, repo cmdutil.Repo, prIndex int64) (add
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return 0, 0, 0, err
+		return 0, 0, 0, false, err
 	}
 	req.Header.Set("Authorization", "token "+token)
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return 0, 0, 0, err
+		return 0, 0, 0, false, err
 	}
 	defer resp.Body.Close()
 
 	var result struct {
-		Additions    int `json:"additions"`
-		Deletions    int `json:"deletions"`
-		ChangedFiles int `json:"changed_files"`
+		Additions    int  `json:"additions"`
+		Deletions    int  `json:"deletions"`
+		ChangedFiles int  `json:"changed_files"`
+		Draft        bool `json:"draft"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return 0, 0, 0, err
+		return 0, 0, 0, false, err
 	}
-	return result.Additions, result.Deletions, result.ChangedFiles, nil
+	return result.Additions, result.Deletions, result.ChangedFiles, result.Draft, nil
 }
 
 func printStatus(s *repoStatus) {
@@ -390,6 +393,8 @@ func printStatus(s *repoStatus) {
 				}
 				if pr.Mergeable {
 					fmt.Fprintf(w, "  %s\n", output.Colorize(output.Green, "Mergeable"))
+				} else if pr.Draft {
+					fmt.Fprintf(w, "  %s\n", output.Colorize(output.Yellow, "WIP / Draft"))
 				} else {
 					fmt.Fprintf(w, "  %s\n", output.Colorize(output.Red, "Has conflicts"))
 				}
