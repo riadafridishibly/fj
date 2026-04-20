@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 	"github.com/spf13/cobra"
@@ -54,7 +55,18 @@ type repoStatus struct {
 	ClosedPRs int `json:"closed_prs"`
 	MergedPRs int `json:"merged_prs"`
 
+	LatestRelease *releaseStatus `json:"latest_release,omitempty"`
+
 	Branch *branchStatus `json:"branch,omitempty"`
+}
+
+type releaseStatus struct {
+	Tag         string    `json:"tag"`
+	Title       string    `json:"title"`
+	IsDraft     bool      `json:"draft"`
+	IsPrerelease bool     `json:"prerelease"`
+	PublishedAt time.Time `json:"published_at"`
+	HTMLURL     string    `json:"html_url"`
 }
 
 type branchStatus struct {
@@ -152,6 +164,22 @@ func statusRun(opts *statusOptions) error {
 	}
 	status.MergedPRs = merged
 	status.ClosedPRs = closedTotal - merged
+
+	// Latest release (non-fatal if repo has none)
+	if latest, _, err := client.GetLatestRelease(repo.Owner, repo.Name); err == nil && latest != nil {
+		title := latest.Title
+		if title == "" {
+			title = latest.TagName
+		}
+		status.LatestRelease = &releaseStatus{
+			Tag:          latest.TagName,
+			Title:        title,
+			IsDraft:      latest.IsDraft,
+			IsPrerelease: latest.IsPrerelease,
+			PublishedAt:  latest.PublishedAt,
+			HTMLURL:      latest.HTMLURL,
+		}
+	}
 
 	// Current branch info
 	if branch != "" {
@@ -338,6 +366,29 @@ func printStatus(s *repoStatus) {
 		output.Colorize(output.Magenta, fmt.Sprintf("%d", s.MergedPRs)),
 	)
 	fmt.Fprintln(w)
+
+	// Latest release
+	if s.LatestRelease != nil {
+		r := s.LatestRelease
+		fmt.Fprintf(w, "%s\n", output.Colorize(output.Bold, "Latest Release"))
+		typ := "release"
+		typColor := output.Green
+		switch {
+		case r.IsDraft:
+			typ = "draft"
+			typColor = output.Yellow
+		case r.IsPrerelease:
+			typ = "pre-release"
+			typColor = output.Magenta
+		}
+		fmt.Fprintf(w, "  %s %s %s\n",
+			output.Colorize(output.Cyan, r.Tag),
+			output.Truncate(r.Title, 50),
+			output.Colorize(typColor, "("+typ+")"),
+		)
+		fmt.Fprintf(w, "  Published %s\n", output.RelativeTimeStr(r.PublishedAt))
+		fmt.Fprintln(w)
+	}
 
 	// Current branch
 	if s.Branch != nil {
