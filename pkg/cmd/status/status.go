@@ -178,17 +178,26 @@ func statusRun(opts *statusOptions) error {
 		debug.Logf(3, "found open PR for branch %q: #%d", branch, branchPR.Index)
 	}
 
-	// Get closed PRs to count merged vs closed
-	debug.Logf(1, "phase: count closed/merged PRs (paginates all closed PRs)")
-	done = debug.Track(2, "countClosedAndMergedPRs")
-	closedTotal, merged, err := countClosedAndMergedPRs(client, repo)
+	// Paginate closed PRs once to both count merged and (optionally) find the
+	// current branch's PR. Skip the branch lookup when on the default branch —
+	// no PR is ever opened from there.
+	lookupBranch := ""
+	if branchPR == nil && branch != "" && branch != r.DefaultBranch {
+		lookupBranch = branch
+	}
+	debug.Logf(1, "phase: scan closed PRs (count merged, lookupBranch=%q)", lookupBranch)
+	done = debug.Track(2, "scanClosedPRs")
+	closedTotal, merged, foundPR, err := scanClosedPRs(client, repo, lookupBranch)
 	done()
 	if err != nil {
-		return fmt.Errorf("counting closed PRs: %w", err)
+		return fmt.Errorf("scanning closed PRs: %w", err)
 	}
 	status.MergedPRs = merged
 	status.ClosedPRs = closedTotal - merged
-	debug.Logf(3, "closed PRs total=%d merged=%d", closedTotal, merged)
+	if foundPR != nil {
+		branchPR = foundPR
+	}
+	debug.Logf(3, "closed PRs total=%d merged=%d branchPR_found=%v", closedTotal, merged, foundPR != nil)
 
 	// Latest release (non-fatal if repo has none)
 	debug.Logf(1, "phase: latest release")
@@ -221,19 +230,6 @@ func statusRun(opts *statusOptions) error {
 		done()
 		bs.ExistsRemote = err == nil
 		debug.Logf(3, "branch exists on remote: %v", bs.ExistsRemote)
-
-		// If we didn't find a PR in open PRs, also check closed/merged PRs for this branch
-		if branchPR == nil {
-			debug.Logf(1, "phase: search closed PRs for branch %q (paginates all closed PRs)", branch)
-			done = debug.Track(2, "findBranchPR")
-			branchPR, err = findBranchPR(client, repo, branch)
-			done()
-			if err != nil {
-				// Non-fatal, just skip PR info
-				debug.Logf(2, "findBranchPR error (non-fatal): %v", err)
-				branchPR = nil
-			}
-		}
 
 		if branchPR != nil {
 			ps := &prStatus{
@@ -287,17 +283,20 @@ func statusRun(opts *statusOptions) error {
 	return nil
 }
 
-func countClosedAndMergedPRs(client *forgejo.Client, repo cmdutil.Repo) (total, merged int, err error) {
+// scanClosedPRs paginates through every closed PR to tally merged vs. closed.
+// If lookupBranch is non-empty, the first PR opened from that branch is also
+// returned — no separate pagination needed.
+func scanClosedPRs(client *forgejo.Client, repo cmdutil.Repo, lookupBranch string) (total, merged int, branchPR *forgejo.PullRequest, err error) {
 	page := 1
 	for {
 		done := debug.Track(3, fmt.Sprintf("ListRepoPullRequests closed page=%d size=50", page))
-		prs, resp, err := client.ListRepoPullRequests(repo.Owner, repo.Name, forgejo.ListPullRequestsOptions{
+		prs, resp, e := client.ListRepoPullRequests(repo.Owner, repo.Name, forgejo.ListPullRequestsOptions{
 			ListOptions: forgejo.ListOptions{Page: page, PageSize: 50},
 			State:       forgejo.StateClosed,
 		})
 		done()
-		if err != nil {
-			return 0, 0, err
+		if e != nil {
+			return 0, 0, nil, e
 		}
 		if page == 1 {
 			total = cmdutil.TotalCount(resp)
@@ -309,6 +308,10 @@ func countClosedAndMergedPRs(client *forgejo.Client, repo cmdutil.Repo) (total, 
 				merged++
 				pageMerged++
 			}
+			if branchPR == nil && lookupBranch != "" && pr.Head != nil && pr.Head.Ref == lookupBranch {
+				branchPR = pr
+				debug.Logf(3, "found branch PR #%d on page %d", pr.Index, page)
+			}
 		}
 		debug.Logf(3, "page %d: returned=%d merged_on_page=%d running_merged=%d", page, len(prs), pageMerged, merged)
 		if len(prs) < 50 {
@@ -316,34 +319,7 @@ func countClosedAndMergedPRs(client *forgejo.Client, repo cmdutil.Repo) (total, 
 		}
 		page++
 	}
-	return total, merged, nil
-}
-
-func findBranchPR(client *forgejo.Client, repo cmdutil.Repo, branch string) (*forgejo.PullRequest, error) {
-	page := 1
-	for {
-		done := debug.Track(3, fmt.Sprintf("ListRepoPullRequests closed page=%d (search branch %q)", page, branch))
-		prs, _, err := client.ListRepoPullRequests(repo.Owner, repo.Name, forgejo.ListPullRequestsOptions{
-			ListOptions: forgejo.ListOptions{Page: page, PageSize: 50},
-			State:       forgejo.StateClosed,
-		})
-		done()
-		if err != nil {
-			return nil, err
-		}
-		for _, pr := range prs {
-			if pr.Head != nil && pr.Head.Ref == branch {
-				debug.Logf(3, "found branch PR #%d on page %d", pr.Index, page)
-				return pr, nil
-			}
-		}
-		debug.Logf(3, "page %d: returned=%d (no match)", page, len(prs))
-		if len(prs) < 50 {
-			break
-		}
-		page++
-	}
-	return nil, nil
+	return total, merged, branchPR, nil
 }
 
 // fetchPRDetails gets additions/deletions/changed_files/draft via raw API call
