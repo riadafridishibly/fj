@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
+	"github.com/riadafridishibly/fj/internal/debug"
 	"github.com/riadafridishibly/fj/internal/git"
 	"github.com/riadafridishibly/fj/internal/output"
 )
@@ -91,10 +92,13 @@ type prStatus struct {
 }
 
 func statusRun(opts *statusOptions) error {
+	defer debug.Track(1, "fj status (total)")()
+
 	repo, err := opts.Factory.BaseRepo()
 	if err != nil {
 		return err
 	}
+	debug.Logf(1, "resolved repo: %s/%s on %s", repo.Owner, repo.Name, repo.Host)
 
 	client, err := opts.Factory.ClientForRepo(repo)
 	if err != nil {
@@ -102,10 +106,13 @@ func statusRun(opts *statusOptions) error {
 	}
 
 	// Get repo info
+	done := debug.Track(2, "GetRepo")
 	r, _, err := client.GetRepo(repo.Owner, repo.Name)
+	done()
 	if err != nil {
 		return fmt.Errorf("getting repository: %w", err)
 	}
+	debug.Logf(3, "repo default_branch=%s stars=%d forks=%d", r.DefaultBranch, r.Stars, r.Forks)
 
 	status := &repoStatus{
 		Repository:    r.FullName,
@@ -116,37 +123,48 @@ func statusRun(opts *statusOptions) error {
 	}
 
 	// Get issue counts (open + closed) using minimal page size, reading X-Total-Count
+	debug.Logf(1, "phase: issue counts")
+	done = debug.Track(2, "ListRepoIssues open (count)")
 	_, respOpenIssues, err := client.ListRepoIssues(repo.Owner, repo.Name, forgejo.ListIssueOption{
 		ListOptions: forgejo.ListOptions{Page: 1, PageSize: 1},
 		State:       forgejo.StateOpen,
 		Type:        forgejo.IssueTypeIssue,
 	})
+	done()
 	if err != nil {
 		return fmt.Errorf("listing open issues: %w", err)
 	}
 	status.OpenIssues = cmdutil.TotalCount(respOpenIssues)
+	debug.Logf(3, "open issues X-Total-Count=%d", status.OpenIssues)
 
+	done = debug.Track(2, "ListRepoIssues closed (count)")
 	_, respClosedIssues, err := client.ListRepoIssues(repo.Owner, repo.Name, forgejo.ListIssueOption{
 		ListOptions: forgejo.ListOptions{Page: 1, PageSize: 1},
 		State:       forgejo.StateClosed,
 		Type:        forgejo.IssueTypeIssue,
 	})
+	done()
 	if err != nil {
 		return fmt.Errorf("listing closed issues: %w", err)
 	}
 	status.ClosedIssues = cmdutil.TotalCount(respClosedIssues)
+	debug.Logf(3, "closed issues X-Total-Count=%d", status.ClosedIssues)
 
 	// Get PR counts - fetch open PRs (also scan for current branch PR)
 	branch, _ := git.CurrentBranch()
+	debug.Logf(1, "phase: open PRs (current branch=%q)", branch)
 
+	done = debug.Track(2, "ListRepoPullRequests open page=1 size=50")
 	openPRs, respOpenPRs, err := client.ListRepoPullRequests(repo.Owner, repo.Name, forgejo.ListPullRequestsOptions{
 		ListOptions: forgejo.ListOptions{Page: 1, PageSize: 50},
 		State:       forgejo.StateOpen,
 	})
+	done()
 	if err != nil {
 		return fmt.Errorf("listing open PRs: %w", err)
 	}
 	status.OpenPRs = cmdutil.TotalCount(respOpenPRs)
+	debug.Logf(3, "open PRs X-Total-Count=%d, returned=%d", status.OpenPRs, len(openPRs))
 
 	// Find PR for current branch among open PRs
 	var branchPR *forgejo.PullRequest
@@ -156,17 +174,28 @@ func statusRun(opts *statusOptions) error {
 			break
 		}
 	}
+	if branchPR != nil {
+		debug.Logf(3, "found open PR for branch %q: #%d", branch, branchPR.Index)
+	}
 
 	// Get closed PRs to count merged vs closed
+	debug.Logf(1, "phase: count closed/merged PRs (paginates all closed PRs)")
+	done = debug.Track(2, "countClosedAndMergedPRs")
 	closedTotal, merged, err := countClosedAndMergedPRs(client, repo)
+	done()
 	if err != nil {
 		return fmt.Errorf("counting closed PRs: %w", err)
 	}
 	status.MergedPRs = merged
 	status.ClosedPRs = closedTotal - merged
+	debug.Logf(3, "closed PRs total=%d merged=%d", closedTotal, merged)
 
 	// Latest release (non-fatal if repo has none)
-	if latest, _, err := client.GetLatestRelease(repo.Owner, repo.Name); err == nil && latest != nil {
+	debug.Logf(1, "phase: latest release")
+	done = debug.Track(2, "GetLatestRelease")
+	latest, _, relErr := client.GetLatestRelease(repo.Owner, repo.Name)
+	done()
+	if relErr == nil && latest != nil {
 		title := latest.Title
 		if title == "" {
 			title = latest.TagName
@@ -183,17 +212,25 @@ func statusRun(opts *statusOptions) error {
 
 	// Current branch info
 	if branch != "" {
+		debug.Logf(1, "phase: current branch (%s)", branch)
 		bs := &branchStatus{Name: branch}
 
 		// Check if branch exists on remote
+		done = debug.Track(2, "GetRepoBranch")
 		_, _, err := client.GetRepoBranch(repo.Owner, repo.Name, branch)
+		done()
 		bs.ExistsRemote = err == nil
+		debug.Logf(3, "branch exists on remote: %v", bs.ExistsRemote)
 
 		// If we didn't find a PR in open PRs, also check closed/merged PRs for this branch
 		if branchPR == nil {
+			debug.Logf(1, "phase: search closed PRs for branch %q (paginates all closed PRs)", branch)
+			done = debug.Track(2, "findBranchPR")
 			branchPR, err = findBranchPR(client, repo, branch)
+			done()
 			if err != nil {
 				// Non-fatal, just skip PR info
+				debug.Logf(2, "findBranchPR error (non-fatal): %v", err)
 				branchPR = nil
 			}
 		}
@@ -222,12 +259,16 @@ func statusRun(opts *statusOptions) error {
 			ps.Synced = localSHA != "" && ps.HeadSHA != "" && localSHA == ps.HeadSHA
 
 			// Get additions/deletions/draft via raw API (SDK doesn't expose these fields)
+			done = debug.Track(2, fmt.Sprintf("fetchPRDetails #%d", branchPR.Index))
 			additions, deletions, changedFiles, draft, err := fetchPRDetails(opts.Factory, repo, branchPR.Index)
+			done()
 			if err == nil {
 				ps.Additions = additions
 				ps.Deletions = deletions
 				ps.ChangedFiles = changedFiles
 				ps.Draft = draft
+			} else {
+				debug.Logf(2, "fetchPRDetails error (non-fatal): %v", err)
 			}
 
 			bs.PR = ps
@@ -249,21 +290,27 @@ func statusRun(opts *statusOptions) error {
 func countClosedAndMergedPRs(client *forgejo.Client, repo cmdutil.Repo) (total, merged int, err error) {
 	page := 1
 	for {
+		done := debug.Track(3, fmt.Sprintf("ListRepoPullRequests closed page=%d size=50", page))
 		prs, resp, err := client.ListRepoPullRequests(repo.Owner, repo.Name, forgejo.ListPullRequestsOptions{
 			ListOptions: forgejo.ListOptions{Page: page, PageSize: 50},
 			State:       forgejo.StateClosed,
 		})
+		done()
 		if err != nil {
 			return 0, 0, err
 		}
 		if page == 1 {
 			total = cmdutil.TotalCount(resp)
+			debug.Logf(3, "closed PRs X-Total-Count=%d (will paginate)", total)
 		}
+		pageMerged := 0
 		for _, pr := range prs {
 			if pr.HasMerged {
 				merged++
+				pageMerged++
 			}
 		}
+		debug.Logf(3, "page %d: returned=%d merged_on_page=%d running_merged=%d", page, len(prs), pageMerged, merged)
 		if len(prs) < 50 {
 			break
 		}
@@ -275,18 +322,22 @@ func countClosedAndMergedPRs(client *forgejo.Client, repo cmdutil.Repo) (total, 
 func findBranchPR(client *forgejo.Client, repo cmdutil.Repo, branch string) (*forgejo.PullRequest, error) {
 	page := 1
 	for {
+		done := debug.Track(3, fmt.Sprintf("ListRepoPullRequests closed page=%d (search branch %q)", page, branch))
 		prs, _, err := client.ListRepoPullRequests(repo.Owner, repo.Name, forgejo.ListPullRequestsOptions{
 			ListOptions: forgejo.ListOptions{Page: page, PageSize: 50},
 			State:       forgejo.StateClosed,
 		})
+		done()
 		if err != nil {
 			return nil, err
 		}
 		for _, pr := range prs {
 			if pr.Head != nil && pr.Head.Ref == branch {
+				debug.Logf(3, "found branch PR #%d on page %d", pr.Index, page)
 				return pr, nil
 			}
 		}
+		debug.Logf(3, "page %d: returned=%d (no match)", page, len(prs))
 		if len(prs) < 50 {
 			break
 		}
