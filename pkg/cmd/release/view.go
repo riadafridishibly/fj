@@ -110,7 +110,7 @@ func viewRun(opts *viewOptions) error {
 	}
 
 	if rel.Note != "" {
-		fmt.Fprintf(os.Stdout, "\n%s\n", rel.Note)
+		fmt.Fprintf(os.Stdout, "\n%s\n", output.RenderMarkdown(rel.Note))
 	}
 
 	fmt.Fprintf(os.Stdout, "\nView this release on the web: %s\n", rel.HTMLURL)

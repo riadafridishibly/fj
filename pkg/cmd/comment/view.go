@@ -82,7 +82,7 @@ func viewRun(opts *viewOptions) error {
 		fmt.Fprintf(os.Stdout, "Updated: %s\n", output.RelativeTimeStr(comment.Updated))
 	}
 	if comment.Body != "" {
-		fmt.Fprintf(os.Stdout, "\n%s\n", comment.Body)
+		fmt.Fprintf(os.Stdout, "\n%s\n", output.RenderMarkdown(comment.Body))
 	}
 	fmt.Fprintf(os.Stdout, "\nView on the web: %s\n", comment.HTMLURL)
 	return nil

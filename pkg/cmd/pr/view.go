@@ -131,7 +131,7 @@ func viewRun(opts *viewOptions) error {
 	}
 
 	if pr.Body != "" {
-		fmt.Fprintf(os.Stdout, "\n%s\n", pr.Body)
+		fmt.Fprintf(os.Stdout, "\n%s\n", output.RenderMarkdown(pr.Body))
 	}
 
 	fmt.Fprintf(os.Stdout, "\nView this pull request on the web: %s\n", pr.HTMLURL)
@@ -151,7 +151,7 @@ func viewRun(opts *viewOptions) error {
 				fmt.Fprintf(os.Stdout, "\n%s commented %s:\n%s\n",
 					author,
 					output.RelativeTimeStr(c.Created),
-					c.Body,
+					output.RenderMarkdown(c.Body),
 				)
 			}
 		}

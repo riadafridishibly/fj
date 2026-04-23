@@ -136,7 +136,7 @@ func viewRun(opts *viewOptions) error {
 	fmt.Fprintf(os.Stdout, "Created: %s\n", output.RelativeTimeStr(issue.Created))
 
 	if issue.Body != "" {
-		fmt.Fprintf(os.Stdout, "\n%s\n", issue.Body)
+		fmt.Fprintf(os.Stdout, "\n%s\n", output.RenderMarkdown(issue.Body))
 	}
 
 	fmt.Fprintf(os.Stdout, "\nView this issue on the web: %s\n", issue.HTMLURL)
@@ -156,7 +156,7 @@ func viewRun(opts *viewOptions) error {
 				fmt.Fprintf(os.Stdout, "\n%s commented %s:\n%s\n",
 					author,
 					output.RelativeTimeStr(c.Created),
-					c.Body,
+					output.RenderMarkdown(c.Body),
 				)
 			}
 		}
