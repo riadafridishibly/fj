@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
+	"github.com/riadafridishibly/fj/pkg/cmd/pr/review"
 )
 
 func NewCmdPR(f *cmdutil.Factory) *cobra.Command {
@@ -19,6 +20,7 @@ func NewCmdPR(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(NewCmdClose(f))
 	cmd.AddCommand(NewCmdEdit(f))
 	cmd.AddCommand(NewCmdComment(f))
+	cmd.AddCommand(review.NewCmdReview(f))
 	cmd.AddCommand(NewCmdMerge(f))
 	cmd.AddCommand(NewCmdDiff(f))
 	cmd.AddCommand(NewCmdCheckout(f))
