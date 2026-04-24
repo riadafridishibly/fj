@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -20,6 +21,7 @@ import (
 type statusOptions struct {
 	Factory    *cmdutil.Factory
 	JSONOutput bool
+	Full       bool
 }
 
 func NewCmdStatus(f *cmdutil.Factory) *cobra.Command {
@@ -28,9 +30,14 @@ func NewCmdStatus(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show repository status overview",
-		Long:  "Display a summary of the repository including issue/PR counts and current branch status.",
+		Long: `Display a summary of the repository including issue/PR counts and current branch status.
+
+By default the "closed" PR count is the total from the server and includes merged PRs.
+Pass --full to paginate every closed PR and produce a merged-vs-closed breakdown; this
+can take tens of seconds on repositories with many closed PRs.`,
 		Example: `  $ fj status
-  $ fj status --json`,
+  $ fj status --json
+  $ fj status --full`,
 		Aliases: []string{"st"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return statusRun(opts)
@@ -38,6 +45,7 @@ func NewCmdStatus(f *cmdutil.Factory) *cobra.Command {
 	}
 
 	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmd.Flags().BoolVar(&opts.Full, "full", false, "Compute the merged-vs-closed PR breakdown (slow on large repos)")
 
 	return cmd
 }
@@ -53,8 +61,12 @@ type repoStatus struct {
 	ClosedIssues int `json:"closed_issues"`
 
 	OpenPRs   int `json:"open_prs"`
+	// ClosedPRs is the total count of PRs in the "closed" state as reported by
+	// the server (includes merged PRs). When --full is used, ClosedPRs is
+	// re-computed as closed-only (merged excluded).
 	ClosedPRs int `json:"closed_prs"`
-	MergedPRs int `json:"merged_prs"`
+	// MergedPRs is only populated when --full is used. nil otherwise.
+	MergedPRs *int `json:"merged_prs,omitempty"`
 
 	LatestRelease *releaseStatus `json:"latest_release,omitempty"`
 
@@ -178,26 +190,34 @@ func statusRun(opts *statusOptions) error {
 		debug.Logf(3, "found open PR for branch %q: #%d", branch, branchPR.Index)
 	}
 
-	// Paginate closed PRs once to both count merged and (optionally) find the
-	// current branch's PR. Skip the branch lookup when on the default branch —
-	// no PR is ever opened from there.
-	lookupBranch := ""
-	if branchPR == nil && branch != "" && branch != r.DefaultBranch {
-		lookupBranch = branch
+	// Closed-PR count. Splitting merged vs. closed requires paginating every
+	// closed PR (Forgejo has no filter or stats endpoint for it) which is slow
+	// on busy repos, so gate it behind --full. Default: just the total.
+	if opts.Full {
+		debug.Logf(1, "phase: scan closed PRs (count merged — --full)")
+		done = debug.Track(2, "scanClosedPRs")
+		closedTotal, merged, err := scanClosedPRs(client, repo)
+		done()
+		if err != nil {
+			return fmt.Errorf("scanning closed PRs: %w", err)
+		}
+		status.ClosedPRs = closedTotal - merged
+		status.MergedPRs = &merged
+		debug.Logf(3, "closed PRs total=%d merged=%d", closedTotal, merged)
+	} else {
+		debug.Logf(1, "phase: closed PRs count (X-Total-Count only)")
+		done = debug.Track(2, "ListRepoPullRequests closed (count)")
+		_, respClosedPRs, err := client.ListRepoPullRequests(repo.Owner, repo.Name, forgejo.ListPullRequestsOptions{
+			ListOptions: forgejo.ListOptions{Page: 1, PageSize: 1},
+			State:       forgejo.StateClosed,
+		})
+		done()
+		if err != nil {
+			return fmt.Errorf("counting closed PRs: %w", err)
+		}
+		status.ClosedPRs = cmdutil.TotalCount(respClosedPRs)
+		debug.Logf(3, "closed PRs X-Total-Count=%d (merged breakdown skipped)", status.ClosedPRs)
 	}
-	debug.Logf(1, "phase: scan closed PRs (count merged, lookupBranch=%q)", lookupBranch)
-	done = debug.Track(2, "scanClosedPRs")
-	closedTotal, merged, foundPR, err := scanClosedPRs(client, repo, lookupBranch)
-	done()
-	if err != nil {
-		return fmt.Errorf("scanning closed PRs: %w", err)
-	}
-	status.MergedPRs = merged
-	status.ClosedPRs = closedTotal - merged
-	if foundPR != nil {
-		branchPR = foundPR
-	}
-	debug.Logf(3, "closed PRs total=%d merged=%d branchPR_found=%v", closedTotal, merged, foundPR != nil)
 
 	// Latest release (non-fatal if repo has none)
 	debug.Logf(1, "phase: latest release")
@@ -231,6 +251,28 @@ func statusRun(opts *statusOptions) error {
 		bs.ExistsRemote = err == nil
 		debug.Logf(3, "branch exists on remote: %v", bs.ExistsRemote)
 
+		// If we didn't find a PR among open PRs, try the base/head endpoint —
+		// a single O(1) lookup instead of paginating closed PRs. We assume the
+		// base is the repo's default branch, which covers the common case.
+		// Also returns the full PR object, so no separate fetchPRDetails call.
+		var prDetails *fullPR
+		if branchPR == nil && branch != r.DefaultBranch {
+			debug.Logf(1, "phase: lookup PR by base/head (%s <- %s)", r.DefaultBranch, branch)
+			done = debug.Track(2, "getPullByBaseHead")
+			fp, lookupErr := getPullByBaseHead(opts.Factory, repo, r.DefaultBranch, branch)
+			done()
+			switch {
+			case lookupErr != nil:
+				debug.Logf(2, "getPullByBaseHead error (non-fatal): %v", lookupErr)
+			case fp != nil:
+				branchPR = &fp.PullRequest
+				prDetails = fp
+				debug.Logf(3, "found PR #%d via base/head (state=%s merged=%v)", fp.Index, fp.State, fp.HasMerged)
+			default:
+				debug.Logf(3, "no PR found for base=%s head=%s", r.DefaultBranch, branch)
+			}
+		}
+
 		if branchPR != nil {
 			ps := &prStatus{
 				Number:    branchPR.Index,
@@ -254,17 +296,25 @@ func statusRun(opts *statusOptions) error {
 			ps.LocalSHA = localSHA
 			ps.Synced = localSHA != "" && ps.HeadSHA != "" && localSHA == ps.HeadSHA
 
-			// Get additions/deletions/draft via raw API (SDK doesn't expose these fields)
-			done = debug.Track(2, fmt.Sprintf("fetchPRDetails #%d", branchPR.Index))
-			additions, deletions, changedFiles, draft, err := fetchPRDetails(opts.Factory, repo, branchPR.Index)
-			done()
-			if err == nil {
-				ps.Additions = additions
-				ps.Deletions = deletions
-				ps.ChangedFiles = changedFiles
-				ps.Draft = draft
+			// Populate extra fields (SDK PullRequest doesn't expose them). If we
+			// got the PR from base/head, the response already has everything.
+			if prDetails != nil {
+				ps.Additions = prDetails.Additions
+				ps.Deletions = prDetails.Deletions
+				ps.ChangedFiles = prDetails.ChangedFiles
+				ps.Draft = prDetails.Draft
 			} else {
-				debug.Logf(2, "fetchPRDetails error (non-fatal): %v", err)
+				done = debug.Track(2, fmt.Sprintf("fetchPRDetails #%d", branchPR.Index))
+				additions, deletions, changedFiles, draft, err := fetchPRDetails(opts.Factory, repo, branchPR.Index)
+				done()
+				if err == nil {
+					ps.Additions = additions
+					ps.Deletions = deletions
+					ps.ChangedFiles = changedFiles
+					ps.Draft = draft
+				} else {
+					debug.Logf(2, "fetchPRDetails error (non-fatal): %v", err)
+				}
 			}
 
 			bs.PR = ps
@@ -284,9 +334,8 @@ func statusRun(opts *statusOptions) error {
 }
 
 // scanClosedPRs paginates through every closed PR to tally merged vs. closed.
-// If lookupBranch is non-empty, the first PR opened from that branch is also
-// returned — no separate pagination needed.
-func scanClosedPRs(client *forgejo.Client, repo cmdutil.Repo, lookupBranch string) (total, merged int, branchPR *forgejo.PullRequest, err error) {
+// Forgejo has no cheaper endpoint for this breakdown.
+func scanClosedPRs(client *forgejo.Client, repo cmdutil.Repo) (total, merged int, err error) {
 	page := 1
 	for {
 		done := debug.Track(3, fmt.Sprintf("ListRepoPullRequests closed page=%d size=50", page))
@@ -296,7 +345,7 @@ func scanClosedPRs(client *forgejo.Client, repo cmdutil.Repo, lookupBranch strin
 		})
 		done()
 		if e != nil {
-			return 0, 0, nil, e
+			return 0, 0, e
 		}
 		if page == 1 {
 			total = cmdutil.TotalCount(resp)
@@ -308,10 +357,6 @@ func scanClosedPRs(client *forgejo.Client, repo cmdutil.Repo, lookupBranch strin
 				merged++
 				pageMerged++
 			}
-			if branchPR == nil && lookupBranch != "" && pr.Head != nil && pr.Head.Ref == lookupBranch {
-				branchPR = pr
-				debug.Logf(3, "found branch PR #%d on page %d", pr.Index, page)
-			}
 		}
 		debug.Logf(3, "page %d: returned=%d merged_on_page=%d running_merged=%d", page, len(prs), pageMerged, merged)
 		if len(prs) < 50 {
@@ -319,7 +364,66 @@ func scanClosedPRs(client *forgejo.Client, repo cmdutil.Repo, lookupBranch strin
 		}
 		page++
 	}
-	return total, merged, branchPR, nil
+	return total, merged, nil
+}
+
+// fullPR mirrors the Forgejo PR API response, embedding the SDK type and
+// adding the fields the SDK struct doesn't expose.
+type fullPR struct {
+	forgejo.PullRequest
+	Additions    int  `json:"additions"`
+	Deletions    int  `json:"deletions"`
+	ChangedFiles int  `json:"changed_files"`
+	Draft        bool `json:"draft"`
+}
+
+// getPullByBaseHead fetches a PR by its base/head branches via
+// GET /repos/{owner}/{repo}/pulls/{base}/{head}. Returns (nil, nil) on 404.
+func getPullByBaseHead(f *cmdutil.Factory, repo cmdutil.Repo, base, head string) (*fullPR, error) {
+	cfg, err := f.Config()
+	if err != nil {
+		return nil, err
+	}
+
+	token, err := cfg.TokenForHost(repo.Host)
+	if err != nil {
+		return nil, err
+	}
+
+	scheme := "https"
+	if os.Getenv("FJ_INSECURE") != "" {
+		scheme = "http"
+	}
+
+	u := fmt.Sprintf("%s://%s/api/v1/repos/%s/%s/pulls/%s/%s",
+		scheme, repo.Host, repo.Owner, repo.Name,
+		url.PathEscape(base), url.PathEscape(head))
+
+	req, err := http.NewRequest("GET", u, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "token "+token)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("GET %s: %s", u, resp.Status)
+	}
+
+	var fp fullPR
+	if err := json.NewDecoder(resp.Body).Decode(&fp); err != nil {
+		return nil, err
+	}
+	return &fp, nil
 }
 
 // fetchPRDetails gets additions/deletions/changed_files/draft via raw API call
@@ -387,11 +491,19 @@ func printStatus(s *repoStatus) {
 
 	// Pull Requests
 	fmt.Fprintf(w, "%s\n", output.Colorize(output.Bold, "Pull Requests"))
-	fmt.Fprintf(w, "  %s open  %s closed  %s merged\n",
-		output.Colorize(output.Green, fmt.Sprintf("%d", s.OpenPRs)),
-		output.Colorize(output.Red, fmt.Sprintf("%d", s.ClosedPRs)),
-		output.Colorize(output.Magenta, fmt.Sprintf("%d", s.MergedPRs)),
-	)
+	if s.MergedPRs != nil {
+		fmt.Fprintf(w, "  %s open  %s closed  %s merged\n",
+			output.Colorize(output.Green, fmt.Sprintf("%d", s.OpenPRs)),
+			output.Colorize(output.Red, fmt.Sprintf("%d", s.ClosedPRs)),
+			output.Colorize(output.Magenta, fmt.Sprintf("%d", *s.MergedPRs)),
+		)
+	} else {
+		fmt.Fprintf(w, "  %s open  %s closed %s\n",
+			output.Colorize(output.Green, fmt.Sprintf("%d", s.OpenPRs)),
+			output.Colorize(output.Red, fmt.Sprintf("%d", s.ClosedPRs)),
+			output.Colorize(output.Gray, "(incl. merged — use --full for breakdown)"),
+		)
+	}
 	fmt.Fprintln(w)
 
 	// Latest release
