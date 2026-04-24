@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
@@ -72,7 +71,7 @@ func statusRun(opts *statusOptions) error {
 
 		// Verify the token still works
 		baseURL := fmt.Sprintf("https://%s", name)
-		client, err := forgejo.NewClient(baseURL, forgejo.SetToken(host.Token))
+		client, err := cmdutil.NewForgejoClient(baseURL, host.Token)
 		if err != nil {
 			status.Active = false
 			status.Error = err.Error()

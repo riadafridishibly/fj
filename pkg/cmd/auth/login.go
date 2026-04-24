@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 
-	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
@@ -97,7 +96,7 @@ func loginRun(opts *loginOptions) error {
 
 	// Validate the token by fetching user info
 	baseURL := fmt.Sprintf("https://%s", hostname)
-	client, err := forgejo.NewClient(baseURL, forgejo.SetToken(token))
+	client, err := cmdutil.NewForgejoClient(baseURL, token)
 	if err != nil {
 		return fmt.Errorf("creating client: %w", err)
 	}

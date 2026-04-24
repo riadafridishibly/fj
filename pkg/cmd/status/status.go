@@ -118,9 +118,7 @@ func statusRun(opts *statusOptions) error {
 	}
 
 	// Get repo info
-	done := debug.Track(2, "GetRepo")
 	r, _, err := client.GetRepo(repo.Owner, repo.Name)
-	done()
 	if err != nil {
 		return fmt.Errorf("getting repository: %w", err)
 	}
@@ -136,47 +134,38 @@ func statusRun(opts *statusOptions) error {
 
 	// Get issue counts (open + closed) using minimal page size, reading X-Total-Count
 	debug.Logf(1, "phase: issue counts")
-	done = debug.Track(2, "ListRepoIssues open (count)")
 	_, respOpenIssues, err := client.ListRepoIssues(repo.Owner, repo.Name, forgejo.ListIssueOption{
 		ListOptions: forgejo.ListOptions{Page: 1, PageSize: 1},
 		State:       forgejo.StateOpen,
 		Type:        forgejo.IssueTypeIssue,
 	})
-	done()
 	if err != nil {
 		return fmt.Errorf("listing open issues: %w", err)
 	}
 	status.OpenIssues = cmdutil.TotalCount(respOpenIssues)
-	debug.Logf(3, "open issues X-Total-Count=%d", status.OpenIssues)
 
-	done = debug.Track(2, "ListRepoIssues closed (count)")
 	_, respClosedIssues, err := client.ListRepoIssues(repo.Owner, repo.Name, forgejo.ListIssueOption{
 		ListOptions: forgejo.ListOptions{Page: 1, PageSize: 1},
 		State:       forgejo.StateClosed,
 		Type:        forgejo.IssueTypeIssue,
 	})
-	done()
 	if err != nil {
 		return fmt.Errorf("listing closed issues: %w", err)
 	}
 	status.ClosedIssues = cmdutil.TotalCount(respClosedIssues)
-	debug.Logf(3, "closed issues X-Total-Count=%d", status.ClosedIssues)
 
 	// Get PR counts - fetch open PRs (also scan for current branch PR)
 	branch, _ := git.CurrentBranch()
 	debug.Logf(1, "phase: open PRs (current branch=%q)", branch)
 
-	done = debug.Track(2, "ListRepoPullRequests open page=1 size=50")
 	openPRs, respOpenPRs, err := client.ListRepoPullRequests(repo.Owner, repo.Name, forgejo.ListPullRequestsOptions{
 		ListOptions: forgejo.ListOptions{Page: 1, PageSize: 50},
 		State:       forgejo.StateOpen,
 	})
-	done()
 	if err != nil {
 		return fmt.Errorf("listing open PRs: %w", err)
 	}
 	status.OpenPRs = cmdutil.TotalCount(respOpenPRs)
-	debug.Logf(3, "open PRs X-Total-Count=%d, returned=%d", status.OpenPRs, len(openPRs))
 
 	// Find PR for current branch among open PRs
 	var branchPR *forgejo.PullRequest
@@ -195,9 +184,7 @@ func statusRun(opts *statusOptions) error {
 	// on busy repos, so gate it behind --full. Default: just the total.
 	if opts.Full {
 		debug.Logf(1, "phase: scan closed PRs (count merged — --full)")
-		done = debug.Track(2, "scanClosedPRs")
 		closedTotal, merged, err := scanClosedPRs(client, repo)
-		done()
 		if err != nil {
 			return fmt.Errorf("scanning closed PRs: %w", err)
 		}
@@ -206,24 +193,19 @@ func statusRun(opts *statusOptions) error {
 		debug.Logf(3, "closed PRs total=%d merged=%d", closedTotal, merged)
 	} else {
 		debug.Logf(1, "phase: closed PRs count (X-Total-Count only)")
-		done = debug.Track(2, "ListRepoPullRequests closed (count)")
 		_, respClosedPRs, err := client.ListRepoPullRequests(repo.Owner, repo.Name, forgejo.ListPullRequestsOptions{
 			ListOptions: forgejo.ListOptions{Page: 1, PageSize: 1},
 			State:       forgejo.StateClosed,
 		})
-		done()
 		if err != nil {
 			return fmt.Errorf("counting closed PRs: %w", err)
 		}
 		status.ClosedPRs = cmdutil.TotalCount(respClosedPRs)
-		debug.Logf(3, "closed PRs X-Total-Count=%d (merged breakdown skipped)", status.ClosedPRs)
 	}
 
 	// Latest release (non-fatal if repo has none)
 	debug.Logf(1, "phase: latest release")
-	done = debug.Track(2, "GetLatestRelease")
 	latest, _, relErr := client.GetLatestRelease(repo.Owner, repo.Name)
-	done()
 	if relErr == nil && latest != nil {
 		title := latest.Title
 		if title == "" {
@@ -245,9 +227,7 @@ func statusRun(opts *statusOptions) error {
 		bs := &branchStatus{Name: branch}
 
 		// Check if branch exists on remote
-		done = debug.Track(2, "GetRepoBranch")
 		_, _, err := client.GetRepoBranch(repo.Owner, repo.Name, branch)
-		done()
 		bs.ExistsRemote = err == nil
 		debug.Logf(3, "branch exists on remote: %v", bs.ExistsRemote)
 
@@ -258,9 +238,7 @@ func statusRun(opts *statusOptions) error {
 		var prDetails *fullPR
 		if branchPR == nil && branch != r.DefaultBranch {
 			debug.Logf(1, "phase: lookup PR by base/head (%s <- %s)", r.DefaultBranch, branch)
-			done = debug.Track(2, "getPullByBaseHead")
 			fp, lookupErr := getPullByBaseHead(opts.Factory, repo, r.DefaultBranch, branch)
-			done()
 			switch {
 			case lookupErr != nil:
 				debug.Logf(2, "getPullByBaseHead error (non-fatal): %v", lookupErr)
@@ -304,9 +282,7 @@ func statusRun(opts *statusOptions) error {
 				ps.ChangedFiles = prDetails.ChangedFiles
 				ps.Draft = prDetails.Draft
 			} else {
-				done = debug.Track(2, fmt.Sprintf("fetchPRDetails #%d", branchPR.Index))
 				additions, deletions, changedFiles, draft, err := fetchPRDetails(opts.Factory, repo, branchPR.Index)
-				done()
 				if err == nil {
 					ps.Additions = additions
 					ps.Deletions = deletions
@@ -338,18 +314,15 @@ func statusRun(opts *statusOptions) error {
 func scanClosedPRs(client *forgejo.Client, repo cmdutil.Repo) (total, merged int, err error) {
 	page := 1
 	for {
-		done := debug.Track(3, fmt.Sprintf("ListRepoPullRequests closed page=%d size=50", page))
 		prs, resp, e := client.ListRepoPullRequests(repo.Owner, repo.Name, forgejo.ListPullRequestsOptions{
 			ListOptions: forgejo.ListOptions{Page: page, PageSize: 50},
 			State:       forgejo.StateClosed,
 		})
-		done()
 		if e != nil {
 			return 0, 0, e
 		}
 		if page == 1 {
 			total = cmdutil.TotalCount(resp)
-			debug.Logf(3, "closed PRs X-Total-Count=%d (will paginate)", total)
 		}
 		pageMerged := 0
 		for _, pr := range prs {
@@ -380,33 +353,9 @@ type fullPR struct {
 // getPullByBaseHead fetches a PR by its base/head branches via
 // GET /repos/{owner}/{repo}/pulls/{base}/{head}. Returns (nil, nil) on 404.
 func getPullByBaseHead(f *cmdutil.Factory, repo cmdutil.Repo, base, head string) (*fullPR, error) {
-	cfg, err := f.Config()
-	if err != nil {
-		return nil, err
-	}
-
-	token, err := cfg.TokenForHost(repo.Host)
-	if err != nil {
-		return nil, err
-	}
-
-	scheme := "https"
-	if os.Getenv("FJ_INSECURE") != "" {
-		scheme = "http"
-	}
-
-	u := fmt.Sprintf("%s://%s/api/v1/repos/%s/%s/pulls/%s/%s",
-		scheme, repo.Host, repo.Owner, repo.Name,
-		url.PathEscape(base), url.PathEscape(head))
-
-	req, err := http.NewRequest("GET", u, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "token "+token)
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
+	path := fmt.Sprintf("/repos/%s/%s/pulls/%s/%s",
+		repo.Owner, repo.Name, url.PathEscape(base), url.PathEscape(head))
+	resp, err := f.APIGet(repo, path)
 	if err != nil {
 		return nil, err
 	}
@@ -416,7 +365,7 @@ func getPullByBaseHead(f *cmdutil.Factory, repo cmdutil.Repo, base, head string)
 		return nil, nil
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("GET %s: %s", u, resp.Status)
+		return nil, fmt.Errorf("GET %s: %s", path, resp.Status)
 	}
 
 	var fp fullPR
@@ -429,32 +378,7 @@ func getPullByBaseHead(f *cmdutil.Factory, repo cmdutil.Repo, base, head string)
 // fetchPRDetails gets additions/deletions/changed_files/draft via raw API call
 // since the Forgejo SDK's PullRequest struct doesn't expose these fields.
 func fetchPRDetails(f *cmdutil.Factory, repo cmdutil.Repo, prIndex int64) (additions, deletions, changedFiles int, draft bool, err error) {
-	cfg, err := f.Config()
-	if err != nil {
-		return 0, 0, 0, false, err
-	}
-
-	token, err := cfg.TokenForHost(repo.Host)
-	if err != nil {
-		return 0, 0, 0, false, err
-	}
-
-	scheme := "https"
-	if os.Getenv("FJ_INSECURE") != "" {
-		scheme = "http"
-	}
-
-	url := fmt.Sprintf("%s://%s/api/v1/repos/%s/%s/pulls/%d",
-		scheme, repo.Host, repo.Owner, repo.Name, prIndex)
-
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return 0, 0, 0, false, err
-	}
-	req.Header.Set("Authorization", "token "+token)
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := f.APIGet(repo, fmt.Sprintf("/repos/%s/%s/pulls/%d", repo.Owner, repo.Name, prIndex))
 	if err != nil {
 		return 0, 0, 0, false, err
 	}

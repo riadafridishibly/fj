@@ -3,12 +3,14 @@ package cmdutil
 import (
 	"fmt"
 	"math/rand/v2"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 	"github.com/riadafridishibly/fj/internal/config"
+	"github.com/riadafridishibly/fj/internal/debug"
 )
 
 type Factory struct {
@@ -94,7 +96,44 @@ func (f *Factory) Client(hostname string) (*forgejo.Client, error) {
 		scheme = "http"
 	}
 	baseURL := fmt.Sprintf("%s://%s", scheme, hostname)
-	return forgejo.NewClient(baseURL, forgejo.SetToken(token))
+	return NewForgejoClient(baseURL, token)
+}
+
+// NewForgejoClient builds a forgejo.Client with fj's standard options
+// (auth token + DEBUG-aware HTTP transport). Shared by the factory and
+// by auth commands that construct clients outside the factory (login,
+// status) to validate credentials before they land in config.
+func NewForgejoClient(baseURL, token string) (*forgejo.Client, error) {
+	return forgejo.NewClient(baseURL,
+		forgejo.SetToken(token),
+		forgejo.SetHTTPClient(debug.WrapClient(nil)),
+	)
+}
+
+// APIGet performs an authenticated GET against /api/v1<path> on the repo's
+// host and returns the response. Used for endpoints the Forgejo SDK does
+// not cover. Caller owns closing resp.Body.
+func (f *Factory) APIGet(repo Repo, path string) (*http.Response, error) {
+	cfg, err := f.Config()
+	if err != nil {
+		return nil, err
+	}
+	token, err := cfg.TokenForHost(repo.Host)
+	if err != nil {
+		return nil, err
+	}
+	scheme := "https"
+	if os.Getenv("FJ_INSECURE") != "" {
+		scheme = "http"
+	}
+	req, err := http.NewRequest(http.MethodGet,
+		fmt.Sprintf("%s://%s/api/v1%s", scheme, repo.Host, path), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "token "+token)
+	req.Header.Set("Accept", "application/json")
+	return debug.WrapClient(nil).Do(req)
 }
 
 // ClientForRepo creates a client for the repo's host

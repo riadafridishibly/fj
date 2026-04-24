@@ -41,10 +41,7 @@ JSON output attaches a review_id field to each comment so it can be
 addressed back to the Forgejo API.
 
 Pass --review-id to limit the output to a single review (you can get
-review ids from 'fj pr review list <pr>').
-
-With DEBUG=2 or DEBUG=3 in the environment, each API call is logged and
-underlying errors are shown verbatim.`,
+review ids from 'fj pr review list <pr>').`,
 		Example: `  # All inline comments across every review on pr #70
   $ fj pr review comment list 70
 

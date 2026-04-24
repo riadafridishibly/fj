@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
-	"github.com/riadafridishibly/fj/internal/debug"
 	"github.com/riadafridishibly/fj/internal/output"
 )
 
@@ -62,24 +61,15 @@ func viewRun(opts *viewOptions) error {
 		return err
 	}
 
-	debug.Logf(3, "GetPullReview %s/%s pr=%d review=%d", repo.Owner, repo.Name, index, reviewID)
-	done := debug.Track(2, fmt.Sprintf("GetPullReview pr=%d review=%d", index, reviewID))
 	review, _, err := client.GetPullReview(repo.Owner, repo.Name, index, reviewID)
-	done()
 	if err != nil {
-		debug.Logf(3, "GetPullReview error: %v", err)
 		return fmt.Errorf("getting review: %w", err)
 	}
 
-	debug.Logf(3, "ListPullReviewComments pr=%d review=%d", index, reviewID)
-	done = debug.Track(2, fmt.Sprintf("ListPullReviewComments pr=%d review=%d", index, reviewID))
 	comments, _, err := client.ListPullReviewComments(repo.Owner, repo.Name, index, reviewID)
-	done()
 	if err != nil {
-		debug.Logf(3, "ListPullReviewComments error: %v", err)
 		return fmt.Errorf("listing review comments: %w", err)
 	}
-	debug.Logf(3, "ListPullReviewComments pr=%d review=%d returned=%d", index, reviewID, len(comments))
 
 	if opts.JSONOutput {
 		enc := json.NewEncoder(os.Stdout)

@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
-	"github.com/riadafridishibly/fj/internal/debug"
 	"github.com/riadafridishibly/fj/internal/output"
 )
 
@@ -69,15 +68,10 @@ func listRun(opts *listOptions) error {
 	page := 1
 	for len(all) < opts.Limit {
 		listOpt.Page = page
-		debug.Logf(3, "ListPullReviews %s/%s pr=%d page=%d", repo.Owner, repo.Name, index, page)
-		done := debug.Track(2, fmt.Sprintf("ListPullReviews pr=%d page=%d", index, page))
 		reviews, _, err := client.ListPullReviews(repo.Owner, repo.Name, index, listOpt)
-		done()
 		if err != nil {
-			debug.Logf(3, "ListPullReviews error: %v", err)
 			return fmt.Errorf("listing reviews: %w", err)
 		}
-		debug.Logf(3, "ListPullReviews pr=%d page=%d returned=%d", index, page, len(reviews))
 		if len(reviews) == 0 {
 			break
 		}

@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
-	"github.com/riadafridishibly/fj/internal/debug"
 )
 
 type createOptions struct {
@@ -135,17 +134,13 @@ func createRun(opts *createOptions) error {
 		return err
 	}
 
-	debug.Logf(3, "CreatePullReview %s/%s pr=%d state=%s comments=%d", repo.Owner, repo.Name, index, state, len(comments))
-	done := debug.Track(2, fmt.Sprintf("CreatePullReview pr=%d", index))
 	review, _, err := client.CreatePullReview(repo.Owner, repo.Name, index, forgejo.CreatePullReviewOptions{
 		State:    state,
 		Body:     opts.Body,
 		CommitID: opts.CommitID,
 		Comments: comments,
 	})
-	done()
 	if err != nil {
-		debug.Logf(3, "CreatePullReview error: %v", err)
 		return fmt.Errorf("creating review: %w", err)
 	}
 

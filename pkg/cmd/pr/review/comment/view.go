@@ -36,10 +36,7 @@ comment id. This command walks reviews on the given PR to find the
 matching comment id.
 
 If you already know which review the comment belongs to (e.g. from
-'fj pr review list <pr>'), pass --review-id to skip the scan.
-
-With DEBUG=2 or DEBUG=3 in the environment, each API call is logged and
-underlying errors are shown verbatim.`,
+'fj pr review list <pr>'), pass --review-id to skip the scan.`,
 		Example: `  # Scan every review on pr #70 for comment id 4081
   $ fj pr review comment view 70 4081
 
