@@ -31,7 +31,7 @@ func NewCmdDownload(f *cmdutil.Factory) *cobra.Command {
 		Example: `  $ fj release download v1.2.0
   $ fj release download v1.2.0 --dir ./artifacts
   $ fj release download v1.2.0 --pattern '*linux*' --pattern '*.tar.gz'`,
-		Args: cobra.MaximumNArgs(1),
+		Args: cmdutil.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
 				opts.Tag = args[0]

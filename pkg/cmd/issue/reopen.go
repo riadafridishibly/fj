@@ -23,7 +23,7 @@ func NewCmdReopen(f *cmdutil.Factory) *cobra.Command {
 		Use:     "reopen <number>",
 		Short:   "Reopen an issue",
 		Example: `  $ fj issue reopen 42`,
-		Args:    cobra.ExactArgs(1),
+		Args:    cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
 			return reopenRun(opts)

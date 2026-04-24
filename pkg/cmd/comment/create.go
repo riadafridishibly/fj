@@ -29,7 +29,7 @@ func NewCmdCreate(f *cmdutil.Factory, k Kind) *cobra.Command {
 		Example: fmt.Sprintf(`  $ %s create 42 --body "This is a comment"
   $ %s create 42 --body-file comment.md
   $ echo "comment" | %s create 42 --body-file -`, k.CLI, k.CLI, k.CLI),
-		Args: cobra.ExactArgs(1),
+		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
 			if opts.BodyFile != "" {

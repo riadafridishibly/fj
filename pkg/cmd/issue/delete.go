@@ -24,7 +24,7 @@ func NewCmdDelete(f *cmdutil.Factory) *cobra.Command {
 		Short: "Delete an issue",
 		Example: `  $ fj issue delete 42
   $ fj issue delete 42 --yes`,
-		Args: cobra.ExactArgs(1),
+		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
 			return deleteRun(opts)

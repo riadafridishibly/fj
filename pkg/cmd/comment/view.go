@@ -28,7 +28,7 @@ func NewCmdView(f *cmdutil.Factory, k Kind) *cobra.Command {
 		Example: fmt.Sprintf(`  $ %s view 12345
   $ %s view 12345 --web
   $ %s view 12345 --json`, k.CLI, k.CLI, k.CLI),
-		Args: cobra.ExactArgs(1),
+		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.ID = args[0]
 			return viewRun(opts)

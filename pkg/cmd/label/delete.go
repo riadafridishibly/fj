@@ -24,7 +24,7 @@ func NewCmdDelete(f *cmdutil.Factory) *cobra.Command {
 		Short: "Delete a label",
 		Example: `  $ fj label delete bug
   $ fj label delete "help wanted"`,
-		Args: cobra.ExactArgs(1),
+		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Name = args[0]
 			return deleteRun(opts)

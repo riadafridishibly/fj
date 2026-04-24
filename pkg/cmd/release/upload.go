@@ -25,7 +25,7 @@ func NewCmdUpload(f *cmdutil.Factory) *cobra.Command {
 		Short: "Upload assets to a release",
 		Example: `  $ fj release upload v1.2.0 dist/*.tar.gz
   $ fj release upload v1.2.0 binary --clobber`,
-		Args: cobra.MinimumNArgs(2),
+		Args: cmdutil.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Tag = args[0]
 			opts.Files = args[1:]

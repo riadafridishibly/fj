@@ -36,7 +36,7 @@ func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
   $ fj repo create my-project --org myorg
   $ fj repo create my-project --clone
   $ fj repo create my-project --json`,
-		Args: cobra.MaximumNArgs(1),
+		Args: cmdutil.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
 				opts.Name = args[0]

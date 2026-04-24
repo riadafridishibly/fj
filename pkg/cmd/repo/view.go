@@ -27,7 +27,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
   $ fj repo view owner/repo
   $ fj repo view --web
   $ fj repo view --json`,
-		Args: cobra.MaximumNArgs(1),
+		Args: cmdutil.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
 				opts.Repo = args[0]

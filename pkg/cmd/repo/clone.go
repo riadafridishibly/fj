@@ -25,7 +25,7 @@ func NewCmdClone(f *cmdutil.Factory) *cobra.Command {
 		Short: "Clone a repository locally",
 		Example: `  $ fj repo clone owner/repo
   $ fj repo clone owner/repo my-directory`,
-		Args: cobra.RangeArgs(1, 2),
+		Args: cmdutil.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Repo = args[0]
 			if len(args) > 1 {

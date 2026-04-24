@@ -35,7 +35,7 @@ func NewCmdMerge(f *cmdutil.Factory) *cobra.Command {
   $ fj pr merge 42 --delete-branch
   $ fj pr merge 42 --merge --title "Merge feature" --message "Detailed description"
   $ fj pr merge 42 --auto`,
-		Args: cobra.ExactArgs(1),
+		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
 

@@ -25,7 +25,7 @@ func NewCmdClose(f *cmdutil.Factory) *cobra.Command {
 		Short: "Close a pull request",
 		Example: `  $ fj pr close 42
   $ fj pr close 42 --comment "Closing this PR"`,
-		Args: cobra.ExactArgs(1),
+		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
 			return closeRun(opts)

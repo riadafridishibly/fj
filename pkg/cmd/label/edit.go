@@ -30,7 +30,7 @@ func NewCmdEdit(f *cmdutil.Factory) *cobra.Command {
 		Example: `  $ fj label edit bug --color "#ff0000"
   $ fj label edit bug --new-name bugfix
   $ fj label edit bug --description "Something is broken"`,
-		Args: cobra.ExactArgs(1),
+		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Name = args[0]
 			return editRun(opts)

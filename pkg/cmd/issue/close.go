@@ -25,7 +25,7 @@ func NewCmdClose(f *cmdutil.Factory) *cobra.Command {
 		Short: "Close an issue",
 		Example: `  $ fj issue close 42
   $ fj issue close 42 --comment "Closing as duplicate"`,
-		Args: cobra.ExactArgs(1),
+		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
 			return closeRun(opts)

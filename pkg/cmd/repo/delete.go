@@ -23,7 +23,7 @@ func NewCmdDelete(f *cmdutil.Factory) *cobra.Command {
 		Short: "Delete a repository",
 		Example: `  $ fj repo delete owner/repo
   $ fj repo delete owner/repo --yes`,
-		Args: cobra.ExactArgs(1),
+		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Repo = args[0]
 			return deleteRun(opts)

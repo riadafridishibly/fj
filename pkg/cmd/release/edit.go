@@ -35,7 +35,7 @@ func NewCmdEdit(f *cmdutil.Factory) *cobra.Command {
   $ fj release edit v1.2.0 --notes-file CHANGELOG.md
   $ fj release edit v1.2.0 --draft=false
   $ fj release edit v1.2.0 --prerelease=true`,
-		Args: cobra.ExactArgs(1),
+		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Tag = args[0]
 			if opts.NotesFile != "" {

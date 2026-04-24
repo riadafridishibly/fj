@@ -34,7 +34,7 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
   $ fj repo list --limit 50
   $ fj repo list myorg
   $ fj repo list --json`,
-		Args: cobra.MaximumNArgs(1),
+		Args: cmdutil.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
 				opts.Owner = args[0]

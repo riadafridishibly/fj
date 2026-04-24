@@ -31,7 +31,7 @@ func NewCmdFork(f *cmdutil.Factory) *cobra.Command {
   $ fj repo fork owner/repo --org myorg
   $ fj repo fork owner/repo --clone
   $ fj repo fork`,
-		Args: cobra.MaximumNArgs(1),
+		Args: cmdutil.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
 				opts.Repo = args[0]

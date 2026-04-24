@@ -38,7 +38,7 @@ func NewCmdEdit(f *cmdutil.Factory) *cobra.Command {
   $ fj issue edit 42 --add-assignee riad
   $ fj issue edit 42 --milestone "v1.0"
   $ fj issue edit 42 --json`,
-		Args: cobra.ExactArgs(1),
+		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
 			if opts.BodyFile != "" {

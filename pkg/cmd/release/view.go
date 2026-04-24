@@ -30,7 +30,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
   $ fj release view v1.2.0
   $ fj release view v1.2.0 --web
   $ fj release view v1.2.0 --json`,
-		Args: cobra.MaximumNArgs(1),
+		Args: cmdutil.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
 				opts.Tag = args[0]

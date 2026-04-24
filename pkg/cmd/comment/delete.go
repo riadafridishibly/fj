@@ -24,7 +24,7 @@ func NewCmdDelete(f *cmdutil.Factory, k Kind) *cobra.Command {
 		Short: "Delete a comment by its ID",
 		Example: fmt.Sprintf(`  $ %s delete 12345
   $ %s delete 12345 --yes`, k.CLI, k.CLI),
-		Args: cobra.ExactArgs(1),
+		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.ID = args[0]
 			return deleteRun(opts)

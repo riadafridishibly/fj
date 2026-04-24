@@ -23,7 +23,7 @@ func NewCmdCheckout(f *cmdutil.Factory) *cobra.Command {
 		Use:     "checkout <number>",
 		Short:   "Check out a pull request locally",
 		Example: `  $ fj pr checkout 42`,
-		Args:    cobra.ExactArgs(1),
+		Args:    cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
 			return checkoutRun(opts)

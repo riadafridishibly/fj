@@ -25,7 +25,7 @@ func NewCmdDelete(f *cmdutil.Factory) *cobra.Command {
 		Example: `  $ fj release delete v1.2.0
   $ fj release delete v1.2.0 --yes
   $ fj release delete v1.2.0 --cleanup-tag`,
-		Args: cobra.ExactArgs(1),
+		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Tag = args[0]
 			return deleteRun(opts)

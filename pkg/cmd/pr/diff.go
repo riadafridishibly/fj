@@ -24,7 +24,7 @@ func NewCmdDiff(f *cmdutil.Factory) *cobra.Command {
 		Short: "View the diff of a pull request",
 		Example: `  $ fj pr diff 42
   $ fj pr diff 42 | less`,
-		Args: cobra.ExactArgs(1),
+		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
 			return diffRun(opts)

@@ -30,7 +30,7 @@ func NewCmdList(f *cmdutil.Factory, k Kind) *cobra.Command {
 		Example: fmt.Sprintf(`  $ %s list 42
   $ %s list 42 --limit 100
   $ %s list 42 --json`, k.CLI, k.CLI, k.CLI),
-		Args: cobra.ExactArgs(1),
+		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
 			return listRun(opts, k)

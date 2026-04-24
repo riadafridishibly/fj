@@ -29,7 +29,7 @@ func NewCmdEdit(f *cmdutil.Factory, k Kind) *cobra.Command {
 		Example: fmt.Sprintf(`  $ %s edit 12345 --body "Updated comment"
   $ %s edit 12345 --body-file updated.md
   $ echo "new body" | %s edit 12345 --body-file -`, k.CLI, k.CLI, k.CLI),
-		Args: cobra.ExactArgs(1),
+		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.ID = args[0]
 			if opts.BodyFile != "" {

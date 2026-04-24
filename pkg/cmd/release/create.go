@@ -38,7 +38,7 @@ func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
   $ fj release create v1.2.0 --prerelease --target main
   $ fj release create v1.2.0 dist/fj_linux_amd64.tar.gz dist/fj_darwin_amd64.tar.gz
   $ fj release create v1.2.0 --notes-file - < CHANGELOG.md`,
-		Args: cobra.MinimumNArgs(1),
+		Args: cmdutil.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Tag = args[0]
 			opts.Assets = args[1:]

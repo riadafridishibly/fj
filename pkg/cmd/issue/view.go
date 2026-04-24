@@ -39,7 +39,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
   $ fj issue view 42 --json
   $ fj issue view 42 --download
   $ fj issue view 42 --download --download-dir ./tmp`,
-		Args: cobra.ExactArgs(1),
+		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
 			return viewRun(opts)
