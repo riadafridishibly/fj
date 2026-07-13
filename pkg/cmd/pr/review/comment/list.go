@@ -118,7 +118,7 @@ func listRun(opts *listOptions) error {
 		return nil
 	}
 
-	t := output.NewTable("ID", "REVIEW_ID", "AUTHOR", "PATH", "LINE", "CREATED")
+	t := output.NewTable("ID", "REVIEW_ID", "AUTHOR", "PATH", "LINE", "CREATED").Flexible(3)
 	for _, c := range flat {
 		author := ""
 		if c.Reviewer != nil {
@@ -135,7 +135,7 @@ func listRun(opts *listOptions) error {
 			strconv.FormatInt(c.ID, 10),
 			strconv.FormatInt(c.ReviewID, 10),
 			author,
-			output.Truncate(c.Path, 40),
+			output.Sanitize(c.Path),
 			line,
 			output.Colorize(output.Gray, output.RelativeTimeStr(c.Created)),
 		)

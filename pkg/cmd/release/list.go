@@ -106,7 +106,7 @@ func listRun(opts *listOptions) error {
 
 	fmt.Fprintf(os.Stdout, "\nShowing %d releases in %s\n\n", len(all), repo.FullName())
 
-	t := output.NewTable("TAG", "TITLE", "TYPE", "PUBLISHED")
+	t := output.NewTable("TAG", "TITLE", "TYPE", "PUBLISHED").Flexible(1)
 	for _, r := range all {
 		typ := "release"
 		typeColor := output.Green
@@ -120,7 +120,7 @@ func listRun(opts *listOptions) error {
 		}
 		t.AddRow(
 			output.Colorize(output.Cyan, r.TagName),
-			output.Truncate(r.Title, 60),
+			output.Sanitize(r.Title),
 			output.Colorize(typeColor, typ),
 			output.Colorize(output.Gray, output.RelativeTimeStr(r.PublishedAt)),
 		)

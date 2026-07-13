@@ -142,8 +142,8 @@ func listRun(opts *listOptions) error {
 			len(allRepos), owner)
 	}
 
-	// Table with headers
-	t := output.NewTable("NAME", "DESCRIPTION", "INFO", "UPDATED")
+	// Table with headers. DESCRIPTION flexes to fit the terminal width.
+	t := output.NewTable("NAME", "DESCRIPTION", "INFO", "UPDATED").Flexible(1)
 	for _, r := range allRepos {
 		var info []string
 		if r.Private {
@@ -160,7 +160,7 @@ func listRun(opts *listOptions) error {
 
 		t.AddRow(
 			output.Colorize(output.Bold, r.FullName),
-			output.Truncate(r.Description, 60),
+			output.Sanitize(r.Description),
 			strings.Join(info, ", "),
 			output.Colorize(output.Gray, output.RelativeTimeStr(r.Updated)),
 		)

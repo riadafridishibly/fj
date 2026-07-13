@@ -134,8 +134,8 @@ func listRun(opts *listOptions) error {
 			len(allPRs), opts.State, repo.FullName())
 	}
 
-	// Table with headers
-	t := output.NewTable("NUMBER", "TITLE", "BRANCH", "STATUS", "UPDATED")
+	// Table with headers. TITLE and BRANCH flex to fit the terminal width.
+	t := output.NewTable("NUMBER", "TITLE", "BRANCH", "STATUS", "UPDATED").Flexible(1, 2)
 	for _, pr := range allPRs {
 		status := string(pr.State)
 		statusColor := output.Green
@@ -159,7 +159,7 @@ func listRun(opts *listOptions) error {
 
 		t.AddRow(
 			output.Colorize(statusColor, number),
-			output.Truncate(pr.Title, 50),
+			output.Sanitize(pr.Title),
 			output.Colorize(output.Cyan, head),
 			output.Colorize(statusColor, status),
 			output.Colorize(output.Gray, updated),

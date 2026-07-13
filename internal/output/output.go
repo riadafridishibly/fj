@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -31,6 +32,38 @@ var isTTY = term.IsTerminal(int(os.Stdout.Fd()))
 // IsTerminal returns true if stdout is a terminal
 func IsTerminal() bool {
 	return isTTY
+}
+
+// Table layout width variables. These govern how much horizontal space a
+// rendered Table is allowed to use and how far flexible columns may shrink.
+const (
+	// tablePadding is the number of spaces printed between columns.
+	tablePadding = 2
+	// minFlexWidth is the smallest width a flexible column may shrink to
+	// before the table stops reclaiming space from it (it may still be
+	// floored higher by its header width).
+	minFlexWidth = 12
+)
+
+// TerminalWidth returns the usable width budget for tables:
+//   - the FJ_WIDTH environment override, if set to a positive integer;
+//   - otherwise the current terminal width, when stdout is a TTY;
+//   - otherwise 0, meaning "unbounded" (e.g. when piped) so nothing is
+//     truncated and downstream tools receive full content.
+func TerminalWidth() int {
+	if v := os.Getenv("FJ_WIDTH"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	if !isTTY {
+		return 0
+	}
+	w, _, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil || w <= 0 {
+		return 0
+	}
+	return w
 }
 
 // Colorize wraps text with an ANSI color code, only if stdout is a TTY
@@ -138,17 +171,45 @@ func PrintField(w io.Writer, label, value string) {
 // Table prints aligned columns with proper ANSI color support.
 // Unlike tabwriter, it calculates column widths based on display width
 // (stripping ANSI codes) so colors don't break alignment.
+//
+// Columns marked via Flexible absorb the leftover terminal width and are
+// truncated with an ellipsis only when a row would otherwise overflow the
+// terminal. When the width budget is unbounded (piped output), nothing is
+// truncated.
 type Table struct {
-	headers []string
-	rows    [][]string
-	padding int
+	headers  []string
+	rows     [][]string
+	padding  int
+	maxWidth int
+	flexCols []int
+	minFlex  int
 }
 
 func NewTable(headers ...string) *Table {
 	return &Table{
-		headers: headers,
-		padding: 2,
+		headers:  headers,
+		padding:  tablePadding,
+		maxWidth: TerminalWidth(),
+		minFlex:  minFlexWidth,
 	}
+}
+
+// Flexible marks the given column indices as flexible: they yield width to
+// keep the table within its budget and get truncated with an ellipsis when
+// space runs short. Columns are listed in priority order — the first argument
+// is protected the longest, and later columns give up their width first. So
+// Flexible(titleCol, labelsCol) keeps titles wide and trims labels first.
+// Returns the table for chaining.
+func (t *Table) Flexible(cols ...int) *Table {
+	t.flexCols = cols
+	return t
+}
+
+// MaxWidth overrides the width budget (0 = unbounded). Returns the table
+// for chaining.
+func (t *Table) MaxWidth(w int) *Table {
+	t.maxWidth = w
+	return t
 }
 
 func (t *Table) AddRow(cols ...string) {
@@ -157,21 +218,10 @@ func (t *Table) AddRow(cols ...string) {
 
 func (t *Table) Render(w io.Writer) {
 	numCols := len(t.headers)
-	widths := make([]int, numCols)
+	widths := t.naturalWidths()
 
-	// Measure header widths
-	for i, h := range t.headers {
-		widths[i] = displayWidth(h)
-	}
-
-	// Measure row widths
-	for _, row := range t.rows {
-		for i := range min(len(row), numCols) {
-			if dw := displayWidth(row[i]); dw > widths[i] {
-				widths[i] = dw
-			}
-		}
-	}
+	// Shrink flexible columns so the row fits the width budget.
+	flex := t.fitFlexible(widths)
 
 	// Print header
 	for i, h := range t.headers {
@@ -194,9 +244,13 @@ func (t *Table) Render(w io.Writer) {
 			if i > 0 {
 				fmt.Fprint(w, strings.Repeat(" ", t.padding))
 			}
-			fmt.Fprint(w, row[i])
+			cell := row[i]
+			if flex[i] {
+				cell = truncateDisplay(cell, widths[i])
+			}
+			fmt.Fprint(w, cell)
 			if i < numCols-1 {
-				pad := widths[i] - displayWidth(row[i])
+				pad := widths[i] - displayWidth(cell)
 				if pad > 0 {
 					fmt.Fprint(w, strings.Repeat(" ", pad))
 				}
@@ -204,6 +258,68 @@ func (t *Table) Render(w io.Writer) {
 		}
 		fmt.Fprintln(w)
 	}
+}
+
+// naturalWidths returns the untruncated display width of each column.
+func (t *Table) naturalWidths() []int {
+	numCols := len(t.headers)
+	widths := make([]int, numCols)
+	for i, h := range t.headers {
+		widths[i] = displayWidth(h)
+	}
+	for _, row := range t.rows {
+		for i := range min(len(row), numCols) {
+			if dw := displayWidth(row[i]); dw > widths[i] {
+				widths[i] = dw
+			}
+		}
+	}
+	return widths
+}
+
+// fitFlexible shrinks flexible columns in-place until the total row width fits
+// t.maxWidth (when bounded). It reclaims from the lowest-priority flexible
+// column first (the last one passed to Flexible), fully exhausting it down to
+// its floor before touching the next, so the highest-priority column (e.g. the
+// title) keeps its full width for as long as possible. It returns a lookup of
+// which columns are flexible (and thus truncated at render time).
+func (t *Table) fitFlexible(widths []int) map[int]bool {
+	numCols := len(t.headers)
+	flex := make(map[int]bool, len(t.flexCols))
+	valid := make([]int, 0, len(t.flexCols))
+	for _, c := range t.flexCols {
+		if c < 0 || c >= numCols {
+			continue
+		}
+		flex[c] = true
+		valid = append(valid, c)
+	}
+
+	if t.maxWidth <= 0 || len(valid) == 0 {
+		return flex
+	}
+
+	total := (numCols - 1) * t.padding
+	for _, w := range widths {
+		total += w
+	}
+	overflow := total - t.maxWidth
+
+	// Reclaim from lowest priority (last listed) to highest (first listed).
+	for i := len(valid) - 1; i >= 0 && overflow > 0; i-- {
+		c := valid[i]
+		// Never shrink below the header width or minFlex.
+		floor := t.minFlex
+		if hw := displayWidth(t.headers[c]); hw > floor {
+			floor = hw
+		}
+		if reducible := widths[c] - floor; reducible > 0 {
+			take := min(reducible, overflow)
+			widths[c] -= take
+			overflow -= take
+		}
+	}
+	return flex
 }
 
 // displayWidth returns the visible width of a string, ignoring ANSI escape codes.
@@ -224,4 +340,48 @@ func displayWidth(s string) int {
 		n++
 	}
 	return n
+}
+
+// truncateDisplay shortens s to at most maxWidth display columns, appending a
+// single-column ellipsis when it has to cut. ANSI escape sequences are copied
+// through without counting toward the width, and a Reset is appended if the
+// string contained color so a mid-color cut doesn't bleed into later columns.
+func truncateDisplay(s string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return ""
+	}
+	if displayWidth(s) <= maxWidth {
+		return s
+	}
+	const ellipsis = "…"
+	limit := maxWidth - 1 // reserve one column for the ellipsis
+	var b strings.Builder
+	n := 0
+	inEscape := false
+	hadColor := false
+	for _, r := range s {
+		if inEscape {
+			b.WriteRune(r)
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+				inEscape = false
+			}
+			continue
+		}
+		if r == '\033' {
+			inEscape = true
+			hadColor = true
+			b.WriteRune(r)
+			continue
+		}
+		if n >= limit {
+			break
+		}
+		b.WriteRune(r)
+		n++
+	}
+	b.WriteString(ellipsis)
+	if hadColor {
+		b.WriteString(Reset)
+	}
+	return b.String()
 }

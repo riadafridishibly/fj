@@ -126,8 +126,8 @@ func listRun(opts *listOptions) error {
 			len(allIssues), opts.State, repo.FullName())
 	}
 
-	// Table with headers
-	t := output.NewTable("NUMBER", "TITLE", "LABELS", "UPDATED")
+	// Table with headers. TITLE and LABELS flex to fit the terminal width.
+	t := output.NewTable("NUMBER", "TITLE", "LABELS", "UPDATED").Flexible(1, 2)
 	for _, issue := range allIssues {
 		var labels strings.Builder
 		for i, l := range issue.Labels {
@@ -145,7 +145,7 @@ func listRun(opts *listOptions) error {
 
 		t.AddRow(
 			output.Colorize(stateColor, number),
-			output.Truncate(issue.Title, 60),
+			output.Sanitize(issue.Title),
 			output.Colorize(output.Cyan, labels.String()),
 			output.Colorize(output.Gray, output.RelativeTimeStr(issue.Updated)),
 		)

@@ -99,7 +99,7 @@ func listRun(opts *listOptions, k Kind) error {
 	fmt.Fprintf(os.Stdout, "\nShowing %d comments on %s #%d in %s\n\n",
 		len(all), k.Noun, index, repo.FullName())
 
-	t := output.NewTable("ID", "AUTHOR", "UPDATED", "BODY")
+	t := output.NewTable("ID", "AUTHOR", "UPDATED", "BODY").Flexible(3)
 	for _, c := range all {
 		author := ""
 		if c.Poster != nil {
@@ -109,7 +109,7 @@ func listRun(opts *listOptions, k Kind) error {
 			output.Colorize(output.Green, strconv.FormatInt(c.ID, 10)),
 			author,
 			output.Colorize(output.Gray, output.RelativeTimeStr(c.Updated)),
-			output.Truncate(c.Body, 80),
+			output.Sanitize(c.Body),
 		)
 	}
 	t.Render(os.Stdout)

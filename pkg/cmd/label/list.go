@@ -86,12 +86,12 @@ func listRun(opts *listOptions) error {
 
 	fmt.Fprintf(os.Stdout, "\nShowing %d labels in %s\n\n", len(allLabels), repo.FullName())
 
-	t := output.NewTable("NAME", "COLOR", "DESCRIPTION")
+	t := output.NewTable("NAME", "COLOR", "DESCRIPTION").Flexible(2)
 	for _, l := range allLabels {
 		t.AddRow(
 			output.Colorize(output.Cyan, l.Name),
 			"#"+l.Color,
-			output.Truncate(l.Description, 60),
+			output.Sanitize(l.Description),
 		)
 	}
 	t.Render(os.Stdout)
