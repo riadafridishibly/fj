@@ -18,6 +18,7 @@ type listOptions struct {
 	State      string
 	Label      string
 	Milestone  string
+	Head       string
 	JSONOutput bool
 }
 
@@ -31,6 +32,7 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 		Example: `  $ fj pr list
   $ fj pr list --state closed
   $ fj pr list --limit 50
+  $ fj pr list --head feature-1
   $ fj pr list --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return listRun(opts)
@@ -41,6 +43,7 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVarP(&opts.State, "state", "s", "open", "Filter by state: open, closed, all")
 	cmd.Flags().StringVarP(&opts.Label, "label", "l", "", "Filter by label")
 	cmd.Flags().StringVarP(&opts.Milestone, "milestone", "m", "", "Filter by milestone")
+	cmd.Flags().StringVarP(&opts.Head, "head", "H", "", "Filter by head branch")
 	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
 
 	return cmd
@@ -57,7 +60,11 @@ func listRun(opts *listOptions) error {
 		return err
 	}
 
+	// When filtering client-side (head), grab full pages to reduce round trips.
 	pageSize := min(opts.Limit, 50)
+	if opts.Head != "" {
+		pageSize = 50
+	}
 
 	listOpt := forgejo.ListPullRequestsOptions{
 		ListOptions: forgejo.ListOptions{Page: 1, PageSize: pageSize},
@@ -87,14 +94,19 @@ func listRun(opts *listOptions) error {
 		if len(prs) == 0 {
 			break
 		}
-		allPRs = append(allPRs, prs...)
+		for _, pr := range prs {
+			if opts.Head != "" && (pr.Head == nil || pr.Head.Ref != opts.Head) {
+				continue
+			}
+			allPRs = append(allPRs, pr)
+			if len(allPRs) >= opts.Limit {
+				break
+			}
+		}
 		if len(prs) < pageSize {
 			break
 		}
 		page++
-	}
-	if len(allPRs) > opts.Limit {
-		allPRs = allPRs[:opts.Limit]
 	}
 
 	if opts.JSONOutput {
@@ -108,11 +120,16 @@ func listRun(opts *listOptions) error {
 		return nil
 	}
 
-	// Status line
-	if totalCount > 0 {
+	// Status line. The API's X-Total-Count is the unfiltered total, so when
+	// we're filtering client-side (head) we can't quote it as the "of N" total.
+	switch {
+	case opts.Head != "":
+		fmt.Fprintf(os.Stdout, "\nShowing %d %s pull requests with head %q in %s\n\n",
+			len(allPRs), opts.State, opts.Head, repo.FullName())
+	case totalCount > 0:
 		fmt.Fprintf(os.Stdout, "\nShowing %d of %d %s pull requests in %s\n\n",
 			len(allPRs), totalCount, opts.State, repo.FullName())
-	} else {
+	default:
 		fmt.Fprintf(os.Stdout, "\nShowing %d %s pull requests in %s\n\n",
 			len(allPRs), opts.State, repo.FullName())
 	}
