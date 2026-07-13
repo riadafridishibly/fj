@@ -17,7 +17,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 			os.Exit(2)
 		}
-		if err != cmdutil.SilentError {
+		if err != cmdutil.ErrSilent {
 			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		}
 		os.Exit(1)

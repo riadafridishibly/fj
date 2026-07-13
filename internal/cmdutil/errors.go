@@ -5,8 +5,8 @@ import (
 	"fmt"
 )
 
-// SilentError is an error that should not be printed, only the exit code matters.
-var SilentError = errors.New("SilentError")
+// ErrSilent is an error that should not be printed, only the exit code matters.
+var ErrSilent = errors.New("SilentError")
 
 // FlagErrorf creates a flag-related error. Cobra will show usage when this is returned.
 func FlagErrorf(format string, args ...any) error {

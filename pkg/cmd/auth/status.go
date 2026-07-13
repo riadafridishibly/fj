@@ -44,7 +44,7 @@ func statusRun(opts *statusOptions) error {
 
 	if len(cfg.Hosts) == 0 {
 		fmt.Fprintln(os.Stderr, "You are not logged in to any Forgejo hosts. Run 'fj auth login' to authenticate.")
-		return cmdutil.SilentError
+		return cmdutil.ErrSilent
 	}
 
 	type hostStatus struct {
