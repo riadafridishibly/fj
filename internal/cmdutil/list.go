@@ -2,7 +2,9 @@ package cmdutil
 
 import (
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // sortAliases maps the friendly --sort values fj accepts to the sort keys the
@@ -49,4 +51,46 @@ func sortValues() []string {
 	}
 	sort.Strings(vals)
 	return vals
+}
+
+// ParseTimeFilter parses a --since/--before style value into an absolute time.
+// It accepts an RFC3339 timestamp, a plain YYYY-MM-DD date, or a relative age
+// like "7d", "24h", "2w", "30m" interpreted as "that long ago". An empty input
+// yields the zero time (meaning "no filter").
+func ParseTimeFilter(v string) (time.Time, error) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return time.Time{}, nil
+	}
+	if t, err := time.Parse(time.RFC3339, v); err == nil {
+		return t, nil
+	}
+	if t, err := time.Parse("2006-01-02", v); err == nil {
+		return t, nil
+	}
+	if d, ok := parseRelativeAge(v); ok {
+		return time.Now().Add(-d), nil
+	}
+	return time.Time{}, FlagErrorf(
+		"invalid time %q (use YYYY-MM-DD, an RFC3339 timestamp, or a relative age like 7d)", v)
+}
+
+// parseRelativeAge parses durations Go's time.ParseDuration rejects — days and
+// weeks — falling back to time.ParseDuration for h/m/s units.
+func parseRelativeAge(v string) (time.Duration, bool) {
+	if len(v) >= 2 {
+		unit := v[len(v)-1]
+		if n, err := strconv.Atoi(v[:len(v)-1]); err == nil && n >= 0 {
+			switch unit {
+			case 'd':
+				return time.Duration(n) * 24 * time.Hour, true
+			case 'w':
+				return time.Duration(n) * 7 * 24 * time.Hour, true
+			}
+		}
+	}
+	if d, err := time.ParseDuration(v); err == nil {
+		return d, true
+	}
+	return 0, false
 }

@@ -3,7 +3,10 @@ package issue
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
@@ -22,6 +25,10 @@ type listOptions struct {
 	Author     string
 	Milestone  string
 	Search     string
+	Sort       string
+	Since      string
+	Before     string
+	Mention    string
 	JSONOutput bool
 }
 
@@ -36,7 +43,8 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
   $ fj issue list --state closed
   $ fj issue list --label bug --label urgent
   $ fj issue list --assignee riad
-  $ fj issue list --limit 50
+  $ fj issue list --sort oldest
+  $ fj issue list --since 7d
   $ fj issue list --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return listRun(opts)
@@ -50,6 +58,10 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVarP(&opts.Author, "author", "A", "", "Filter by author")
 	cmd.Flags().StringVarP(&opts.Milestone, "milestone", "m", "", "Filter by milestone")
 	cmd.Flags().StringVarP(&opts.Search, "search", "S", "", "Search issues")
+	cmd.Flags().StringVar(&opts.Sort, "sort", "", "Sort order: newest, oldest, recently-updated, most-commented, ...")
+	cmd.Flags().StringVar(&opts.Since, "since", "", "Only issues updated after this time (YYYY-MM-DD, RFC3339, or an age like 7d)")
+	cmd.Flags().StringVar(&opts.Before, "before", "", "Only issues updated before this time (YYYY-MM-DD, RFC3339, or an age like 7d)")
+	cmd.Flags().StringVar(&opts.Mention, "mention", "", "Filter by user mentioned in the issue")
 	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
 
 	return cmd
@@ -61,7 +73,15 @@ func listRun(opts *listOptions) error {
 		return err
 	}
 
-	client, err := opts.Factory.ClientForRepo(repo)
+	sortKey, err := cmdutil.SortValue(opts.Sort)
+	if err != nil {
+		return err
+	}
+	since, err := cmdutil.ParseTimeFilter(opts.Since)
+	if err != nil {
+		return err
+	}
+	before, err := cmdutil.ParseTimeFilter(opts.Before)
 	if err != nil {
 		return err
 	}
@@ -76,6 +96,9 @@ func listRun(opts *listOptions) error {
 		KeyWord:     opts.Search,
 		CreatedBy:   opts.Author,
 		AssignedBy:  opts.Assignee,
+		MentionedBy: opts.Mention,
+		Since:       since,
+		Before:      before,
 	}
 	if opts.Milestone != "" {
 		listOpt.Milestones = []string{opts.Milestone}
@@ -86,12 +109,12 @@ func listRun(opts *listOptions) error {
 	page := 1
 	for len(allIssues) < opts.Limit {
 		listOpt.Page = page
-		issues, resp, err := client.ListRepoIssues(repo.Owner, repo.Name, listOpt)
+		issues, total, err := fetchIssues(opts.Factory, repo, listOpt, sortKey)
 		if err != nil {
-			return fmt.Errorf("listing issues: %w", err)
+			return err
 		}
 		if page == 1 {
-			totalCount = cmdutil.TotalCount(resp)
+			totalCount = total
 		}
 		if len(issues) == 0 {
 			break
@@ -152,4 +175,39 @@ func listRun(opts *listOptions) error {
 	}
 	t.Render(os.Stdout)
 	return nil
+}
+
+// fetchIssues fetches one page of issues via the raw REST endpoint. We bypass
+// the SDK's ListRepoIssues here because its ListIssueOption has no field for
+// the "sort" query parameter; everything else is still encoded by the SDK's
+// QueryEncode. It returns the page and the unfiltered X-Total-Count header.
+func fetchIssues(f *cmdutil.Factory, repo cmdutil.Repo, opt forgejo.ListIssueOption, sortKey string) ([]*forgejo.Issue, int, error) {
+	query := opt.QueryEncode()
+	if sortKey != "" {
+		query += "&sort=" + url.QueryEscape(sortKey)
+	}
+	path := fmt.Sprintf("/repos/%s/%s/issues?%s",
+		url.PathEscape(repo.Owner), url.PathEscape(repo.Name), query)
+
+	resp, err := f.APIGet(repo, path)
+	if err != nil {
+		return nil, 0, fmt.Errorf("listing issues: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return nil, 0, fmt.Errorf("listing issues: %s: %s", resp.Status, strings.TrimSpace(string(body)))
+	}
+
+	var issues []*forgejo.Issue
+	if err := json.NewDecoder(resp.Body).Decode(&issues); err != nil {
+		return nil, 0, fmt.Errorf("decoding issues: %w", err)
+	}
+
+	total := 0
+	if s := resp.Header.Get("X-Total-Count"); s != "" {
+		total, _ = strconv.Atoi(s)
+	}
+	return issues, total, nil
 }
