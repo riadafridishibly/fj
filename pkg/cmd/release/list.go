@@ -55,10 +55,7 @@ func listRun(opts *listOptions) error {
 		return err
 	}
 
-	pageSize := opts.Limit
-	if pageSize > 50 {
-		pageSize = 50
-	}
+	pageSize := min(opts.Limit, 50)
 
 	listOpt := forgejo.ListReleasesOptions{
 		ListOptions: forgejo.ListOptions{Page: 1, PageSize: pageSize},

@@ -31,7 +31,7 @@ func TestTableTruncatesFlexibleColumnToFit(t *testing.T) {
 	var b strings.Builder
 	tbl.Render(&b)
 
-	for _, line := range strings.Split(strings.TrimRight(b.String(), "\n"), "\n") {
+	for line := range strings.SplitSeq(strings.TrimRight(b.String(), "\n"), "\n") {
 		if w := lineWidth(line); w > maxWidth {
 			t.Errorf("line exceeds max width %d (got %d): %q", maxWidth, w, line)
 		}

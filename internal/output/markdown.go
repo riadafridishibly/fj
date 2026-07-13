@@ -31,11 +31,11 @@ var fjStyle = ansi.StyleConfig{
 	},
 	BlockQuote: ansi.StyleBlock{
 		StylePrimitive: ansi.StylePrimitive{
-			Color:  stringPtr("242"),
-			Italic: boolPtr(true),
+			Color:  new("242"),
+			Italic: new(true),
 		},
 		Indent:      uintPtr(1),
-		IndentToken: stringPtr("│ "),
+		IndentToken: new("│ "),
 	},
 	Paragraph: ansi.StyleBlock{
 		StylePrimitive: ansi.StylePrimitive{},
@@ -50,58 +50,58 @@ var fjStyle = ansi.StyleConfig{
 	Heading: ansi.StyleBlock{
 		StylePrimitive: ansi.StylePrimitive{
 			BlockSuffix: "\n",
-			Color:       stringPtr("39"),
-			Bold:        boolPtr(true),
+			Color:       new("39"),
+			Bold:        new(true),
 		},
 	},
 	H1: ansi.StyleBlock{
 		StylePrimitive: ansi.StylePrimitive{
 			Prefix:          " ",
 			Suffix:          " ",
-			Color:           stringPtr("228"),
-			BackgroundColor: stringPtr("63"),
-			Bold:            boolPtr(true),
+			Color:           new("228"),
+			BackgroundColor: new("63"),
+			Bold:            new(true),
 		},
 	},
 	H2: ansi.StyleBlock{
 		StylePrimitive: ansi.StylePrimitive{
 			Prefix: "## ",
-			Color:  stringPtr("39"),
-			Bold:   boolPtr(true),
+			Color:  new("39"),
+			Bold:   new(true),
 		},
 	},
 	H3: ansi.StyleBlock{
 		StylePrimitive: ansi.StylePrimitive{
 			Prefix: "### ",
-			Color:  stringPtr("36"),
-			Bold:   boolPtr(true),
+			Color:  new("36"),
+			Bold:   new(true),
 		},
 	},
 	H4: ansi.StyleBlock{
 		StylePrimitive: ansi.StylePrimitive{
 			Prefix: "#### ",
-			Color:  stringPtr("36"),
+			Color:  new("36"),
 		},
 	},
 	H5: ansi.StyleBlock{
 		StylePrimitive: ansi.StylePrimitive{
 			Prefix: "##### ",
-			Color:  stringPtr("36"),
+			Color:  new("36"),
 		},
 	},
 	H6: ansi.StyleBlock{
 		StylePrimitive: ansi.StylePrimitive{
 			Prefix: "###### ",
-			Color:  stringPtr("36"),
-			Bold:   boolPtr(false),
+			Color:  new("36"),
+			Bold:   new(false),
 		},
 	},
 
-	Strikethrough: ansi.StylePrimitive{CrossedOut: boolPtr(true)},
-	Emph:          ansi.StylePrimitive{Italic: boolPtr(true)},
-	Strong:        ansi.StylePrimitive{Bold: boolPtr(true)},
+	Strikethrough: ansi.StylePrimitive{CrossedOut: new(true)},
+	Emph:          ansi.StylePrimitive{Italic: new(true)},
+	Strong:        ansi.StylePrimitive{Bold: new(true)},
 	HorizontalRule: ansi.StylePrimitive{
-		Color:  stringPtr("242"),
+		Color:  new("242"),
 		Format: "\n--------\n",
 	},
 
@@ -114,19 +114,19 @@ var fjStyle = ansi.StyleConfig{
 	},
 
 	Link: ansi.StylePrimitive{
-		Color:     stringPtr("36"),
-		Underline: boolPtr(true),
+		Color:     new("36"),
+		Underline: new(true),
 	},
 	LinkText: ansi.StylePrimitive{
-		Color: stringPtr("36"),
+		Color: new("36"),
 	},
 
 	Image: ansi.StylePrimitive{
-		Color:     stringPtr("36"),
-		Underline: boolPtr(true),
+		Color:     new("36"),
+		Underline: new(true),
 	},
 	ImageText: ansi.StylePrimitive{
-		Color:  stringPtr("36"),
+		Color:  new("36"),
 		Format: "Image: {{.text}} →",
 	},
 
@@ -134,7 +134,7 @@ var fjStyle = ansi.StyleConfig{
 		StylePrimitive: ansi.StylePrimitive{
 			Prefix: "`",
 			Suffix: "`",
-			Color:  stringPtr("203"),
+			Color:  new("203"),
 		},
 	},
 	CodeBlock: ansi.StyleCodeBlock{
@@ -145,32 +145,32 @@ var fjStyle = ansi.StyleConfig{
 		// Chroma (syntax highlighting) requires hex color strings, unlike
 		// the rest of the style which uses ANSI 256-color codes.
 		Chroma: &ansi.Chroma{
-			Text:                ansi.StylePrimitive{Color: stringPtr("#C4C4C4")},
-			Error:               ansi.StylePrimitive{Color: stringPtr("#F1F1F1"), BackgroundColor: stringPtr("#F05B5B")},
-			Comment:             ansi.StylePrimitive{Color: stringPtr("#676767"), Italic: boolPtr(true)},
-			CommentPreproc:      ansi.StylePrimitive{Color: stringPtr("#FF875F")},
-			Keyword:             ansi.StylePrimitive{Color: stringPtr("#00AAFF")},
-			KeywordReserved:     ansi.StylePrimitive{Color: stringPtr("#FF5FD2")},
-			KeywordNamespace:    ansi.StylePrimitive{Color: stringPtr("#FF5FD2")},
-			KeywordType:         ansi.StylePrimitive{Color: stringPtr("#EEAA00")},
-			Operator:            ansi.StylePrimitive{Color: stringPtr("#EF8080")},
-			Punctuation:         ansi.StylePrimitive{Color: stringPtr("#E8E8A8")},
-			Name:                ansi.StylePrimitive{Color: stringPtr("#C4C4C4")},
-			NameBuiltin:         ansi.StylePrimitive{Color: stringPtr("#FF8EC7")},
-			NameTag:             ansi.StylePrimitive{Color: stringPtr("#B083EA")},
-			NameAttribute:       ansi.StylePrimitive{Color: stringPtr("#7A7AE6")},
-			NameClass:           ansi.StylePrimitive{Color: stringPtr("#F1F1F1"), Bold: boolPtr(true)},
-			NameDecorator:       ansi.StylePrimitive{Color: stringPtr("#FFFF87")},
-			NameFunction:        ansi.StylePrimitive{Color: stringPtr("#00D787")},
-			LiteralNumber:       ansi.StylePrimitive{Color: stringPtr("#6EEFC0")},
-			LiteralString:       ansi.StylePrimitive{Color: stringPtr("#C69669")},
-			LiteralStringEscape: ansi.StylePrimitive{Color: stringPtr("#AFFFD7")},
-			GenericDeleted:      ansi.StylePrimitive{Color: stringPtr("#FD5B5B")},
-			GenericInserted:     ansi.StylePrimitive{Color: stringPtr("#00D787")},
-			GenericEmph:         ansi.StylePrimitive{Italic: boolPtr(true)},
-			GenericStrong:       ansi.StylePrimitive{Bold: boolPtr(true)},
-			GenericSubheading:   ansi.StylePrimitive{Color: stringPtr("#777777")},
-			Background:          ansi.StylePrimitive{BackgroundColor: stringPtr("#373737")},
+			Text:                ansi.StylePrimitive{Color: new("#C4C4C4")},
+			Error:               ansi.StylePrimitive{Color: new("#F1F1F1"), BackgroundColor: new("#F05B5B")},
+			Comment:             ansi.StylePrimitive{Color: new("#676767"), Italic: new(true)},
+			CommentPreproc:      ansi.StylePrimitive{Color: new("#FF875F")},
+			Keyword:             ansi.StylePrimitive{Color: new("#00AAFF")},
+			KeywordReserved:     ansi.StylePrimitive{Color: new("#FF5FD2")},
+			KeywordNamespace:    ansi.StylePrimitive{Color: new("#FF5FD2")},
+			KeywordType:         ansi.StylePrimitive{Color: new("#EEAA00")},
+			Operator:            ansi.StylePrimitive{Color: new("#EF8080")},
+			Punctuation:         ansi.StylePrimitive{Color: new("#E8E8A8")},
+			Name:                ansi.StylePrimitive{Color: new("#C4C4C4")},
+			NameBuiltin:         ansi.StylePrimitive{Color: new("#FF8EC7")},
+			NameTag:             ansi.StylePrimitive{Color: new("#B083EA")},
+			NameAttribute:       ansi.StylePrimitive{Color: new("#7A7AE6")},
+			NameClass:           ansi.StylePrimitive{Color: new("#F1F1F1"), Bold: new(true)},
+			NameDecorator:       ansi.StylePrimitive{Color: new("#FFFF87")},
+			NameFunction:        ansi.StylePrimitive{Color: new("#00D787")},
+			LiteralNumber:       ansi.StylePrimitive{Color: new("#6EEFC0")},
+			LiteralString:       ansi.StylePrimitive{Color: new("#C69669")},
+			LiteralStringEscape: ansi.StylePrimitive{Color: new("#AFFFD7")},
+			GenericDeleted:      ansi.StylePrimitive{Color: new("#FD5B5B")},
+			GenericInserted:     ansi.StylePrimitive{Color: new("#00D787")},
+			GenericEmph:         ansi.StylePrimitive{Italic: new(true)},
+			GenericStrong:       ansi.StylePrimitive{Bold: new(true)},
+			GenericSubheading:   ansi.StylePrimitive{Color: new("#777777")},
+			Background:          ansi.StylePrimitive{BackgroundColor: new("#373737")},
 		},
 	},
 
@@ -182,19 +182,19 @@ var fjStyle = ansi.StyleConfig{
 		StyleBlock: ansi.StyleBlock{
 			StylePrimitive: ansi.StylePrimitive{},
 		},
-		CenterSeparator: stringPtr("┼"),
-		ColumnSeparator: stringPtr("│"),
-		RowSeparator:    stringPtr("─"),
+		CenterSeparator: new("┼"),
+		ColumnSeparator: new("│"),
+		RowSeparator:    new("─"),
 	},
 
 	DefinitionList: ansi.StyleBlock{StylePrimitive: ansi.StylePrimitive{}},
-	DefinitionTerm: ansi.StylePrimitive{Bold: boolPtr(true)},
+	DefinitionTerm: ansi.StylePrimitive{Bold: new(true)},
 	DefinitionDescription: ansi.StylePrimitive{
 		BlockPrefix: "\n  ",
 	},
 
-	HTMLBlock: ansi.StyleBlock{StylePrimitive: ansi.StylePrimitive{Color: stringPtr("242")}},
-	HTMLSpan:  ansi.StyleBlock{StylePrimitive: ansi.StylePrimitive{Color: stringPtr("242")}},
+	HTMLBlock: ansi.StyleBlock{StylePrimitive: ansi.StylePrimitive{Color: new("242")}},
+	HTMLSpan:  ansi.StyleBlock{StylePrimitive: ansi.StylePrimitive{Color: new("242")}},
 }
 
 var (
@@ -492,7 +492,7 @@ func naturalTableWidth(headers []string, rows [][]string) int {
 			if i >= len(widths) {
 				break
 			}
-			for _, line := range strings.Split(c, "\n") {
+			for line := range strings.SplitSeq(c, "\n") {
 				if w := lipgloss.Width(line); w > widths[i] {
 					widths[i] = w
 				}
@@ -506,6 +506,5 @@ func naturalTableWidth(headers []string, rows [][]string) int {
 	return total
 }
 
-func stringPtr(s string) *string { return &s }
-func boolPtr(b bool) *bool       { return &b }
-func uintPtr(u uint) *uint       { return &u }
+//go:fix inline
+func uintPtr(u uint) *uint { return new(u) }
