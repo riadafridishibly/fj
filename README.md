@@ -93,6 +93,20 @@ fj issue comment 42 --body "Fixed in …"   # Comment on an issue
 fj issue edit 42 --title "New title"      # Edit an issue
 ```
 
+### Milestones
+
+```sh
+fj milestone list                         # List open milestones
+fj milestone list --state all             # List all milestones
+fj milestone view v1.0                    # View a milestone
+fj milestone create --title v1.0 \
+  --due-date 2026-12-31                   # Create a milestone
+fj milestone edit v1.0 --title v1.1       # Edit a milestone
+fj milestone close v1.0                   # Close a milestone
+fj milestone reopen v1.0                  # Reopen a milestone
+fj milestone delete v1.0                  # Delete (with confirmation)
+```
+
 ### Pull Requests
 
 ```sh

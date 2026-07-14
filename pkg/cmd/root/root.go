@@ -10,6 +10,7 @@ import (
 	authCmd "github.com/riadafridishibly/fj/pkg/cmd/auth"
 	issueCmd "github.com/riadafridishibly/fj/pkg/cmd/issue"
 	labelCmd "github.com/riadafridishibly/fj/pkg/cmd/label"
+	milestoneCmd "github.com/riadafridishibly/fj/pkg/cmd/milestone"
 	prCmd "github.com/riadafridishibly/fj/pkg/cmd/pr"
 	releaseCmd "github.com/riadafridishibly/fj/pkg/cmd/release"
 	repoCmd "github.com/riadafridishibly/fj/pkg/cmd/repo"
@@ -44,6 +45,7 @@ func NewCmdRoot(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(repoCmd.NewCmdRepo(f))
 	cmd.AddCommand(issueCmd.NewCmdIssue(f))
 	cmd.AddCommand(labelCmd.NewCmdLabel(f))
+	cmd.AddCommand(milestoneCmd.NewCmdMilestone(f))
 	cmd.AddCommand(prCmd.NewCmdPR(f))
 	cmd.AddCommand(releaseCmd.NewCmdRelease(f))
 	cmd.AddCommand(statusCmd.NewCmdStatus(f))
