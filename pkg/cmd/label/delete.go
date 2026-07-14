@@ -74,7 +74,7 @@ func deleteRun(opts *deleteOptions) error {
 	fmt.Fprintf(os.Stderr, "Label #%d %q (color %s)\n", label.ID, label.Name, label.Color)
 
 	if !perform {
-		fmt.Fprintln(os.Stderr, "(dry-run; no changes were made)")
+		fmt.Fprintln(os.Stderr, cmdutil.DryRunMessage)
 		return nil
 	}
 

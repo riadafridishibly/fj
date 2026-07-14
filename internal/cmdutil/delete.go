@@ -2,6 +2,11 @@ package cmdutil
 
 import "github.com/spf13/cobra"
 
+// DryRunMessage is the standard notice printed when a delete command resolves
+// its target but leaves it intact because --dry-run was given. Centralizing it
+// keeps the wording identical across all delete commands.
+const DryRunMessage = "(dry-run; no changes were made)"
+
 // AddDeleteFlags registers the two flags every delete command shares:
 //
 //	--yes     perform the deletion

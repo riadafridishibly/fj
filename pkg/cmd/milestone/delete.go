@@ -63,7 +63,7 @@ func deleteRun(opts *deleteOptions) error {
 		ms.ID, ms.Title, ms.State, ms.OpenIssues, ms.ClosedIssues)
 
 	if !perform {
-		fmt.Fprintln(os.Stderr, "(dry-run; no changes were made)")
+		fmt.Fprintln(os.Stderr, cmdutil.DryRunMessage)
 		return nil
 	}
 

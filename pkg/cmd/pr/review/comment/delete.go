@@ -93,7 +93,7 @@ func deleteRun(opts *deleteOptions) error {
 		target.ID, author, target.Path, reviewID, cmdutil.Excerpt(target.Body))
 
 	if !perform {
-		fmt.Fprintln(os.Stderr, "(dry-run; no changes were made)")
+		fmt.Fprintln(os.Stderr, cmdutil.DryRunMessage)
 		return nil
 	}
 
