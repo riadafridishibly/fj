@@ -13,6 +13,7 @@ type deleteOptions struct {
 	Factory *cmdutil.Factory
 	Name    string
 	Yes     bool
+	DryRun  bool
 }
 
 func NewCmdDelete(f *cmdutil.Factory) *cobra.Command {
@@ -21,8 +22,8 @@ func NewCmdDelete(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <milestone>",
 		Short: "Delete a milestone",
-		Example: `  $ fj milestone delete v1.0
-  $ fj milestone delete v1.0 --yes`,
+		Example: `  $ fj milestone delete v1.0 --yes
+  $ fj milestone delete v1.0 --dry-run`,
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Name = args[0]
@@ -30,25 +31,20 @@ func NewCmdDelete(f *cmdutil.Factory) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&opts.Yes, "yes", false, "Skip confirmation prompt")
+	cmdutil.AddDeleteFlags(cmd, &opts.Yes, &opts.DryRun)
 
 	return cmd
 }
 
 func deleteRun(opts *deleteOptions) error {
-	repo, err := opts.Factory.BaseRepo()
+	perform, err := cmdutil.ResolveDeleteFlags(opts.Yes, opts.DryRun)
 	if err != nil {
 		return err
 	}
 
-	if !opts.Yes {
-		fmt.Fprintf(os.Stderr, "Are you sure you want to delete milestone %q? This cannot be undone. (y/N): ", opts.Name)
-		var confirm string
-		fmt.Scanln(&confirm)
-		if confirm != "y" && confirm != "Y" {
-			fmt.Fprintln(os.Stderr, "Aborted.")
-			return nil
-		}
+	repo, err := opts.Factory.BaseRepo()
+	if err != nil {
+		return err
 	}
 
 	client, err := opts.Factory.ClientForRepo(repo)
@@ -56,7 +52,22 @@ func deleteRun(opts *deleteOptions) error {
 		return err
 	}
 
-	if _, err := client.DeleteMilestoneByName(repo.Owner, repo.Name, opts.Name); err != nil {
+	// Resolve the milestone first so a wrong name fails before anything is
+	// deleted, and so the user can verify the target.
+	ms, _, err := client.GetMilestoneByName(repo.Owner, repo.Name, opts.Name)
+	if err != nil {
+		return fmt.Errorf("fetching milestone %q: %w", opts.Name, err)
+	}
+
+	fmt.Fprintf(os.Stderr, "Milestone #%d %q (%s, %d open / %d closed)\n",
+		ms.ID, ms.Title, ms.State, ms.OpenIssues, ms.ClosedIssues)
+
+	if !perform {
+		fmt.Fprintln(os.Stderr, "(dry-run; no changes were made)")
+		return nil
+	}
+
+	if _, err := client.DeleteMilestone(repo.Owner, repo.Name, ms.ID); err != nil {
 		return fmt.Errorf("deleting milestone: %w", err)
 	}
 

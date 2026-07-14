@@ -13,6 +13,7 @@ type deleteOptions struct {
 	Factory *cmdutil.Factory
 	Repo    string
 	Yes     bool
+	DryRun  bool
 }
 
 func NewCmdDelete(f *cmdutil.Factory) *cobra.Command {
@@ -21,8 +22,8 @@ func NewCmdDelete(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <owner/repo>",
 		Short: "Delete a repository",
-		Example: `  $ fj repo delete owner/repo
-  $ fj repo delete owner/repo --yes`,
+		Example: `  $ fj repo delete owner/repo --yes
+  $ fj repo delete owner/repo --dry-run`,
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Repo = args[0]
@@ -30,12 +31,17 @@ func NewCmdDelete(f *cmdutil.Factory) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&opts.Yes, "yes", false, "Skip confirmation prompt")
+	cmdutil.AddDeleteFlags(cmd, &opts.Yes, &opts.DryRun)
 
 	return cmd
 }
 
 func deleteRun(opts *deleteOptions) error {
+	perform, err := cmdutil.ResolveDeleteFlags(opts.Yes, opts.DryRun)
+	if err != nil {
+		return err
+	}
+
 	repo, err := cmdutil.RepoFromFullName(opts.Repo)
 	if err != nil {
 		return err
@@ -51,23 +57,32 @@ func deleteRun(opts *deleteOptions) error {
 	}
 	repo.Host = host
 
-	if !opts.Yes {
-		fmt.Fprintf(os.Stderr, "Are you sure you want to delete %s? This cannot be undone. (y/N): ", repo.FullName())
-		var confirm string
-		fmt.Scanln(&confirm)
-		if confirm != "y" && confirm != "Y" {
-			fmt.Fprintln(os.Stderr, "Aborted.")
-			return nil
-		}
-	}
-
 	client, err := opts.Factory.ClientForRepo(repo)
 	if err != nil {
 		return err
 	}
 
-	_, err = client.DeleteRepo(repo.Owner, repo.Name)
+	// Resolve the repo first so a wrong name fails before anything is deleted.
+	info, _, err := client.GetRepo(repo.Owner, repo.Name)
 	if err != nil {
+		return fmt.Errorf("fetching repository %s: %w", repo.FullName(), err)
+	}
+
+	fmt.Fprintf(os.Stderr, "Repository %s (%d★)", info.FullName, info.Stars)
+	if info.Private {
+		fmt.Fprint(os.Stderr, " [private]")
+	}
+	if info.Archived {
+		fmt.Fprint(os.Stderr, " [archived]")
+	}
+	fmt.Fprintln(os.Stderr)
+
+	if !perform {
+		fmt.Fprintln(os.Stderr, "(dry-run; no changes were made)")
+		return nil
+	}
+
+	if _, err := client.DeleteRepo(repo.Owner, repo.Name); err != nil {
 		return fmt.Errorf("deleting repository: %w", err)
 	}
 

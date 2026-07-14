@@ -14,6 +14,8 @@ import (
 type deleteOptions struct {
 	Factory *cmdutil.Factory
 	Name    string
+	Yes     bool
+	DryRun  bool
 }
 
 func NewCmdDelete(f *cmdutil.Factory) *cobra.Command {
@@ -22,8 +24,8 @@ func NewCmdDelete(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <name>",
 		Short: "Delete a label",
-		Example: `  $ fj label delete bug
-  $ fj label delete "help wanted"`,
+		Example: `  $ fj label delete bug --yes
+  $ fj label delete "help wanted" --dry-run`,
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Name = args[0]
@@ -31,10 +33,17 @@ func NewCmdDelete(f *cmdutil.Factory) *cobra.Command {
 		},
 	}
 
+	cmdutil.AddDeleteFlags(cmd, &opts.Yes, &opts.DryRun)
+
 	return cmd
 }
 
 func deleteRun(opts *deleteOptions) error {
+	perform, err := cmdutil.ResolveDeleteFlags(opts.Yes, opts.DryRun)
+	if err != nil {
+		return err
+	}
+
 	repo, err := opts.Factory.BaseRepo()
 	if err != nil {
 		return err
@@ -45,25 +54,31 @@ func deleteRun(opts *deleteOptions) error {
 		return err
 	}
 
-	// Find label by name
+	// Find label by name (case-insensitive).
 	labels, _, err := client.ListRepoLabels(repo.Owner, repo.Name, forgejo.ListLabelsOptions{})
 	if err != nil {
 		return fmt.Errorf("listing labels: %w", err)
 	}
 
-	var labelID int64
+	var label *forgejo.Label
 	for _, l := range labels {
 		if strings.EqualFold(l.Name, opts.Name) {
-			labelID = l.ID
+			label = l
 			break
 		}
 	}
-	if labelID == 0 {
+	if label == nil {
 		return fmt.Errorf("label not found: %s", opts.Name)
 	}
 
-	_, err = client.DeleteLabel(repo.Owner, repo.Name, labelID)
-	if err != nil {
+	fmt.Fprintf(os.Stderr, "Label #%d %q (color %s)\n", label.ID, label.Name, label.Color)
+
+	if !perform {
+		fmt.Fprintln(os.Stderr, "(dry-run; no changes were made)")
+		return nil
+	}
+
+	if _, err := client.DeleteLabel(repo.Owner, repo.Name, label.ID); err != nil {
 		return fmt.Errorf("deleting label: %w", err)
 	}
 

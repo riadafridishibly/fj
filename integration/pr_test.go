@@ -130,8 +130,8 @@ func TestPRReviewCommentLifecycle(t *testing.T) {
 		t.Fatalf("reply not visible in comment list:\n%s", listOut)
 	}
 
-	// Delete the reply (with --yes the prompt is skipped but the comment
-	// details are still fetched and printed).
+	// Delete the reply. --yes is required to delete; the comment details are
+	// fetched and printed before the deletion happens.
 	mustRunFJ(t, "pr", "review", "comment", "delete", "5",
 		strconv.FormatInt(reply.ID, 10), repoFlag, repoName, "--yes")
 

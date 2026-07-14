@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -14,6 +15,7 @@ type deleteOptions struct {
 	Factory *cmdutil.Factory
 	ID      string
 	Yes     bool
+	DryRun  bool
 }
 
 func NewCmdDelete(f *cmdutil.Factory, k Kind) *cobra.Command {
@@ -22,8 +24,8 @@ func NewCmdDelete(f *cmdutil.Factory, k Kind) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <id>",
 		Short: "Delete a comment by its ID",
-		Example: fmt.Sprintf(`  $ %s delete 12345
-  $ %s delete 12345 --yes`, k.CLI, k.CLI),
+		Example: fmt.Sprintf(`  $ %s delete 12345 --yes
+  $ %s delete 12345 --dry-run`, k.CLI, k.CLI),
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.ID = args[0]
@@ -31,12 +33,17 @@ func NewCmdDelete(f *cmdutil.Factory, k Kind) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&opts.Yes, "yes", false, "Skip confirmation prompt")
+	cmdutil.AddDeleteFlags(cmd, &opts.Yes, &opts.DryRun)
 
 	return cmd
 }
 
 func deleteRun(opts *deleteOptions) error {
+	perform, err := cmdutil.ResolveDeleteFlags(opts.Yes, opts.DryRun)
+	if err != nil {
+		return err
+	}
+
 	repo, err := opts.Factory.BaseRepo()
 	if err != nil {
 		return err
@@ -47,19 +54,27 @@ func deleteRun(opts *deleteOptions) error {
 		return cmdutil.FlagErrorf("invalid comment id: %s", opts.ID)
 	}
 
-	if !opts.Yes {
-		fmt.Fprintf(os.Stderr, "Are you sure you want to delete comment #%d? This cannot be undone. (y/N): ", id)
-		var confirm string
-		fmt.Scanln(&confirm)
-		if confirm != "y" && confirm != "Y" {
-			fmt.Fprintln(os.Stderr, "Aborted.")
-			return nil
-		}
-	}
-
 	client, err := opts.Factory.ClientForRepo(repo)
 	if err != nil {
 		return err
+	}
+
+	// Fetch the comment first so a wrong id fails before anything is deleted,
+	// and so the user can verify the target from author + body excerpt.
+	comment, _, err := client.GetIssueComment(repo.Owner, repo.Name, id)
+	if err != nil {
+		return fmt.Errorf("fetching comment #%d: %w", id, err)
+	}
+
+	author := "unknown"
+	if comment.Poster != nil {
+		author = comment.Poster.UserName
+	}
+	fmt.Fprintf(os.Stderr, "Comment #%d by %s:\n  %s\n", id, author, excerpt(comment.Body))
+
+	if !perform {
+		fmt.Fprintln(os.Stderr, "(dry-run; no changes were made)")
+		return nil
 	}
 
 	if _, err := client.DeleteIssueComment(repo.Owner, repo.Name, id); err != nil {
@@ -68,4 +83,13 @@ func deleteRun(opts *deleteOptions) error {
 
 	fmt.Fprintf(os.Stderr, "✓ Deleted comment #%d\n", id)
 	return nil
+}
+
+// excerpt renders the first line of a comment body, truncated for display.
+func excerpt(body string) string {
+	line, _, _ := strings.Cut(strings.TrimSpace(body), "\n")
+	if len(line) > 80 {
+		line = line[:77] + "..."
+	}
+	return line
 }

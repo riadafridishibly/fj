@@ -76,7 +76,7 @@ fj repo view owner/repo                   # View a specific repo
 fj repo create my-project --private       # Create a new repo
 fj repo clone owner/repo                  # Clone a repo
 fj repo fork owner/repo                   # Fork a repo
-fj repo delete owner/repo                 # Delete a repo
+fj repo delete owner/repo --yes           # Delete a repo (needs --yes)
 ```
 
 ### Issues
@@ -104,7 +104,7 @@ fj milestone create --title v1.0 \
 fj milestone edit v1.0 --title v1.1       # Edit a milestone
 fj milestone close v1.0                   # Close a milestone
 fj milestone reopen v1.0                  # Reopen a milestone
-fj milestone delete v1.0                  # Delete (with confirmation)
+fj milestone delete v1.0 --yes             # Delete (needs --yes; --dry-run previews)
 ```
 
 ### Pull Requests
@@ -132,7 +132,7 @@ fj pr review list 10                                          # List reviews
 fj pr review comment list 10                                  # List inline comments
 fj pr review comment view 10 4081                             # View one comment
 fj pr review comment reply 10 4081 --body "Fixed"             # Reply in-thread
-fj pr review comment delete 10 4081                           # Delete (with confirmation)
+fj pr review comment delete 10 4081 --yes                    # Delete (needs --yes; --dry-run previews)
 ```
 
 ### JSON Output

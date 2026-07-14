@@ -205,7 +205,9 @@ func TestMilestoneCloseReopen(t *testing.T) {
 	}
 }
 
-// TestMilestoneDelete deletes a milestone and verifies it's gone.
+// TestMilestoneDelete deletes a milestone and verifies it's gone. It also
+// exercises the shared delete-flag contract: --yes is required to delete and
+// --dry-run previews without deleting.
 func TestMilestoneDelete(t *testing.T) {
 	repo := adminUser + "/test-repo"
 	title := "ms-delete"
@@ -214,7 +216,28 @@ func TestMilestoneDelete(t *testing.T) {
 		t.Fatalf("setup create failed: %v\n%s", err, stderr)
 	}
 
-	_, stderr, err := runFJ("milestone", "delete", title, "-R", repo, "--yes")
+	// Without --yes or --dry-run, the command must refuse to delete.
+	if _, _, err := runFJ("milestone", "delete", title, "-R", repo); err == nil {
+		t.Fatalf("milestone delete without --yes should fail")
+	}
+
+	// --dry-run must resolve and print the milestone but leave it intact.
+	stdout, stderr, err := runFJ("milestone", "delete", title, "-R", repo, "--dry-run")
+	if err != nil {
+		t.Fatalf("milestone delete --dry-run failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	if !strings.Contains(stderr, title) {
+		t.Errorf("dry-run output should mention the milestone title\nstderr: %s", stderr)
+	}
+	if !strings.Contains(stderr, "dry-run") {
+		t.Errorf("dry-run output should state nothing was changed\nstderr: %s", stderr)
+	}
+	if _, _, err := testClient.GetMilestoneByName(adminUser, "test-repo", title); err != nil {
+		t.Errorf("dry-run must not delete the milestone: %v", err)
+	}
+
+	// --yes performs the actual deletion.
+	_, stderr, err = runFJ("milestone", "delete", title, "-R", repo, "--yes")
 	if err != nil {
 		t.Fatalf("milestone delete failed: %v\nstderr: %s", err, stderr)
 	}

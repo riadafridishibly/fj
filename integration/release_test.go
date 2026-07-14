@@ -429,7 +429,9 @@ func TestReleaseDownload(t *testing.T) {
 	}
 }
 
-// TestReleaseDelete deletes a release and verifies it's gone.
+// TestReleaseDelete deletes a release and verifies it's gone. It also
+// exercises the shared delete-flag contract: --yes is required to delete and
+// --dry-run previews without deleting.
 func TestReleaseDelete(t *testing.T) {
 	repo := adminUser + "/test-repo"
 	tag := "v0.8.0-delete"
@@ -439,7 +441,28 @@ func TestReleaseDelete(t *testing.T) {
 		t.Fatalf("setup create failed: %v\n%s", err, stderr)
 	}
 
-	_, stderr, err := runFJ("release", "delete", tag, "-R", repo, "--yes")
+	// Without --yes or --dry-run, the command must refuse to delete.
+	if _, _, err := runFJ("release", "delete", tag, "-R", repo); err == nil {
+		t.Fatalf("release delete without --yes should fail")
+	}
+
+	// --dry-run must resolve and print the release but leave it intact.
+	stdout, stderr, err := runFJ("release", "delete", tag, "-R", repo, "--dry-run")
+	if err != nil {
+		t.Fatalf("release delete --dry-run failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	if !strings.Contains(stderr, tag) {
+		t.Errorf("dry-run output should mention the tag\nstderr: %s", stderr)
+	}
+	if !strings.Contains(stderr, "dry-run") {
+		t.Errorf("dry-run output should state nothing was changed\nstderr: %s", stderr)
+	}
+	if _, _, err := testClient.GetReleaseByTag(adminUser, "test-repo", tag); err != nil {
+		t.Errorf("dry-run must not delete the release: %v", err)
+	}
+
+	// --yes performs the actual deletion.
+	_, stderr, err = runFJ("release", "delete", tag, "-R", repo, "--yes")
 	if err != nil {
 		t.Fatalf("release delete failed: %v\nstderr: %s", err, stderr)
 	}

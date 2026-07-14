@@ -14,6 +14,7 @@ type deleteOptions struct {
 	Factory *cmdutil.Factory
 	Number  string
 	Yes     bool
+	DryRun  bool
 }
 
 func NewCmdDelete(f *cmdutil.Factory) *cobra.Command {
@@ -22,8 +23,8 @@ func NewCmdDelete(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <number>",
 		Short: "Delete an issue",
-		Example: `  $ fj issue delete 42
-  $ fj issue delete 42 --yes`,
+		Example: `  $ fj issue delete 42 --yes
+  $ fj issue delete 42 --dry-run`,
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
@@ -31,12 +32,17 @@ func NewCmdDelete(f *cmdutil.Factory) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&opts.Yes, "yes", false, "Skip confirmation prompt")
+	cmdutil.AddDeleteFlags(cmd, &opts.Yes, &opts.DryRun)
 
 	return cmd
 }
 
 func deleteRun(opts *deleteOptions) error {
+	perform, err := cmdutil.ResolveDeleteFlags(opts.Yes, opts.DryRun)
+	if err != nil {
+		return err
+	}
+
 	repo, err := opts.Factory.BaseRepo()
 	if err != nil {
 		return err
@@ -47,19 +53,27 @@ func deleteRun(opts *deleteOptions) error {
 		return cmdutil.FlagErrorf("invalid issue number: %s", opts.Number)
 	}
 
-	if !opts.Yes {
-		fmt.Fprintf(os.Stderr, "Are you sure you want to delete issue #%d? This cannot be undone. (y/N): ", index)
-		var confirm string
-		fmt.Scanln(&confirm)
-		if confirm != "y" && confirm != "Y" {
-			fmt.Fprintln(os.Stderr, "Aborted.")
-			return nil
-		}
-	}
-
 	client, err := opts.Factory.ClientForRepo(repo)
 	if err != nil {
 		return err
+	}
+
+	// Fetch the issue first so a wrong number fails before anything is deleted,
+	// and so the user can verify the target from its title.
+	issue, _, err := client.GetIssue(repo.Owner, repo.Name, index)
+	if err != nil {
+		return fmt.Errorf("fetching issue #%d: %w", index, err)
+	}
+
+	author := "unknown"
+	if issue.Poster != nil {
+		author = issue.Poster.UserName
+	}
+	fmt.Fprintf(os.Stderr, "Issue #%d %q by %s\n", index, issue.Title, author)
+
+	if !perform {
+		fmt.Fprintln(os.Stderr, "(dry-run; no changes were made)")
+		return nil
 	}
 
 	_, err = client.DeleteIssue(repo.Owner, repo.Name, index)
