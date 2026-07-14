@@ -89,3 +89,41 @@ func TestRepoCreate(t *testing.T) {
 		t.Errorf("expected description 'Created by integration test', got %v", repo["description"])
 	}
 }
+
+func TestRepoDelete(t *testing.T) {
+	name := "repo-delete-contract"
+	full := adminUser + "/" + name
+
+	if _, stderr, err := runFJ("repo", "create", name, "--description", "to be deleted"); err != nil {
+		t.Fatalf("setup create failed: %v\n%s", err, stderr)
+	}
+
+	// Without --yes or --dry-run, the command must refuse to delete.
+	if _, _, err := runFJ("repo", "delete", full); err == nil {
+		t.Fatalf("repo delete without --yes should fail")
+	}
+
+	// --dry-run must resolve and print the repository but leave it intact.
+	stdout, stderr, err := runFJ("repo", "delete", full, "--dry-run")
+	if err != nil {
+		t.Fatalf("repo delete --dry-run failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	if !strings.Contains(stderr, name) {
+		t.Errorf("dry-run output should mention the repository\nstderr: %s", stderr)
+	}
+	if !strings.Contains(stderr, "dry-run") {
+		t.Errorf("dry-run output should state nothing was changed\nstderr: %s", stderr)
+	}
+	if _, _, err := testClient.GetRepo(adminUser, name); err != nil {
+		t.Errorf("dry-run must not delete the repository: %v", err)
+	}
+
+	// --yes performs the actual deletion.
+	_, stderr, err = runFJ("repo", "delete", full, "--yes")
+	if err != nil {
+		t.Fatalf("repo delete failed: %v\nstderr: %s", err, stderr)
+	}
+	if _, _, err := testClient.GetRepo(adminUser, name); err == nil {
+		t.Errorf("expected repository %s to be deleted", full)
+	}
+}

@@ -148,3 +148,90 @@ func TestPRReviewCommentLifecycle(t *testing.T) {
 		t.Errorf("deleting nonexistent comment should fail")
 	}
 }
+
+// prReviewCommentIDByBody finds the ID of the first inline review comment whose
+// body matches, via the JSON review comment list for the given PR.
+func prReviewCommentIDByBody(t *testing.T, pr, repo, body string) int64 {
+	t.Helper()
+	out := mustRunFJ(t, "pr", "review", "comment", "list", pr, "-R", repo, "--json")
+	var comments []struct {
+		ID   int64  `json:"id"`
+		Body string `json:"body"`
+	}
+	if err := json.Unmarshal([]byte(out), &comments); err != nil {
+		t.Fatalf("invalid JSON from review comment list: %v\nraw: %s", err, out)
+	}
+	for _, c := range comments {
+		if c.Body == body {
+			return c.ID
+		}
+	}
+	return 0
+}
+
+// prReviewCommentExists reports whether an inline review comment with the given
+// ID is still present.
+func prReviewCommentExists(t *testing.T, pr, repo string, id int64) bool {
+	t.Helper()
+	out := mustRunFJ(t, "pr", "review", "comment", "list", pr, "-R", repo, "--json")
+	var comments []struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal([]byte(out), &comments); err != nil {
+		t.Fatalf("invalid JSON from review comment list: %v\nraw: %s", err, out)
+	}
+	for _, c := range comments {
+		if c.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// TestPRReviewCommentDelete covers the --yes/--dry-run contract for deleting an
+// inline review comment, mirroring TestMilestoneDelete / TestReleaseDelete.
+func TestPRReviewCommentDelete(t *testing.T) {
+	repoFlag := "-R"
+	repoName := adminUser + "/test-repo"
+	pr := "5"
+	body := "review-comment-delete-contract"
+
+	// PR #5 (feature-2) adds feature-2.txt with a single line; comment on it.
+	mustRunFJ(t, "pr", "review", "create", pr, repoFlag, repoName,
+		"--comment", "--comment-path", "feature-2.txt", "--comment-line", "1",
+		"--comment-body", body)
+
+	id := prReviewCommentIDByBody(t, pr, repoName, body)
+	if id == 0 {
+		t.Fatal("could not find created review comment id")
+	}
+
+	// Without --yes or --dry-run, the command must refuse to delete.
+	if _, _, err := runFJ("pr", "review", "comment", "delete", pr, strconv.FormatInt(id, 10), repoFlag, repoName); err == nil {
+		t.Fatalf("pr review comment delete without --yes should fail")
+	}
+
+	// --dry-run must resolve and print the comment but leave it intact.
+	stdout, stderr, err := runFJ("pr", "review", "comment", "delete", pr, strconv.FormatInt(id, 10), repoFlag, repoName, "--dry-run")
+	if err != nil {
+		t.Fatalf("pr review comment delete --dry-run failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	if !strings.Contains(stderr, body) {
+		t.Errorf("dry-run output should mention the comment body\nstderr: %s", stderr)
+	}
+	if !strings.Contains(stderr, "dry-run") {
+		t.Errorf("dry-run output should state nothing was changed\nstderr: %s", stderr)
+	}
+	if !prReviewCommentExists(t, pr, repoName, id) {
+		t.Errorf("dry-run must not delete the review comment")
+	}
+
+	// --yes performs the actual deletion.
+	_, stderr, err = runFJ("pr", "review", "comment", "delete", pr, strconv.FormatInt(id, 10), repoFlag, repoName, "--yes")
+	if err != nil {
+		t.Fatalf("pr review comment delete failed: %v\nstderr: %s", err, stderr)
+	}
+	if prReviewCommentExists(t, pr, repoName, id) {
+		t.Errorf("expected review comment #%d to be deleted", id)
+	}
+}

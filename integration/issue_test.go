@@ -5,6 +5,7 @@ package integration
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -148,5 +149,138 @@ func TestIssueClose(t *testing.T) {
 	viewOut := mustRunFJ(t, "issue", "view", issueNum, "-R", adminUser+"/test-repo")
 	if !strings.Contains(viewOut, "closed") {
 		t.Errorf("expected issue to be closed:\n%s", viewOut)
+	}
+}
+
+// issueNumberByTitle finds the issue number for the first issue whose title
+// matches, via the JSON issue list.
+func issueNumberByTitle(t *testing.T, repo, title string) string {
+	t.Helper()
+	out := mustRunFJ(t, "issue", "list", "-R", repo, "--json")
+	var issues []map[string]any
+	if err := json.Unmarshal([]byte(out), &issues); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	for _, iss := range issues {
+		if got, _ := iss["title"].(string); got == title {
+			if num, ok := iss["number"].(float64); ok {
+				return strconv.Itoa(int(num))
+			}
+		}
+	}
+	return ""
+}
+
+// commentIDByBody finds the ID of the first issue comment whose body matches,
+// via the JSON comment list for the given issue.
+func commentIDByBody(t *testing.T, issue, repo, body string) int64 {
+	t.Helper()
+	out := mustRunFJ(t, "issue", "comment", "list", issue, "-R", repo, "--json")
+	var comments []struct {
+		ID   int64  `json:"id"`
+		Body string `json:"body"`
+	}
+	if err := json.Unmarshal([]byte(out), &comments); err != nil {
+		t.Fatalf("invalid JSON from comment list: %v\nraw: %s", err, out)
+	}
+	for _, c := range comments {
+		if c.Body == body {
+			return c.ID
+		}
+	}
+	return 0
+}
+
+func TestIssueDelete(t *testing.T) {
+	repo := adminUser + "/test-repo"
+	title := "issue-delete-contract"
+
+	if _, stderr, err := runFJ("issue", "create", "-R", repo, "--title", title); err != nil {
+		t.Fatalf("setup create failed: %v\n%s", err, stderr)
+	}
+	num := issueNumberByTitle(t, repo, title)
+	if num == "" {
+		t.Fatal("could not find created issue number")
+	}
+	idx, _ := strconv.ParseInt(num, 10, 64)
+
+	// Without --yes or --dry-run, the command must refuse to delete.
+	if _, _, err := runFJ("issue", "delete", num, "-R", repo); err == nil {
+		t.Fatalf("issue delete without --yes should fail")
+	}
+
+	// --dry-run must resolve and print the issue but leave it intact.
+	stdout, stderr, err := runFJ("issue", "delete", num, "-R", repo, "--dry-run")
+	if err != nil {
+		t.Fatalf("issue delete --dry-run failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	if !strings.Contains(stderr, title) {
+		t.Errorf("dry-run output should mention the issue title\nstderr: %s", stderr)
+	}
+	if !strings.Contains(stderr, "dry-run") {
+		t.Errorf("dry-run output should state nothing was changed\nstderr: %s", stderr)
+	}
+	if _, _, err := testClient.GetIssue(adminUser, "test-repo", idx); err != nil {
+		t.Errorf("dry-run must not delete the issue: %v", err)
+	}
+
+	// --yes performs the actual deletion.
+	_, stderr, err = runFJ("issue", "delete", num, "-R", repo, "--yes")
+	if err != nil {
+		t.Fatalf("issue delete failed: %v\nstderr: %s", err, stderr)
+	}
+	if _, _, err := testClient.GetIssue(adminUser, "test-repo", idx); err == nil {
+		t.Errorf("expected issue #%s to be deleted", num)
+	}
+}
+
+func TestIssueCommentDelete(t *testing.T) {
+	repo := adminUser + "/test-repo"
+	issueTitle := "issue-for-comment-delete"
+
+	if _, stderr, err := runFJ("issue", "create", "-R", repo, "--title", issueTitle); err != nil {
+		t.Fatalf("setup create issue failed: %v\n%s", err, stderr)
+	}
+	issueNum := issueNumberByTitle(t, repo, issueTitle)
+	if issueNum == "" {
+		t.Fatal("could not find issue to comment on")
+	}
+
+	body := "comment-delete-contract"
+	if _, stderr, err := runFJ("issue", "comment", "create", issueNum, "-R", repo, "--body", body); err != nil {
+		t.Fatalf("setup create comment failed: %v\n%s", err, stderr)
+	}
+	id := commentIDByBody(t, issueNum, repo, body)
+	if id == 0 {
+		t.Fatal("could not find created comment id")
+	}
+
+	// Without --yes or --dry-run, the command must refuse to delete.
+	if _, _, err := runFJ("issue", "comment", "delete", strconv.FormatInt(id, 10), "-R", repo); err == nil {
+		t.Fatalf("issue comment delete without --yes should fail")
+	}
+
+	// --dry-run must resolve and print the comment but leave it intact.
+	stdout, stderr, err := runFJ("issue", "comment", "delete", strconv.FormatInt(id, 10), "-R", repo, "--dry-run")
+	if err != nil {
+		t.Fatalf("issue comment delete --dry-run failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	if !strings.Contains(stderr, body) {
+		t.Errorf("dry-run output should mention the comment body\nstderr: %s", stderr)
+	}
+	if !strings.Contains(stderr, "dry-run") {
+		t.Errorf("dry-run output should state nothing was changed\nstderr: %s", stderr)
+	}
+	if _, _, err := testClient.GetIssueComment(adminUser, "test-repo", id); err != nil {
+		t.Errorf("dry-run must not delete the comment: %v", err)
+	}
+
+	// --yes performs the actual deletion.
+	_, stderr, err = runFJ("issue", "comment", "delete", strconv.FormatInt(id, 10), "-R", repo, "--yes")
+	if err != nil {
+		t.Fatalf("issue comment delete failed: %v\nstderr: %s", err, stderr)
+	}
+	if _, _, err := testClient.GetIssueComment(adminUser, "test-repo", id); err == nil {
+		t.Errorf("expected comment #%d to be deleted", id)
 	}
 }
