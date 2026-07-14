@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -70,7 +69,7 @@ func deleteRun(opts *deleteOptions) error {
 	if comment.Poster != nil {
 		author = comment.Poster.UserName
 	}
-	fmt.Fprintf(os.Stderr, "Comment #%d by %s:\n  %s\n", id, author, excerpt(comment.Body))
+	fmt.Fprintf(os.Stderr, "Comment #%d by %s:\n  %s\n", id, author, cmdutil.Excerpt(comment.Body))
 
 	if !perform {
 		fmt.Fprintln(os.Stderr, "(dry-run; no changes were made)")
@@ -83,13 +82,4 @@ func deleteRun(opts *deleteOptions) error {
 
 	fmt.Fprintf(os.Stderr, "✓ Deleted comment #%d\n", id)
 	return nil
-}
-
-// excerpt renders the first line of a comment body, truncated for display.
-func excerpt(body string) string {
-	line, _, _ := strings.Cut(strings.TrimSpace(body), "\n")
-	if len(line) > 80 {
-		line = line[:77] + "..."
-	}
-	return line
 }
