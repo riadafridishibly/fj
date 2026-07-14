@@ -58,7 +58,7 @@ func deleteRun(opts *deleteOptions) error {
 	// Resolve the release first so a wrong tag fails before anything is deleted.
 	rel, _, err := client.GetReleaseByTag(repo.Owner, repo.Name, opts.Tag)
 	if err != nil {
-		return fmt.Errorf("getting release: %w", err)
+		return fmt.Errorf("fetching release %q: %w", opts.Tag, err)
 	}
 
 	fmt.Fprintf(os.Stderr, "Release #%d %q (tag %s)", rel.ID, rel.Title, opts.Tag)
