@@ -121,6 +121,20 @@ fj pr checkout 10                         # Check out a PR locally
 fj pr comment 10 --body "LGTM"           # Comment on a PR
 ```
 
+### Reviews
+
+```sh
+fj pr review create 10 --approve --body "LGTM"                # Review a PR
+fj pr review create 10 --comment \
+  --comment-path main.go --comment-line 42 \
+  --comment-body "rename this"                                # Inline comment
+fj pr review list 10                                          # List reviews
+fj pr review comment list 10                                  # List inline comments
+fj pr review comment view 10 4081                             # View one comment
+fj pr review comment reply 10 4081 --body "Fixed"             # Reply in-thread
+fj pr review comment delete 10 4081                           # Delete (with confirmation)
+```
+
 ### JSON Output
 
 Most commands support `--json` for machine-readable output:

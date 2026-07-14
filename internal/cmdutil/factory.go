@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
+	"github.com/riadafridishibly/fj/internal/api"
 	"github.com/riadafridishibly/fj/internal/config"
 	"github.com/riadafridishibly/fj/internal/debug"
 )
@@ -110,10 +111,10 @@ func NewForgejoClient(baseURL, token string) (*forgejo.Client, error) {
 	)
 }
 
-// APIGet performs an authenticated GET against /api/v1<path> on the repo's
-// host and returns the response. Used for endpoints the Forgejo SDK does
-// not cover. Caller owns closing resp.Body.
-func (f *Factory) APIGet(repo Repo, path string) (*http.Response, error) {
+// APIClient builds an api.Client for endpoints the Forgejo SDK does not
+// cover. It authenticates against the repo's host with the same token and
+// debug-aware transport as the SDK client.
+func (f *Factory) APIClient(repo Repo) (*api.Client, error) {
 	cfg, err := f.Config()
 	if err != nil {
 		return nil, err
@@ -126,14 +127,19 @@ func (f *Factory) APIGet(repo Repo, path string) (*http.Response, error) {
 	if os.Getenv("FJ_INSECURE") != "" {
 		scheme = "http"
 	}
-	req, err := http.NewRequest(http.MethodGet,
-		fmt.Sprintf("%s://%s/api/v1%s", scheme, repo.Host, path), nil)
+	baseURL := fmt.Sprintf("%s://%s", scheme, repo.Host)
+	return api.NewClient(baseURL, token, debug.WrapClient(nil)), nil
+}
+
+// APIGet performs an authenticated GET against /api/v1<path> on the repo's
+// host and returns the response. Used for endpoints the Forgejo SDK does
+// not cover. Caller owns closing resp.Body.
+func (f *Factory) APIGet(repo Repo, path string) (*http.Response, error) {
+	client, err := f.APIClient(repo)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "token "+token)
-	req.Header.Set("Accept", "application/json")
-	return debug.WrapClient(nil).Do(req)
+	return client.Get(path)
 }
 
 // ClientForRepo creates a client for the repo's host

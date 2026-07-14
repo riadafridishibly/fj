@@ -1,5 +1,5 @@
 // Package comment implements the `fj pr review comment` subcommands for
-// viewing and listing inline review comments on a pull request.
+// managing inline review comments on a pull request.
 package comment
 
 import (
@@ -11,9 +11,11 @@ import (
 func NewCmdComment(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "comment <command>",
-		Short: "View inline review comments on a pull request",
+		Short: "Manage inline review comments on a pull request",
 	}
 	cmd.AddCommand(NewCmdView(f))
 	cmd.AddCommand(NewCmdList(f))
+	cmd.AddCommand(NewCmdReply(f))
+	cmd.AddCommand(NewCmdDelete(f))
 	return cmd
 }
