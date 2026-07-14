@@ -355,7 +355,8 @@ func populateTestData() error {
 // runFJ executes the fj binary with the given args and returns stdout, stderr, and error.
 func runFJ(args ...string) (string, string, error) {
 	cmd := exec.Command(fjBinary, args...)
-	cmd.Env = append(os.Environ(),
+	cmd.Env = append(
+		os.Environ(),
 		"FJ_CONFIG_DIR="+configDir,
 		"FJ_INSECURE=1",
 		"NO_COLOR=1",

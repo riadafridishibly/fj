@@ -27,14 +27,14 @@ var fjStyle = ansi.StyleConfig{
 			BlockPrefix: "\n",
 			BlockSuffix: "\n",
 		},
-		Margin: uintPtr(0),
+		Margin: new(uint(0)),
 	},
 	BlockQuote: ansi.StyleBlock{
 		StylePrimitive: ansi.StylePrimitive{
 			Color:  new("242"),
 			Italic: new(true),
 		},
-		Indent:      uintPtr(1),
+		Indent:      new(uint(1)),
 		IndentToken: new("│ "),
 	},
 	Paragraph: ansi.StyleBlock{
@@ -140,7 +140,7 @@ var fjStyle = ansi.StyleConfig{
 	CodeBlock: ansi.StyleCodeBlock{
 		StyleBlock: ansi.StyleBlock{
 			StylePrimitive: ansi.StylePrimitive{},
-			Margin:         uintPtr(2),
+			Margin:         new(uint(2)),
 		},
 		// Chroma (syntax highlighting) requires hex color strings, unlike
 		// the rest of the style which uses ANSI 256-color codes.
@@ -505,6 +505,3 @@ func naturalTableWidth(headers []string, rows [][]string) int {
 	}
 	return total
 }
-
-//go:fix inline
-func uintPtr(u uint) *uint { return new(u) }

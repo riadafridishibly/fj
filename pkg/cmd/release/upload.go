@@ -11,10 +11,10 @@ import (
 )
 
 type uploadOptions struct {
-	Factory   *cmdutil.Factory
-	Tag       string
-	Files     []string
-	Clobber   bool
+	Factory *cmdutil.Factory
+	Tag     string
+	Files   []string
+	Clobber bool
 }
 
 func NewCmdUpload(f *cmdutil.Factory) *cobra.Command {

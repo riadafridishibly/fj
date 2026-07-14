@@ -148,7 +148,8 @@ func viewRun(opts *viewOptions) error {
 				if c.Poster != nil {
 					author = c.Poster.UserName
 				}
-				fmt.Fprintf(os.Stdout, "\n%s commented %s:\n%s\n",
+				fmt.Fprintf(
+					os.Stdout, "\n%s commented %s:\n%s\n",
 					author,
 					output.RelativeTimeStr(c.Created),
 					output.RenderMarkdown(c.Body),

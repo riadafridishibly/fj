@@ -39,7 +39,8 @@ func parseDueDate(v string) (time.Time, error) {
 		return t, nil
 	}
 	return time.Time{}, cmdutil.FlagErrorf(
-		"invalid due date %q (use YYYY-MM-DD or an RFC3339 timestamp)", v)
+		"invalid due date %q (use YYYY-MM-DD or an RFC3339 timestamp)", v,
+	)
 }
 
 // dueDateStr formats a milestone's deadline for display. Servers signal "no

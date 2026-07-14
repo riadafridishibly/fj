@@ -105,7 +105,8 @@ func (f *Factory) Client(hostname string) (*forgejo.Client, error) {
 // by auth commands that construct clients outside the factory (login,
 // status) to validate credentials before they land in config.
 func NewForgejoClient(baseURL, token string) (*forgejo.Client, error) {
-	return forgejo.NewClient(baseURL,
+	return forgejo.NewClient(
+		baseURL,
 		forgejo.SetToken(token),
 		forgejo.SetHTTPClient(debug.WrapClient(nil)),
 	)

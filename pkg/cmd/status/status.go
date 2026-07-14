@@ -60,7 +60,7 @@ type repoStatus struct {
 	OpenIssues   int `json:"open_issues"`
 	ClosedIssues int `json:"closed_issues"`
 
-	OpenPRs   int `json:"open_prs"`
+	OpenPRs int `json:"open_prs"`
 	// ClosedPRs is the total count of PRs in the "closed" state as reported by
 	// the server (includes merged PRs). When --full is used, ClosedPRs is
 	// re-computed as closed-only (merged excluded).
@@ -74,12 +74,12 @@ type repoStatus struct {
 }
 
 type releaseStatus struct {
-	Tag         string    `json:"tag"`
-	Title       string    `json:"title"`
-	IsDraft     bool      `json:"draft"`
-	IsPrerelease bool     `json:"prerelease"`
-	PublishedAt time.Time `json:"published_at"`
-	HTMLURL     string    `json:"html_url"`
+	Tag          string    `json:"tag"`
+	Title        string    `json:"title"`
+	IsDraft      bool      `json:"draft"`
+	IsPrerelease bool      `json:"prerelease"`
+	PublishedAt  time.Time `json:"published_at"`
+	HTMLURL      string    `json:"html_url"`
 }
 
 type branchStatus struct {
@@ -407,7 +407,8 @@ func printStatus(s *repoStatus) {
 
 	// Issues
 	fmt.Fprintf(w, "%s\n", output.Colorize(output.Bold, "Issues"))
-	fmt.Fprintf(w, "  %s open  %s closed\n",
+	fmt.Fprintf(
+		w, "  %s open  %s closed\n",
 		output.Colorize(output.Green, fmt.Sprintf("%d", s.OpenIssues)),
 		output.Colorize(output.Red, fmt.Sprintf("%d", s.ClosedIssues)),
 	)
@@ -416,13 +417,15 @@ func printStatus(s *repoStatus) {
 	// Pull Requests
 	fmt.Fprintf(w, "%s\n", output.Colorize(output.Bold, "Pull Requests"))
 	if s.MergedPRs != nil {
-		fmt.Fprintf(w, "  %s open  %s closed  %s merged\n",
+		fmt.Fprintf(
+			w, "  %s open  %s closed  %s merged\n",
 			output.Colorize(output.Green, fmt.Sprintf("%d", s.OpenPRs)),
 			output.Colorize(output.Red, fmt.Sprintf("%d", s.ClosedPRs)),
 			output.Colorize(output.Magenta, fmt.Sprintf("%d", *s.MergedPRs)),
 		)
 	} else {
-		fmt.Fprintf(w, "  %s open  %s closed %s\n",
+		fmt.Fprintf(
+			w, "  %s open  %s closed %s\n",
 			output.Colorize(output.Green, fmt.Sprintf("%d", s.OpenPRs)),
 			output.Colorize(output.Red, fmt.Sprintf("%d", s.ClosedPRs)),
 			output.Colorize(output.Gray, "(incl. merged — use --full for breakdown)"),
@@ -444,7 +447,8 @@ func printStatus(s *repoStatus) {
 			typ = "pre-release"
 			typColor = output.Magenta
 		}
-		fmt.Fprintf(w, "  %s %s %s\n",
+		fmt.Fprintf(
+			w, "  %s %s %s\n",
 			output.Colorize(output.Cyan, r.Tag),
 			output.Truncate(r.Title, 50),
 			output.Colorize(typColor, "("+typ+")"),
@@ -473,7 +477,8 @@ func printStatus(s *repoStatus) {
 			case "closed":
 				stateColor = output.Red
 			}
-			fmt.Fprintf(w, "  PR #%d: %s %s\n",
+			fmt.Fprintf(
+				w, "  PR #%d: %s %s\n",
 				pr.Number,
 				output.Truncate(pr.Title, 50),
 				output.Colorize(stateColor, "("+pr.State+")"),
@@ -482,7 +487,8 @@ func printStatus(s *repoStatus) {
 			// Diff stats
 			var parts []string
 			if pr.Additions > 0 || pr.Deletions > 0 {
-				parts = append(parts,
+				parts = append(
+					parts,
 					output.Colorize(output.Green, fmt.Sprintf("+%d", pr.Additions)),
 					output.Colorize(output.Red, fmt.Sprintf("-%d", pr.Deletions)),
 				)

@@ -101,7 +101,8 @@ func viewRun(opts *viewOptions) error {
 	if len(rel.Attachments) > 0 {
 		fmt.Fprintf(os.Stdout, "\nAssets (%d):\n", len(rel.Attachments))
 		for _, a := range rel.Attachments {
-			fmt.Fprintf(os.Stdout, "  %s  %s  (%d downloads)\n",
+			fmt.Fprintf(
+				os.Stdout, "  %s  %s  (%d downloads)\n",
 				output.Colorize(output.Cyan, a.Name),
 				humanSize(a.Size),
 				a.DownloadCount,

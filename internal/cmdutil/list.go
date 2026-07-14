@@ -72,7 +72,8 @@ func ParseTimeFilter(v string) (time.Time, error) {
 		return time.Now().Add(-d), nil
 	}
 	return time.Time{}, FlagErrorf(
-		"invalid time %q (use YYYY-MM-DD, an RFC3339 timestamp, or a relative age like 7d)", v)
+		"invalid time %q (use YYYY-MM-DD, an RFC3339 timestamp, or a relative age like 7d)", v,
+	)
 }
 
 // parseRelativeAge parses durations Go's time.ParseDuration rejects — days and
