@@ -15,11 +15,12 @@ import (
 )
 
 type viewOptions struct {
-	Factory    *cmdutil.Factory
-	Number     string
-	Comments   bool
-	Web        bool
-	JSONOutput bool
+	Factory      *cmdutil.Factory
+	Number       string
+	Comments     bool
+	ShowTimeline bool
+	Web          bool
+	JSONOutput   bool
 }
 
 func NewCmdView(f *cmdutil.Factory) *cobra.Command {
@@ -30,6 +31,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 		Short: "View a pull request",
 		Example: `  $ fj pr view 42
   $ fj pr view 42 --comments
+  $ fj pr view 42 --show-timeline=false
   $ fj pr view 42 --web
   $ fj pr view 42 --json`,
 		Args: cmdutil.ExactArgs(1),
@@ -40,6 +42,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 	}
 
 	cmd.Flags().BoolVarP(&opts.Comments, "comments", "c", false, "View pull request comments")
+	cmd.Flags().BoolVar(&opts.ShowTimeline, "show-timeline", true, "Show pull request events, such as commit references and label changes")
 	cmdutil.AddWebFlag(cmd, &opts.Web)
 	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
 
@@ -81,6 +84,13 @@ func viewRun(opts *viewOptions) error {
 				return fmt.Errorf("listing comments: %w", err)
 			}
 			result["comments"] = comments
+		}
+		if opts.ShowTimeline {
+			events, err := opts.Factory.Timeline(repo, index)
+			if err != nil {
+				return err
+			}
+			result["timeline"] = events
 		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -154,6 +164,19 @@ func viewRun(opts *viewOptions) error {
 					output.RelativeTimeStr(c.Created),
 					output.RenderMarkdown(c.Body),
 				)
+			}
+		}
+	}
+
+	if opts.ShowTimeline {
+		events, err := opts.Factory.Timeline(repo, index)
+		if err != nil {
+			return err
+		}
+		if lines := cmdutil.TimelineLines(events, cmdutil.SubjectPull); len(lines) > 0 {
+			fmt.Fprintf(os.Stdout, "\n--- Timeline (%d) ---\n", len(lines))
+			for _, l := range lines {
+				fmt.Fprintf(os.Stdout, "%s\n", l)
 			}
 		}
 	}

@@ -85,7 +85,8 @@ fj repo delete owner/repo --yes           # Delete (needs --yes; --dry-run previ
 fj issue list                             # List open issues
 fj issue list --state closed              # List closed issues
 fj issue list --label bug --assignee me   # Filter by label/assignee
-fj issue view 42                          # View issue #42
+fj issue view 42                          # View issue #42, with its timeline
+fj issue view 42 --show-timeline=false    # View issue #42 without events
 fj issue create --title "Bug" --body "…"  # Create an issue
 fj issue close 42                         # Close an issue
 fj issue reopen 42                        # Reopen an issue
@@ -112,7 +113,8 @@ fj milestone delete v1.0 --yes            # Delete (needs --yes; --dry-run previ
 ```sh
 fj pr list                                # List open PRs
 fj pr list --state all                    # List all PRs
-fj pr view 10                             # View PR #10
+fj pr view 10                             # View PR #10, with its timeline
+fj pr view 10 --show-timeline=false       # View PR #10 without events
 fj pr create --title "Fix" --body "…"     # Create a PR
 fj pr merge 10                            # Merge a PR
 fj pr close 10                            # Close a PR

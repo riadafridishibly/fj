@@ -18,13 +18,14 @@ import (
 )
 
 type viewOptions struct {
-	Factory     *cmdutil.Factory
-	Number      string
-	Comments    bool
-	Web         bool
-	JSONOutput  bool
-	Download    bool
-	DownloadDir string
+	Factory      *cmdutil.Factory
+	Number       string
+	Comments     bool
+	ShowTimeline bool
+	Web          bool
+	JSONOutput   bool
+	Download     bool
+	DownloadDir  string
 }
 
 func NewCmdView(f *cmdutil.Factory) *cobra.Command {
@@ -35,6 +36,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 		Short: "View an issue",
 		Example: `  $ fj issue view 42
   $ fj issue view 42 --comments
+  $ fj issue view 42 --show-timeline=false
   $ fj issue view 42 --web
   $ fj issue view 42 --json
   $ fj issue view 42 --download
@@ -47,6 +49,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 	}
 
 	cmd.Flags().BoolVarP(&opts.Comments, "comments", "c", false, "View issue comments")
+	cmd.Flags().BoolVar(&opts.ShowTimeline, "show-timeline", true, "Show issue events, such as commit references and label changes")
 	cmd.Flags().BoolVar(&opts.Download, "download", false, "Download issue attachments")
 	cmd.Flags().StringVarP(&opts.DownloadDir, "download-dir", "D", "", "Directory to download attachments into (default: ./issue-<number>)")
 	cmdutil.AddWebFlag(cmd, &opts.Web)
@@ -90,6 +93,13 @@ func viewRun(opts *viewOptions) error {
 				return fmt.Errorf("listing comments: %w", err)
 			}
 			result["comments"] = comments
+		}
+		if opts.ShowTimeline {
+			events, err := opts.Factory.Timeline(repo, index)
+			if err != nil {
+				return err
+			}
+			result["timeline"] = events
 		}
 		if opts.Download {
 			paths, dir, err := downloadIssueAttachments(opts.Factory, client, repo, index, opts.DownloadDir)
@@ -159,6 +169,19 @@ func viewRun(opts *viewOptions) error {
 					output.RelativeTimeStr(c.Created),
 					output.RenderMarkdown(c.Body),
 				)
+			}
+		}
+	}
+
+	if opts.ShowTimeline {
+		events, err := opts.Factory.Timeline(repo, index)
+		if err != nil {
+			return err
+		}
+		if lines := cmdutil.TimelineLines(events, cmdutil.SubjectIssue); len(lines) > 0 {
+			fmt.Fprintf(os.Stdout, "\n--- Timeline (%d) ---\n", len(lines))
+			for _, l := range lines {
+				fmt.Fprintf(os.Stdout, "%s\n", l)
 			}
 		}
 	}
