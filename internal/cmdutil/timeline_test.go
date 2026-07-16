@@ -1,6 +1,8 @@
 package cmdutil
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -8,6 +10,7 @@ import (
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 
 	"github.com/riadafridishibly/fj/internal/api"
+	"github.com/riadafridishibly/fj/internal/output"
 )
 
 // testRepo is the repository being viewed; references to it stay unqualified.
@@ -113,13 +116,6 @@ func TestEventSummary(t *testing.T) {
 			want:    `referenced this issue from pull request other/repo#7 "upstream fix"`,
 		},
 		{
-			name: "a long title is truncated on a rune boundary",
-			event: api.TimelineEvent{Type: api.EventPullRef, RefIssue: refIssue(618,
-				"feat(trustcard-dashboard): sizing contract — control-size vocabulary, type-scale floor", true)},
-			subject: SubjectIssue,
-			want:    `referenced this issue from pull request #618 "feat(trustcard-dashboard): sizing contract — control-size v…"`,
-		},
-		{
 			name:    "a reference with no title falls back to the number",
 			event:   api.TimelineEvent{Type: api.EventPullRef, RefIssue: refIssue(618, "", true)},
 			subject: SubjectIssue,
@@ -201,7 +197,14 @@ func TestEventSummary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := eventSummary(&tt.event, tt.subject, testRepo); got != tt.want {
+			// Compose phrase and title the way an unbounded terminal would,
+			// so each case reads as the line the user sees.
+			ev := eventSummary(&tt.event, tt.subject, testRepo)
+			got := ev.phrase
+			if ev.title != "" {
+				got = fmt.Sprintf("%s %q", ev.phrase, ev.title)
+			}
+			if got != tt.want {
 				t.Errorf("eventSummary() = %q, want %q", got, tt.want)
 			}
 		})
@@ -259,6 +262,157 @@ func TestTimelineLines(t *testing.T) {
 	}
 	if !strings.Contains(lines[0], "hours ago") {
 		t.Errorf("TimelineLines()[0] = %q, want a relative time", lines[0])
+	}
+}
+
+// TestTimelineLinesFitsTerminalWidth checks that a referencing title takes
+// whatever columns the rest of the line leaves, so a wide terminal shows more
+// of it than a narrow one and neither overflows.
+func TestTimelineLinesFitsTerminalWidth(t *testing.T) {
+	longTitle := "feat(trustcard-dashboard): sizing contract — control-size vocabulary, type-scale floor, drift ratchet"
+	events := []*api.TimelineEvent{{
+		Type:     api.EventPullRef,
+		Poster:   user("riad"),
+		RefIssue: refIssue(618, longTitle, true),
+		Created:  time.Now(),
+	}}
+
+	for _, width := range []int{80, 120, 200} {
+		t.Run(fmt.Sprintf("width_%d", width), func(t *testing.T) {
+			t.Setenv("FJ_WIDTH", strconv.Itoa(width))
+
+			lines := TimelineLines(events, SubjectIssue, testRepo)
+			if len(lines) != 1 {
+				t.Fatalf("got %d lines, want 1", len(lines))
+			}
+			if got := output.DisplayWidth(lines[0]); got > width {
+				t.Errorf("line is %d columns wide, want at most %d:\n%s", got, width, lines[0])
+			}
+			if !strings.Contains(lines[0], "pull request #618") {
+				t.Errorf("the reference itself must survive any width:\n%s", lines[0])
+			}
+		})
+	}
+}
+
+// TestTimelineLinesNarrowTerminal covers a terminal too narrow even for the
+// phrase. The title is dropped, and what remains is the reference itself: the
+// phrase is fixed, so like a table's non-flexible columns it cannot shrink
+// further and is allowed to overflow rather than lose the event.
+func TestTimelineLinesNarrowTerminal(t *testing.T) {
+	t.Setenv("FJ_WIDTH", "40")
+
+	events := []*api.TimelineEvent{{
+		Type:     api.EventPullRef,
+		Poster:   user("riad"),
+		RefIssue: refIssue(618, "sizing contract", true),
+		Created:  time.Now(),
+	}}
+
+	line := TimelineLines(events, SubjectIssue, testRepo)[0]
+
+	if strings.Contains(line, `"`) {
+		t.Errorf("a title cannot fit at width 40 and should be dropped:\n%s", line)
+	}
+	if !strings.Contains(line, "pull request #618") {
+		t.Errorf("the reference must survive even when the title cannot:\n%s", line)
+	}
+}
+
+// TestTimelineLinesWiderTerminalShowsMoreTitle pins the actual point of
+// fitting to the terminal: width buys title.
+func TestTimelineLinesWiderTerminalShowsMoreTitle(t *testing.T) {
+	events := []*api.TimelineEvent{{
+		Type:     api.EventPullRef,
+		Poster:   user("riad"),
+		RefIssue: refIssue(618, strings.Repeat("long title ", 20), true),
+		Created:  time.Now(),
+	}}
+
+	t.Setenv("FJ_WIDTH", "80")
+	narrow := TimelineLines(events, SubjectIssue, testRepo)[0]
+	t.Setenv("FJ_WIDTH", "160")
+	wide := TimelineLines(events, SubjectIssue, testRepo)[0]
+
+	if !(output.DisplayWidth(wide) > output.DisplayWidth(narrow)) {
+		t.Errorf("a wider terminal should show more title:\nnarrow: %s\nwide:   %s", narrow, wide)
+	}
+}
+
+// TestTimelineLinesUnboundedKeepsWholeTitle covers the piped case: with no
+// terminal there is no budget, and a downstream tool or agent must receive the
+// title intact rather than an ellipsis.
+func TestTimelineLinesUnboundedKeepsWholeTitle(t *testing.T) {
+	title := "feat(trustcard-dashboard): sizing contract — control-size vocabulary, type-scale floor, drift ratchet"
+	events := []*api.TimelineEvent{{
+		Type:     api.EventPullRef,
+		Poster:   user("riad"),
+		RefIssue: refIssue(618, title, true),
+		Created:  time.Now(),
+	}}
+
+	t.Setenv("FJ_WIDTH", "0") // falls through to the non-TTY default of unbounded
+
+	lines := TimelineLines(events, SubjectIssue, testRepo)
+	if !strings.Contains(lines[0], title) {
+		t.Errorf("an unbounded line must keep the whole title:\n%s", lines[0])
+	}
+	if strings.Contains(lines[0], "…") {
+		t.Errorf("an unbounded line must not be truncated:\n%s", lines[0])
+	}
+}
+
+// TestFitEventLine covers the budget arithmetic directly, including the floor
+// below which a title is dropped rather than rendered as a stub.
+func TestFitEventLine(t *testing.T) {
+	tests := []struct {
+		name  string
+		head  string
+		title string
+		tail  string
+		width int
+		want  string
+	}{
+		{
+			name:  "unbounded keeps the title whole",
+			head:  "riad referenced this issue from pull request #618",
+			title: "sizing contract",
+			tail:  " 5 hours ago",
+			width: 0,
+			want:  `riad referenced this issue from pull request #618 "sizing contract" 5 hours ago`,
+		},
+		{
+			name:  "a title that fits is untouched",
+			head:  "riad referenced this issue from pull request #618",
+			title: "sizing contract",
+			tail:  " 5 hours ago",
+			width: 120,
+			want:  `riad referenced this issue from pull request #618 "sizing contract" 5 hours ago`,
+		},
+		{
+			name:  "no title renders head and tail alone",
+			head:  "riad closed this issue",
+			title: "",
+			tail:  " 5 hours ago",
+			width: 80,
+			want:  "riad closed this issue 5 hours ago",
+		},
+		{
+			name:  "a title squeezed below the floor is dropped, not stubbed",
+			head:  "riad referenced this issue from pull request #618",
+			title: "sizing contract",
+			tail:  " (closes) 5 hours ago",
+			width: 75,
+			want:  "riad referenced this issue from pull request #618 (closes) 5 hours ago",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := fitEventLine(tt.head, tt.title, tt.tail, tt.width); got != tt.want {
+				t.Errorf("fitEventLine() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 

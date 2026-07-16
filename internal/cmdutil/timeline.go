@@ -31,39 +31,78 @@ func (f *Factory) Timeline(repo Repo, index int64) ([]*api.TimelineEvent, error)
 	return events, nil
 }
 
+// titleFloor is the narrowest a referencing title may be squeezed before it
+// is dropped: below this it is more ellipsis than information. It mirrors the
+// floor a Flexible table column shrinks to.
+const titleFloor = 12
+
+// eventLine is one event ready to render. The title of a referencing issue is
+// held apart from the phrase because it is the only part that can shrink, the
+// way a Flexible table column yields width while fixed columns do not.
+type eventLine struct {
+	// phrase reads as a complete event on its own, e.g. "referenced this
+	// issue from pull request #618".
+	phrase string
+	// title is quoted after phrase when it survives the width budget.
+	title string
+}
+
 // TimelineLines renders one line per event fj has phrasing for, oldest
 // first. Events it cannot phrase are dropped, so the count of lines is not
 // the count of events; --json exposes the raw timeline either way.
 //
 // repo is the repository being viewed, used to leave same-repo references
 // unqualified while spelling out cross-repo ones.
+//
+// Lines are fitted to the terminal, so a wide terminal shows more of a
+// referencing title than a narrow one. When stdout is not a terminal the
+// budget is unbounded and titles are kept whole, which is what a pipe into
+// jq or an agent wants.
 func TimelineLines(events []*api.TimelineEvent, subject TimelineSubject, repo Repo) []string {
+	width := output.TerminalWidth()
+
 	lines := make([]string, 0, len(events))
 	for _, e := range events {
-		summary := eventSummary(e, subject, repo)
-		if summary == "" {
+		ev := eventSummary(e, subject, repo)
+		if ev.phrase == "" {
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("%s %s%s %s",
-			eventActor(e), summary, refActionNote(e), output.RelativeTimeStr(e.Created)))
+		head := eventActor(e) + " " + ev.phrase
+		tail := refActionNote(e) + " " + output.RelativeTimeStr(e.Created)
+		lines = append(lines, fitEventLine(head, ev.title, tail, width))
 	}
 	return lines
 }
 
-// refTitleWidth caps how much of a referencing issue's title is shown. Real
-// titles routinely run past 100 characters, which would bury the event.
-const refTitleWidth = 60
+// fitEventLine assembles a line, giving the title whatever columns the rest of
+// the line leaves. A width of 0 means unbounded. A title squeezed below
+// titleFloor is dropped rather than rendered as a stub, since the phrase
+// already names the reference by number.
+func fitEventLine(head, title, tail string, width int) string {
+	if title == "" {
+		return head + tail
+	}
+	if width > 0 {
+		// The title costs a leading space and two quotes beyond its own width.
+		budget := width - output.DisplayWidth(head) - output.DisplayWidth(tail) - 3
+		if budget < titleFloor {
+			return head + tail
+		}
+		title = output.TruncateDisplay(title, budget)
+	}
+	return fmt.Sprintf("%s %q%s", head, title, tail)
+}
 
-// refSource names where a reference came from, as "pull request #618
-// \"sizing contract…\"". It returns "" when Forgejo did not resolve the
-// source, leaving the caller to fall back to a bare phrase.
+// refSource names where a reference came from, as "pull request #618", with
+// the referencing title returned separately. Both are "" when Forgejo did not
+// resolve the source, leaving the caller to fall back to a bare phrase.
 //
 // The kind is taken from the referencing issue itself rather than from the
 // event type: ref_issue carries a PullRequest only for a pull request, which
 // is the same signal Forgejo's own UI uses.
-func refSource(e *api.TimelineEvent, repo Repo) string {
+func refSource(e *api.TimelineEvent, repo Repo) (source, title string) {
 	if e.RefIssue == nil {
-		return ""
+		return "", ""
 	}
 
 	kind := "issue"
@@ -78,71 +117,69 @@ func refSource(e *api.TimelineEvent, repo Repo) string {
 		ref = r.FullName + ref
 	}
 
-	title := output.TruncateDisplay(output.Sanitize(e.RefIssue.Title), refTitleWidth)
-	if title == "" {
-		return kind + " " + ref
-	}
-	return fmt.Sprintf("%s %s %q", kind, ref, title)
+	return kind + " " + ref, output.Sanitize(e.RefIssue.Title)
 }
 
-// eventSummary renders an event as a phrase completing "<user> ...". It
-// returns "" for entries carrying no event of their own: plain comments,
+// eventSummary renders an event as a phrase completing "<user> ...". Its
+// phrase is "" for entries carrying no event of their own: plain comments,
 // which --comments prints in full, and types fj has no phrasing for.
-func eventSummary(e *api.TimelineEvent, subject TimelineSubject, repo Repo) string {
+func eventSummary(e *api.TimelineEvent, subject TimelineSubject, repo Repo) eventLine {
 	this := "this " + string(subject)
 
 	switch e.Type {
 	case api.EventCommitRef:
-		return fmt.Sprintf("referenced %s from a commit %s", this, shortSHA(e.RefCommitSHA))
+		return eventLine{phrase: fmt.Sprintf("referenced %s from a commit %s", this, shortSHA(e.RefCommitSHA))}
 	case api.EventIssueRef, api.EventPullRef:
-		if src := refSource(e, repo); src != "" {
-			return "referenced " + this + " from " + src
+		src, title := refSource(e, repo)
+		if src == "" {
+			return eventLine{phrase: "referenced " + this}
 		}
-		return "referenced " + this
+		return eventLine{phrase: "referenced " + this + " from " + src, title: title}
 	case api.EventCommentRef:
-		if src := refSource(e, repo); src != "" {
-			return "referenced " + this + " from a comment on " + src
+		src, title := refSource(e, repo)
+		if src == "" {
+			return eventLine{phrase: "referenced " + this + " from a comment"}
 		}
-		return "referenced " + this + " from a comment"
+		return eventLine{phrase: "referenced " + this + " from a comment on " + src, title: title}
 	case api.EventClose:
-		return "closed " + this
+		return eventLine{phrase: "closed " + this}
 	case api.EventReopen:
-		return "reopened " + this
+		return eventLine{phrase: "reopened " + this}
 	case api.EventMergePull:
-		return "merged " + this
+		return eventLine{phrase: "merged " + this}
 	case api.EventLock:
-		return "locked " + this
+		return eventLine{phrase: "locked " + this}
 	case api.EventUnlock:
-		return "unlocked " + this
+		return eventLine{phrase: "unlocked " + this}
 	case api.EventPin:
-		return "pinned " + this
+		return eventLine{phrase: "pinned " + this}
 	case api.EventUnpin:
-		return "unpinned " + this
+		return eventLine{phrase: "unpinned " + this}
 	case api.EventLabel:
-		return labelSummary(e)
+		return eventLine{phrase: labelSummary(e)}
 	case api.EventMilestone:
-		return milestoneSummary(e)
+		return eventLine{phrase: milestoneSummary(e)}
 	case api.EventAssignees:
-		return assigneeSummary(e)
+		return eventLine{phrase: assigneeSummary(e)}
 	case api.EventChangeTitle:
-		return fmt.Sprintf("changed the title from %q to %q", e.OldTitle, e.NewTitle)
+		return eventLine{phrase: fmt.Sprintf("changed the title from %q to %q", e.OldTitle, e.NewTitle)}
 	case api.EventDeleteBranch:
 		if e.OldRef == "" {
-			return "deleted the branch"
+			return eventLine{phrase: "deleted the branch"}
 		}
-		return "deleted the " + e.OldRef + " branch"
+		return eventLine{phrase: "deleted the " + e.OldRef + " branch"}
 	case api.EventChangeTargetBranch:
-		return fmt.Sprintf("changed the target branch from %s to %s", e.OldRef, e.NewRef)
+		return eventLine{phrase: fmt.Sprintf("changed the target branch from %s to %s", e.OldRef, e.NewRef)}
 	case api.EventReviewRequest:
-		return "requested a review"
+		return eventLine{phrase: "requested a review"}
 	case api.EventDismissReview:
-		return "dismissed a review"
+		return eventLine{phrase: "dismissed a review"}
 	case api.EventScheduledMerge:
-		return "scheduled " + this + " to auto-merge"
+		return eventLine{phrase: "scheduled " + this + " to auto-merge"}
 	case api.EventCancelScheduled:
-		return "cancelled the scheduled auto-merge"
+		return eventLine{phrase: "cancelled the scheduled auto-merge"}
 	default:
-		return ""
+		return eventLine{}
 	}
 }
 

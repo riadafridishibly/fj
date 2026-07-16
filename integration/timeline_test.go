@@ -232,6 +232,55 @@ func TestIssueViewTimelineRefSources(t *testing.T) {
 	}
 }
 
+// TestIssueViewTimelineWidth checks the width contract end to end through the
+// real binary: a bounded terminal fits the line to it, while a pipe (no TTY,
+// no FJ_WIDTH) keeps the referencing title whole so agents and tools like jq
+// see everything.
+func TestIssueViewTimelineWidth(t *testing.T) {
+	owner, repo := adminUser, "test-repo"
+
+	longTitle := "Ref width source with a deliberately long title that will not fit inside a narrow terminal at all"
+	target, _, err := testClient.CreateIssue(owner, repo, forgejo.CreateIssueOption{
+		Title: "Ref width target",
+	})
+	if err != nil {
+		t.Fatalf("creating target issue: %v", err)
+	}
+	if _, _, err := testClient.CreateIssue(owner, repo, forgejo.CreateIssueOption{
+		Title: longTitle,
+		Body:  fmt.Sprintf("This issue body references #%d", target.Index),
+	}); err != nil {
+		t.Fatalf("creating source issue: %v", err)
+	}
+
+	num := strconv.FormatInt(target.Index, 10)
+	args := []string{"issue", "view", num, "-R", owner + "/" + repo}
+
+	// Piped, with no width override: the whole title must survive.
+	stdout := viewUntil(t, "referenced this issue from issue", args...)
+	if !strings.Contains(stdout, longTitle) {
+		t.Errorf("a piped run must keep the whole title:\n%s", stdout)
+	}
+
+	// Bounded: every timeline line must fit the budget.
+	const width = 100
+	t.Setenv("FJ_WIDTH", strconv.Itoa(width))
+	bounded := mustRunFJ(t, args...)
+
+	if strings.Contains(bounded, longTitle) {
+		t.Errorf("width %d should have truncated the title:\n%s", width, bounded)
+	}
+	_, timeline, found := strings.Cut(bounded, "--- Timeline")
+	if !found {
+		t.Fatalf("no timeline section:\n%s", bounded)
+	}
+	for _, line := range strings.Split(strings.TrimSpace(timeline), "\n")[1:] {
+		if n := len([]rune(line)); n > width {
+			t.Errorf("line is %d columns, want at most %d:\n%s", n, width, line)
+		}
+	}
+}
+
 // TestPRViewTimeline checks the same default holds for pull requests, whose
 // events say "pull request" rather than "issue".
 func TestPRViewTimeline(t *testing.T) {

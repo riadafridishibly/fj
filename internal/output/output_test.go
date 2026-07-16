@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func lineWidth(s string) int { return displayWidth(s) }
+func lineWidth(s string) int { return DisplayWidth(s) }
 
 func TestTableUnboundedNoTruncation(t *testing.T) {
 	title := "a very long title that should not be truncated when width is unbounded"
@@ -97,7 +97,7 @@ func TestTruncateDisplay(t *testing.T) {
 		if got := TruncateDisplay(c.in, c.width); got != c.want {
 			t.Errorf("TruncateDisplay(%q, %d) = %q, want %q", c.in, c.width, got, c.want)
 		}
-		if w := displayWidth(TruncateDisplay(c.in, c.width)); c.width > 0 && w > c.width {
+		if w := DisplayWidth(TruncateDisplay(c.in, c.width)); c.width > 0 && w > c.width {
 			t.Errorf("TruncateDisplay(%q, %d) width %d exceeds %d", c.in, c.width, w, c.width)
 		}
 	}
@@ -109,7 +109,7 @@ func TestTruncateDisplayResetsColor(t *testing.T) {
 	if !strings.HasSuffix(got, Reset) {
 		t.Errorf("expected a trailing reset after cutting colored text: %q", got)
 	}
-	if displayWidth(got) > 10 {
-		t.Errorf("colored truncation exceeded width: display %d", displayWidth(got))
+	if DisplayWidth(got) > 10 {
+		t.Errorf("colored truncation exceeded width: display %d", DisplayWidth(got))
 	}
 }

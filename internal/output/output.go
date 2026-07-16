@@ -230,7 +230,7 @@ func (t *Table) Render(w io.Writer) {
 		}
 		fmt.Fprint(w, Colorize(Bold, h))
 		if i < numCols-1 {
-			pad := widths[i] - displayWidth(h)
+			pad := widths[i] - DisplayWidth(h)
 			if pad > 0 {
 				fmt.Fprint(w, strings.Repeat(" ", pad))
 			}
@@ -250,7 +250,7 @@ func (t *Table) Render(w io.Writer) {
 			}
 			fmt.Fprint(w, cell)
 			if i < numCols-1 {
-				pad := widths[i] - displayWidth(cell)
+				pad := widths[i] - DisplayWidth(cell)
 				if pad > 0 {
 					fmt.Fprint(w, strings.Repeat(" ", pad))
 				}
@@ -265,11 +265,11 @@ func (t *Table) naturalWidths() []int {
 	numCols := len(t.headers)
 	widths := make([]int, numCols)
 	for i, h := range t.headers {
-		widths[i] = displayWidth(h)
+		widths[i] = DisplayWidth(h)
 	}
 	for _, row := range t.rows {
 		for i := range min(len(row), numCols) {
-			if dw := displayWidth(row[i]); dw > widths[i] {
+			if dw := DisplayWidth(row[i]); dw > widths[i] {
 				widths[i] = dw
 			}
 		}
@@ -310,7 +310,7 @@ func (t *Table) fitFlexible(widths []int) map[int]bool {
 		c := valid[i]
 		// Never shrink below the header width or minFlex.
 		floor := t.minFlex
-		if hw := displayWidth(t.headers[c]); hw > floor {
+		if hw := DisplayWidth(t.headers[c]); hw > floor {
 			floor = hw
 		}
 		if reducible := widths[c] - floor; reducible > 0 {
@@ -322,8 +322,9 @@ func (t *Table) fitFlexible(widths []int) map[int]bool {
 	return flex
 }
 
-// displayWidth returns the visible width of a string, ignoring ANSI escape codes.
-func displayWidth(s string) int {
+// DisplayWidth returns the visible width of a string in terminal columns,
+// ignoring ANSI escape codes.
+func DisplayWidth(s string) int {
 	n := 0
 	inEscape := false
 	for _, r := range s {
@@ -352,7 +353,7 @@ func TruncateDisplay(s string, maxWidth int) string {
 	if maxWidth <= 0 {
 		return ""
 	}
-	if displayWidth(s) <= maxWidth {
+	if DisplayWidth(s) <= maxWidth {
 		return s
 	}
 	const ellipsis = "…"
