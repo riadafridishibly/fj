@@ -10,7 +10,24 @@ import (
 	"github.com/riadafridishibly/fj/internal/api"
 )
 
+// testRepo is the repository being viewed; references to it stay unqualified.
+var testRepo = Repo{Host: "code.example.com", Owner: "example", Name: "project"}
+
 func user(name string) *forgejo.User { return &forgejo.User{UserName: name} }
+
+// refIssue builds the issue a reference came from. pull marks it as a pull
+// request, which is how Forgejo signals the source's kind.
+func refIssue(index int64, title string, pull bool) *forgejo.Issue {
+	issue := &forgejo.Issue{
+		Index:      index,
+		Title:      title,
+		Repository: &forgejo.RepositoryMeta{FullName: testRepo.FullName()},
+	}
+	if pull {
+		issue.PullRequest = &forgejo.PullRequestMeta{}
+	}
+	return issue
+}
 
 // TestEventSummary covers the phrasing of each event type fj renders, and
 // the subject swap that makes the same event read correctly on an issue and
@@ -45,6 +62,68 @@ func TestEventSummary(t *testing.T) {
 			event:   api.TimelineEvent{Type: api.EventClose},
 			subject: SubjectIssue,
 			want:    "closed this issue",
+		},
+		{
+			name:    "pull ref names which pull request",
+			event:   api.TimelineEvent{Type: api.EventPullRef, RefIssue: refIssue(618, "sizing contract", true)},
+			subject: SubjectIssue,
+			want:    `referenced this issue from pull request #618 "sizing contract"`,
+		},
+		{
+			name:    "issue ref names which issue",
+			event:   api.TimelineEvent{Type: api.EventIssueRef, RefIssue: refIssue(626, "typography sweep", false)},
+			subject: SubjectIssue,
+			want:    `referenced this issue from issue #626 "typography sweep"`,
+		},
+		{
+			// The kind must follow ref_issue, not the event type, so an
+			// issue_ref whose source is a pull request still reads right.
+			name:    "source kind comes from ref_issue not the event type",
+			event:   api.TimelineEvent{Type: api.EventIssueRef, RefIssue: refIssue(618, "sizing contract", true)},
+			subject: SubjectIssue,
+			want:    `referenced this issue from pull request #618 "sizing contract"`,
+		},
+		{
+			name:    "comment ref names the issue the comment is on",
+			event:   api.TimelineEvent{Type: api.EventCommentRef, RefIssue: refIssue(626, "typography sweep", false)},
+			subject: SubjectIssue,
+			want:    `referenced this issue from a comment on issue #626 "typography sweep"`,
+		},
+		{
+			name:    "unresolved source falls back to a bare phrase",
+			event:   api.TimelineEvent{Type: api.EventPullRef},
+			subject: SubjectIssue,
+			want:    "referenced this issue",
+		},
+		{
+			name:    "unresolved comment source keeps the comment wording",
+			event:   api.TimelineEvent{Type: api.EventCommentRef},
+			subject: SubjectIssue,
+			want:    "referenced this issue from a comment",
+		},
+		{
+			name: "cross-repo reference is qualified with its repository",
+			event: api.TimelineEvent{Type: api.EventPullRef, RefIssue: &forgejo.Issue{
+				Index:       7,
+				Title:       "upstream fix",
+				PullRequest: &forgejo.PullRequestMeta{},
+				Repository:  &forgejo.RepositoryMeta{FullName: "other/repo"},
+			}},
+			subject: SubjectIssue,
+			want:    `referenced this issue from pull request other/repo#7 "upstream fix"`,
+		},
+		{
+			name: "a long title is truncated on a rune boundary",
+			event: api.TimelineEvent{Type: api.EventPullRef, RefIssue: refIssue(618,
+				"feat(trustcard-dashboard): sizing contract — control-size vocabulary, type-scale floor", true)},
+			subject: SubjectIssue,
+			want:    `referenced this issue from pull request #618 "feat(trustcard-dashboard): sizing contract — control-size v…"`,
+		},
+		{
+			name:    "a reference with no title falls back to the number",
+			event:   api.TimelineEvent{Type: api.EventPullRef, RefIssue: refIssue(618, "", true)},
+			subject: SubjectIssue,
+			want:    "referenced this issue from pull request #618",
 		},
 		{
 			name:    "label added is signalled by body 1",
@@ -122,7 +201,7 @@ func TestEventSummary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := eventSummary(&tt.event, tt.subject); got != tt.want {
+			if got := eventSummary(&tt.event, tt.subject, testRepo); got != tt.want {
 				t.Errorf("eventSummary() = %q, want %q", got, tt.want)
 			}
 		})
@@ -169,7 +248,7 @@ func TestTimelineLines(t *testing.T) {
 		{Type: "some_future_forgejo_event", Poster: user("riad")},
 	}
 
-	lines := TimelineLines(events, SubjectIssue)
+	lines := TimelineLines(events, SubjectIssue, testRepo)
 
 	if len(lines) != 1 {
 		t.Fatalf("TimelineLines() returned %d lines, want 1: %v", len(lines), lines)
@@ -188,7 +267,7 @@ func TestTimelineLines(t *testing.T) {
 func TestTimelineLinesUnknownActor(t *testing.T) {
 	events := []*api.TimelineEvent{{Type: api.EventClose, Created: time.Now()}}
 
-	lines := TimelineLines(events, SubjectIssue)
+	lines := TimelineLines(events, SubjectIssue, testRepo)
 
 	if len(lines) != 1 {
 		t.Fatalf("TimelineLines() returned %d lines, want 1", len(lines))

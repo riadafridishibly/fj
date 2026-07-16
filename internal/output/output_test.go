@@ -94,18 +94,18 @@ func TestTruncateDisplay(t *testing.T) {
 		{"abc", 0, ""},
 	}
 	for _, c := range cases {
-		if got := truncateDisplay(c.in, c.width); got != c.want {
-			t.Errorf("truncateDisplay(%q, %d) = %q, want %q", c.in, c.width, got, c.want)
+		if got := TruncateDisplay(c.in, c.width); got != c.want {
+			t.Errorf("TruncateDisplay(%q, %d) = %q, want %q", c.in, c.width, got, c.want)
 		}
-		if w := displayWidth(truncateDisplay(c.in, c.width)); c.width > 0 && w > c.width {
-			t.Errorf("truncateDisplay(%q, %d) width %d exceeds %d", c.in, c.width, w, c.width)
+		if w := displayWidth(TruncateDisplay(c.in, c.width)); c.width > 0 && w > c.width {
+			t.Errorf("TruncateDisplay(%q, %d) width %d exceeds %d", c.in, c.width, w, c.width)
 		}
 	}
 }
 
 func TestTruncateDisplayResetsColor(t *testing.T) {
 	colored := Red + "a long colored string that gets cut" + Reset
-	got := truncateDisplay(colored, 10)
+	got := TruncateDisplay(colored, 10)
 	if !strings.HasSuffix(got, Reset) {
 		t.Errorf("expected a trailing reset after cutting colored text: %q", got)
 	}

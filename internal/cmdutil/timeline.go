@@ -2,6 +2,7 @@ package cmdutil
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/riadafridishibly/fj/internal/api"
 	"github.com/riadafridishibly/fj/internal/output"
@@ -33,10 +34,13 @@ func (f *Factory) Timeline(repo Repo, index int64) ([]*api.TimelineEvent, error)
 // TimelineLines renders one line per event fj has phrasing for, oldest
 // first. Events it cannot phrase are dropped, so the count of lines is not
 // the count of events; --json exposes the raw timeline either way.
-func TimelineLines(events []*api.TimelineEvent, subject TimelineSubject) []string {
+//
+// repo is the repository being viewed, used to leave same-repo references
+// unqualified while spelling out cross-repo ones.
+func TimelineLines(events []*api.TimelineEvent, subject TimelineSubject, repo Repo) []string {
 	lines := make([]string, 0, len(events))
 	for _, e := range events {
-		summary := eventSummary(e, subject)
+		summary := eventSummary(e, subject, repo)
 		if summary == "" {
 			continue
 		}
@@ -46,21 +50,60 @@ func TimelineLines(events []*api.TimelineEvent, subject TimelineSubject) []strin
 	return lines
 }
 
+// refTitleWidth caps how much of a referencing issue's title is shown. Real
+// titles routinely run past 100 characters, which would bury the event.
+const refTitleWidth = 60
+
+// refSource names where a reference came from, as "pull request #618
+// \"sizing contract…\"". It returns "" when Forgejo did not resolve the
+// source, leaving the caller to fall back to a bare phrase.
+//
+// The kind is taken from the referencing issue itself rather than from the
+// event type: ref_issue carries a PullRequest only for a pull request, which
+// is the same signal Forgejo's own UI uses.
+func refSource(e *api.TimelineEvent, repo Repo) string {
+	if e.RefIssue == nil {
+		return ""
+	}
+
+	kind := "issue"
+	if e.RefIssue.PullRequest != nil {
+		kind = "pull request"
+	}
+
+	ref := fmt.Sprintf("#%d", e.RefIssue.Index)
+	// A cross-repo reference needs its repository spelled out, or "#12"
+	// would read as this repository's #12.
+	if r := e.RefIssue.Repository; r != nil && r.FullName != "" && !strings.EqualFold(r.FullName, repo.FullName()) {
+		ref = r.FullName + ref
+	}
+
+	title := output.TruncateDisplay(output.Sanitize(e.RefIssue.Title), refTitleWidth)
+	if title == "" {
+		return kind + " " + ref
+	}
+	return fmt.Sprintf("%s %s %q", kind, ref, title)
+}
+
 // eventSummary renders an event as a phrase completing "<user> ...". It
 // returns "" for entries carrying no event of their own: plain comments,
 // which --comments prints in full, and types fj has no phrasing for.
-func eventSummary(e *api.TimelineEvent, subject TimelineSubject) string {
+func eventSummary(e *api.TimelineEvent, subject TimelineSubject, repo Repo) string {
 	this := "this " + string(subject)
 
 	switch e.Type {
 	case api.EventCommitRef:
 		return fmt.Sprintf("referenced %s from a commit %s", this, shortSHA(e.RefCommitSHA))
-	case api.EventIssueRef:
+	case api.EventIssueRef, api.EventPullRef:
+		if src := refSource(e, repo); src != "" {
+			return "referenced " + this + " from " + src
+		}
 		return "referenced " + this
 	case api.EventCommentRef:
+		if src := refSource(e, repo); src != "" {
+			return "referenced " + this + " from a comment on " + src
+		}
 		return "referenced " + this + " from a comment"
-	case api.EventPullRef:
-		return "referenced " + this + " from a pull request"
 	case api.EventClose:
 		return "closed " + this
 	case api.EventReopen:

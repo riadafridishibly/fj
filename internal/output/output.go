@@ -246,7 +246,7 @@ func (t *Table) Render(w io.Writer) {
 			}
 			cell := row[i]
 			if flex[i] {
-				cell = truncateDisplay(cell, widths[i])
+				cell = TruncateDisplay(cell, widths[i])
 			}
 			fmt.Fprint(w, cell)
 			if i < numCols-1 {
@@ -342,11 +342,13 @@ func displayWidth(s string) int {
 	return n
 }
 
-// truncateDisplay shortens s to at most maxWidth display columns, appending a
+// TruncateDisplay shortens s to at most maxWidth display columns, appending a
 // single-column ellipsis when it has to cut. ANSI escape sequences are copied
 // through without counting toward the width, and a Reset is appended if the
 // string contained color so a mid-color cut doesn't bleed into later columns.
-func truncateDisplay(s string, maxWidth int) string {
+// Unlike Truncate it cuts on rune boundaries, so it is the safe choice for
+// text that may contain multi-byte characters.
+func TruncateDisplay(s string, maxWidth int) string {
 	if maxWidth <= 0 {
 		return ""
 	}

@@ -178,7 +178,7 @@ func viewRun(opts *viewOptions) error {
 		if err != nil {
 			return err
 		}
-		if lines := cmdutil.TimelineLines(events, cmdutil.SubjectIssue); len(lines) > 0 {
+		if lines := cmdutil.TimelineLines(events, cmdutil.SubjectIssue, repo); len(lines) > 0 {
 			fmt.Fprintf(os.Stdout, "\n--- Timeline (%d) ---\n", len(lines))
 			for _, l := range lines {
 				fmt.Fprintf(os.Stdout, "%s\n", l)

@@ -164,6 +164,74 @@ func TestIssueViewTimelineClose(t *testing.T) {
 	}
 }
 
+// TestIssueViewTimelineRefSources checks that a reference names where it came
+// from. A bare "referenced this issue" is what the timeline looked like before
+// ref_issue was read, and it is useless without the source. Each way of
+// referencing an issue is exercised against a real Forgejo, since the event
+// type alone does not reliably tell you the source's kind.
+func TestIssueViewTimelineRefSources(t *testing.T) {
+	owner, repo := adminUser, "test-repo"
+
+	target, _, err := testClient.CreateIssue(owner, repo, forgejo.CreateIssueOption{
+		Title: "Ref source target",
+	})
+	if err != nil {
+		t.Fatalf("creating target issue: %v", err)
+	}
+
+	// A pull request whose body references the target.
+	branch := fmt.Sprintf("ref-source-%d", target.Index)
+	if _, _, err := testClient.CreateBranch(owner, repo, forgejo.CreateBranchOption{
+		BranchName:    branch,
+		OldBranchName: "main",
+	}); err != nil {
+		t.Fatalf("creating branch: %v", err)
+	}
+	if _, _, err := testClient.CreateFile(owner, repo, branch+".txt", forgejo.CreateFileOptions{
+		FileOptions: forgejo.FileOptions{Message: "ref source file", BranchName: branch},
+		Content:     base64.StdEncoding.EncodeToString([]byte("probe\n")),
+	}); err != nil {
+		t.Fatalf("creating file on branch: %v", err)
+	}
+	pull, _, err := testClient.CreatePullRequest(owner, repo, forgejo.CreatePullRequestOption{
+		Head:  branch,
+		Base:  "main",
+		Title: "Ref source pull request",
+		Body:  fmt.Sprintf("This pull request body references #%d", target.Index),
+	})
+	if err != nil {
+		t.Fatalf("creating pull request: %v", err)
+	}
+
+	// An issue whose body references the target, then a comment doing the same.
+	src, _, err := testClient.CreateIssue(owner, repo, forgejo.CreateIssueOption{
+		Title: "Ref source issue",
+		Body:  fmt.Sprintf("This issue body references #%d", target.Index),
+	})
+	if err != nil {
+		t.Fatalf("creating source issue: %v", err)
+	}
+	if _, _, err := testClient.CreateIssueComment(owner, repo, src.Index, forgejo.CreateIssueCommentOption{
+		Body: fmt.Sprintf("This comment references #%d", target.Index),
+	}); err != nil {
+		t.Fatalf("creating comment: %v", err)
+	}
+
+	num := strconv.FormatInt(target.Index, 10)
+	wantPull := fmt.Sprintf(`referenced this issue from pull request #%d "Ref source pull request"`, pull.Index)
+	stdout := viewUntil(t, wantPull, "issue", "view", num, "-R", owner+"/"+repo)
+
+	for _, want := range []string{
+		wantPull,
+		fmt.Sprintf(`referenced this issue from issue #%d "Ref source issue"`, src.Index),
+		fmt.Sprintf(`referenced this issue from a comment on issue #%d "Ref source issue"`, src.Index),
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("expected %q in output:\n%s", want, stdout)
+		}
+	}
+}
+
 // TestPRViewTimeline checks the same default holds for pull requests, whose
 // events say "pull request" rather than "issue".
 func TestPRViewTimeline(t *testing.T) {
