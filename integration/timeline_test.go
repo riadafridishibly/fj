@@ -232,6 +232,97 @@ func TestIssueViewTimelineRefSources(t *testing.T) {
 	}
 }
 
+// TestIssueViewTimelineFilter checks the filter end to end, and with it the
+// case that decided the filter's design: a reference written in a comment on a
+// pull request arrives as comment_ref, exactly as one written on an issue
+// does. Only ref_issue says which it came from, so a filter keyed on the event
+// type would leave this reference on screen for a reader who asked to hide
+// pull requests. Only a real Forgejo proves the type is genuinely ambiguous.
+func TestIssueViewTimelineFilter(t *testing.T) {
+	owner, repo := adminUser, "test-repo"
+
+	// A target referenced from a commit...
+	index := commitReferencing(t, "Timeline filter target")
+
+	// ...and from a comment on a pull request, whose own body references
+	// nothing, so the only pull request reference is the comment's.
+	branch := fmt.Sprintf("filter-source-%d", index)
+	if _, _, err := testClient.CreateBranch(owner, repo, forgejo.CreateBranchOption{
+		BranchName:    branch,
+		OldBranchName: "main",
+	}); err != nil {
+		t.Fatalf("creating branch: %v", err)
+	}
+	if _, _, err := testClient.CreateFile(owner, repo, branch+".txt", forgejo.CreateFileOptions{
+		FileOptions: forgejo.FileOptions{Message: "filter source file", BranchName: branch},
+		Content:     base64.StdEncoding.EncodeToString([]byte("probe\n")),
+	}); err != nil {
+		t.Fatalf("creating file on branch: %v", err)
+	}
+	pull, _, err := testClient.CreatePullRequest(owner, repo, forgejo.CreatePullRequestOption{
+		Head:  branch,
+		Base:  "main",
+		Title: "Filter source pull request",
+		Body:  "This body references nothing.",
+	})
+	if err != nil {
+		t.Fatalf("creating pull request: %v", err)
+	}
+	if _, _, err := testClient.CreateIssueComment(owner, repo, pull.Index, forgejo.CreateIssueCommentOption{
+		Body: fmt.Sprintf("This comment references #%d", index),
+	}); err != nil {
+		t.Fatalf("creating comment: %v", err)
+	}
+
+	num := strconv.FormatInt(index, 10)
+	base := []string{"issue", "view", num, "-R", owner + "/" + repo}
+	view := func(extra ...string) string {
+		t.Helper()
+		return mustRunFJ(t, append(append([]string{}, base...), extra...)...)
+	}
+
+	fromPull := fmt.Sprintf("referenced this issue from a comment on pull request #%d", pull.Index)
+	stdout := viewUntil(t, fromPull, base...)
+	if !strings.Contains(stdout, "from a commit") {
+		t.Fatalf("expected a commit reference to filter out:\n%s", stdout)
+	}
+
+	// The motivating case: commit references are the noise.
+	if got := view("--timeline-exclude", "commits"); strings.Contains(got, "from a commit") {
+		t.Errorf("--timeline-exclude commits should drop commit references:\n%s", got)
+	} else if !strings.Contains(got, fromPull) {
+		t.Errorf("--timeline-exclude commits should keep other references:\n%s", got)
+	}
+
+	// The design case: comment_ref, but its source is a pull request.
+	noPulls := view("--timeline-exclude", "prs")
+	if strings.Contains(noPulls, fromPull) {
+		t.Errorf("--timeline-exclude prs must drop a reference made in a comment on a pull request:\n%s", noPulls)
+	}
+	if !strings.Contains(noPulls, "from a commit") {
+		t.Errorf("--timeline-exclude prs should leave commit references alone:\n%s", noPulls)
+	}
+
+	// Include narrows, and exclude then subtracts from it.
+	only := view("--timeline-include", "refs", "--timeline-exclude", "commits")
+	if !strings.Contains(only, fromPull) {
+		t.Errorf("--timeline-include refs should keep the pull request reference:\n%s", only)
+	}
+	if strings.Contains(only, "from a commit") {
+		t.Errorf("--timeline-exclude commits should subtract from --timeline-include refs:\n%s", only)
+	}
+
+	// A misspelled category is a flag error, not a filter that quietly
+	// matches nothing.
+	_, stderr, err := runFJ(append(append([]string{}, base...), "--timeline-exclude", "commit")...)
+	if err == nil {
+		t.Error("an unknown category should fail rather than be ignored")
+	}
+	if !strings.Contains(stderr, "commits") {
+		t.Errorf("the error should list the valid categories, got: %s", stderr)
+	}
+}
+
 // TestIssueViewTimelineWidth checks the width contract end to end through the
 // real binary: a bounded terminal fits the line to it, while a pipe (no TTY,
 // no FJ_WIDTH) keeps the referencing title whole so agents and tools like jq

@@ -93,21 +93,37 @@ func fitEventLine(head, title, tail string, width int) string {
 	return fmt.Sprintf("%s %q%s", head, title, tail)
 }
 
-// refSource names where a reference came from, as "pull request #618", with
-// the referencing title returned separately. Both are "" when Forgejo did not
-// resolve the source, leaving the caller to fall back to a bare phrase.
+// The kinds of thing a reference can come from, besides a commit.
+const (
+	kindIssue = "issue"
+	kindPull  = "pull request"
+)
+
+// refKind names what a reference came from, and is "" when Forgejo did not
+// resolve the source.
 //
 // The kind is taken from the referencing issue itself rather than from the
 // event type: ref_issue carries a PullRequest only for a pull request, which
-// is the same signal Forgejo's own UI uses.
-func refSource(e *api.TimelineEvent, repo Repo) (source, title string) {
+// is the same signal Forgejo's own UI uses. The type will not do, because
+// Forgejo records comment_ref for a comment on an issue and for a comment on
+// a pull request alike.
+func refKind(e *api.TimelineEvent) string {
 	if e.RefIssue == nil {
-		return "", ""
+		return ""
 	}
-
-	kind := "issue"
 	if e.RefIssue.PullRequest != nil {
-		kind = "pull request"
+		return kindPull
+	}
+	return kindIssue
+}
+
+// refSource names where a reference came from, as "pull request #618", with
+// the referencing title returned separately. Both are "" when Forgejo did not
+// resolve the source, leaving the caller to fall back to a bare phrase.
+func refSource(e *api.TimelineEvent, repo Repo) (source, title string) {
+	kind := refKind(e)
+	if kind == "" {
+		return "", ""
 	}
 
 	ref := fmt.Sprintf("#%d", e.RefIssue.Index)

@@ -18,14 +18,16 @@ import (
 )
 
 type viewOptions struct {
-	Factory      *cmdutil.Factory
-	Number       string
-	Comments     bool
-	ShowTimeline bool
-	Web          bool
-	JSONOutput   bool
-	Download     bool
-	DownloadDir  string
+	Factory         *cmdutil.Factory
+	Number          string
+	Comments        bool
+	ShowTimeline    bool
+	TimelineInclude []string
+	TimelineExclude []string
+	Web             bool
+	JSONOutput      bool
+	Download        bool
+	DownloadDir     string
 }
 
 func NewCmdView(f *cmdutil.Factory) *cobra.Command {
@@ -37,6 +39,8 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 		Example: `  $ fj issue view 42
   $ fj issue view 42 --comments
   $ fj issue view 42 --show-timeline=false
+  $ fj issue view 42 --timeline-exclude commits
+  $ fj issue view 42 --timeline-include refs --timeline-exclude commits
   $ fj issue view 42 --web
   $ fj issue view 42 --json
   $ fj issue view 42 --download
@@ -50,6 +54,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 
 	cmd.Flags().BoolVarP(&opts.Comments, "comments", "c", false, "View issue comments")
 	cmd.Flags().BoolVar(&opts.ShowTimeline, "show-timeline", true, "Show issue events, such as commit references and label changes")
+	cmdutil.AddTimelineFilterFlags(cmd, &opts.TimelineInclude, &opts.TimelineExclude, cmdutil.SubjectIssue)
 	cmd.Flags().BoolVar(&opts.Download, "download", false, "Download issue attachments")
 	cmd.Flags().StringVarP(&opts.DownloadDir, "download-dir", "D", "", "Directory to download attachments into (default: ./issue-<number>)")
 	cmdutil.AddWebFlag(cmd, &opts.Web)
@@ -67,6 +72,11 @@ func viewRun(opts *viewOptions) error {
 	index, err := strconv.ParseInt(opts.Number, 10, 64)
 	if err != nil {
 		return cmdutil.FlagErrorf("invalid issue number: %s", opts.Number)
+	}
+
+	timeline, err := cmdutil.NewTimelineFilter(opts.TimelineInclude, opts.TimelineExclude)
+	if err != nil {
+		return err
 	}
 
 	client, err := opts.Factory.ClientForRepo(repo)
@@ -99,7 +109,7 @@ func viewRun(opts *viewOptions) error {
 			if err != nil {
 				return err
 			}
-			result["timeline"] = events
+			result["timeline"] = timeline.Apply(events)
 		}
 		if opts.Download {
 			paths, dir, err := downloadIssueAttachments(opts.Factory, client, repo, index, opts.DownloadDir)
@@ -178,7 +188,7 @@ func viewRun(opts *viewOptions) error {
 		if err != nil {
 			return err
 		}
-		if lines := cmdutil.TimelineLines(events, cmdutil.SubjectIssue, repo); len(lines) > 0 {
+		if lines := cmdutil.TimelineLines(timeline.Apply(events), cmdutil.SubjectIssue, repo); len(lines) > 0 {
 			fmt.Fprintf(os.Stdout, "\n--- Timeline (%d) ---\n", len(lines))
 			for _, l := range lines {
 				fmt.Fprintf(os.Stdout, "%s\n", l)

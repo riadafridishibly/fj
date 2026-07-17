@@ -15,12 +15,14 @@ import (
 )
 
 type viewOptions struct {
-	Factory      *cmdutil.Factory
-	Number       string
-	Comments     bool
-	ShowTimeline bool
-	Web          bool
-	JSONOutput   bool
+	Factory         *cmdutil.Factory
+	Number          string
+	Comments        bool
+	ShowTimeline    bool
+	TimelineInclude []string
+	TimelineExclude []string
+	Web             bool
+	JSONOutput      bool
 }
 
 func NewCmdView(f *cmdutil.Factory) *cobra.Command {
@@ -32,6 +34,8 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 		Example: `  $ fj pr view 42
   $ fj pr view 42 --comments
   $ fj pr view 42 --show-timeline=false
+  $ fj pr view 42 --timeline-exclude commits
+  $ fj pr view 42 --timeline-include refs --timeline-exclude commits
   $ fj pr view 42 --web
   $ fj pr view 42 --json`,
 		Args: cmdutil.ExactArgs(1),
@@ -43,6 +47,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 
 	cmd.Flags().BoolVarP(&opts.Comments, "comments", "c", false, "View pull request comments")
 	cmd.Flags().BoolVar(&opts.ShowTimeline, "show-timeline", true, "Show pull request events, such as commit references and label changes")
+	cmdutil.AddTimelineFilterFlags(cmd, &opts.TimelineInclude, &opts.TimelineExclude, cmdutil.SubjectPull)
 	cmdutil.AddWebFlag(cmd, &opts.Web)
 	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
 
@@ -58,6 +63,11 @@ func viewRun(opts *viewOptions) error {
 	index, err := strconv.ParseInt(opts.Number, 10, 64)
 	if err != nil {
 		return cmdutil.FlagErrorf("invalid pull request number: %s", opts.Number)
+	}
+
+	timeline, err := cmdutil.NewTimelineFilter(opts.TimelineInclude, opts.TimelineExclude)
+	if err != nil {
+		return err
 	}
 
 	client, err := opts.Factory.ClientForRepo(repo)
@@ -90,7 +100,7 @@ func viewRun(opts *viewOptions) error {
 			if err != nil {
 				return err
 			}
-			result["timeline"] = events
+			result["timeline"] = timeline.Apply(events)
 		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -173,7 +183,7 @@ func viewRun(opts *viewOptions) error {
 		if err != nil {
 			return err
 		}
-		if lines := cmdutil.TimelineLines(events, cmdutil.SubjectPull, repo); len(lines) > 0 {
+		if lines := cmdutil.TimelineLines(timeline.Apply(events), cmdutil.SubjectPull, repo); len(lines) > 0 {
 			fmt.Fprintf(os.Stdout, "\n--- Timeline (%d) ---\n", len(lines))
 			for _, l := range lines {
 				fmt.Fprintf(os.Stdout, "%s\n", l)
