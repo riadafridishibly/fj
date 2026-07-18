@@ -2,6 +2,7 @@ package root
 
 import (
 	"fmt"
+	"os"
 	"runtime/debug"
 
 	"github.com/spf13/cobra"
@@ -23,6 +24,8 @@ var (
 )
 
 func NewCmdRoot(f *cmdutil.Factory) *cobra.Command {
+	var directory string
+
 	cmd := &cobra.Command{
 		Use:   "fj <command> <subcommand> [flags]",
 		Short: "Forgejo CLI",
@@ -30,12 +33,22 @@ func NewCmdRoot(f *cmdutil.Factory) *cobra.Command {
 		Example: `  $ fj issue list
   $ fj pr create --title "Fix bug" --body "Description"
   $ fj repo view
+  $ fj -C ../other-repo issue list
   $ fj auth login --hostname forgejo.example.com`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			if directory != "" {
+				if err := os.Chdir(directory); err != nil {
+					return fmt.Errorf("cannot change directory: %w", err)
+				}
+			}
+			return nil
+		},
 	}
 
 	cmd.PersistentFlags().Bool("help", false, "Show help for command")
+	cmd.PersistentFlags().StringVarP(&directory, "directory", "C", "", "Run as if fj was started in `<path>` instead of the current working directory")
 
 	// Add -R flag at root level
 	cmdutil.AddRepoOverrideFlags(cmd, f)
