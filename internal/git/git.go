@@ -1,6 +1,7 @@
 package git
 
 import (
+	"bytes"
 	"fmt"
 	"net/url"
 	"os/exec"
@@ -34,6 +35,56 @@ func Run(args ...string) (string, error) {
 
 func CurrentBranch() (string, error) {
 	return Run("symbolic-ref", "--short", "HEAD")
+}
+
+// RevExists reports whether rev resolves to a commit in the local object database.
+func RevExists(rev string) bool {
+	if rev == "" {
+		return false
+	}
+	return exec.Command("git", "rev-parse", "--verify", "--quiet", rev+"^{commit}").Run() == nil
+}
+
+// MergeTreeConflicts merges head into base in memory with `git merge-tree`
+// (requires git >= 2.38) and reports the conflicting files without touching the
+// working tree, index, or HEAD. clean is true for a conflict-free merge. A
+// non-nil error (git too old, rev missing locally, unrelated histories, not a
+// repo) means the result is unknown and must not be read as clean.
+//
+// The -z form keeps paths with spaces or newlines intact: git emits
+// <tree-OID>NUL<path>NUL<path>..., and --no-messages drops the conflict report.
+func MergeTreeConflicts(base, head string) (files []string, clean bool, err error) {
+	cmd := exec.Command("git", "merge-tree", "--write-tree", "-z", "--name-only", "--no-messages", base, head)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	runErr := cmd.Run()
+	if runErr == nil {
+		return nil, true, nil
+	}
+	if _, ok := runErr.(*exec.ExitError); !ok {
+		return nil, false, fmt.Errorf("git merge-tree: %w", runErr)
+	}
+
+	records := strings.Split(stdout.String(), "\x00")
+	// A conflicted merge exits 1 but still emits the tree OID first. So does a
+	// rejected input (bad rev, unrelated histories) — but with empty stdout, so
+	// a missing OID means failure, not a phantom conflict.
+	if records[0] == "" {
+		msg := strings.TrimSpace(stderr.String())
+		if msg == "" {
+			msg = runErr.Error()
+		}
+		return nil, false, fmt.Errorf("git merge-tree %s %s: %s", base, head, msg)
+	}
+
+	for _, path := range records[1:] {
+		if path != "" {
+			files = append(files, path)
+		}
+	}
+	return files, false, nil
 }
 
 func Remotes() ([]Remote, error) {

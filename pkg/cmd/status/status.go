@@ -3,6 +3,7 @@ package status
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -101,6 +102,17 @@ type prStatus struct {
 	HeadSHA      string `json:"head_sha"`
 	LocalSHA     string `json:"local_sha"`
 	Synced       bool   `json:"synced"`
+	// Conflicts is a local git merge-tree check; the REST API only exposes a
+	// mergeable bool without the file list, and it can be stale. nil when the
+	// check couldn't run.
+	Conflicts *conflictInfo `json:"conflicts,omitempty"`
+}
+
+type conflictInfo struct {
+	Status string   `json:"status"` // "clean" or "conflicts"
+	Base   string   `json:"base"`
+	Head   string   `json:"head"`
+	Files  []string `json:"files,omitempty"`
 }
 
 func statusRun(opts *statusOptions) error {
@@ -293,6 +305,10 @@ func statusRun(opts *statusOptions) error {
 				}
 			}
 
+			if ps.State == "open" {
+				ps.Conflicts = detectConflicts(branchPR)
+			}
+
 			bs.PR = ps
 		}
 
@@ -394,6 +410,50 @@ func fetchPRDetails(f *cmdutil.Factory, repo cmdutil.Repo, prIndex int64) (addit
 		return 0, 0, 0, false, err
 	}
 	return result.Additions, result.Deletions, result.ChangedFiles, result.Draft, nil
+}
+
+// detectConflicts recovers the conflicting-file list the REST API omits by
+// running git merge-tree over the checkout, preferring the PR's own commits
+// (matching the server) and falling back to local refs. It returns nil when the
+// check can't be run.
+func detectConflicts(pr *forgejo.PullRequest) *conflictInfo {
+	defer debug.Track(2, "fj status (conflict check)")()
+
+	if pr.Base == nil {
+		return nil
+	}
+	base := firstLocalRev(pr.Base.Sha, "origin/"+pr.Base.Ref, pr.Base.Ref)
+	var headSha string
+	if pr.Head != nil {
+		headSha = pr.Head.Sha
+	}
+	head := firstLocalRev(headSha, "HEAD")
+	if base == "" || head == "" {
+		debug.Logf(2, "conflict check skipped: base=%q head=%q not resolvable locally", base, head)
+		return nil
+	}
+
+	files, clean, err := git.MergeTreeConflicts(base, head)
+	if err != nil {
+		debug.Logf(2, "conflict check error (non-fatal): %v", err)
+		return nil
+	}
+
+	ci := &conflictInfo{Base: base, Head: head, Status: "conflicts", Files: files}
+	if clean {
+		ci.Status = "clean"
+	}
+	debug.Logf(3, "conflict check %s...%s -> %s (%d files)", base, head, ci.Status, len(files))
+	return ci
+}
+
+func firstLocalRev(candidates ...string) string {
+	for _, c := range candidates {
+		if git.RevExists(c) {
+			return c
+		}
+	}
+	return ""
 }
 
 func printStatus(s *repoStatus) {
@@ -511,16 +571,32 @@ func printStatus(s *repoStatus) {
 				} else {
 					fmt.Fprintf(w, "  %s\n", output.Colorize(output.Yellow, "Local is out of sync with PR"))
 				}
-				if pr.Mergeable {
-					fmt.Fprintf(w, "  %s\n", output.Colorize(output.Green, "Mergeable"))
-				} else if pr.Draft {
-					fmt.Fprintf(w, "  %s\n", output.Colorize(output.Yellow, "WIP / Draft"))
-				} else {
-					fmt.Fprintf(w, "  %s\n", output.Colorize(output.Red, "Has conflicts"))
-				}
+				printMergeability(w, pr)
 			}
 
 			fmt.Fprintf(w, "  %s\n", output.Colorize(output.Gray, pr.HTMLURL))
 		}
+	}
+}
+
+func printMergeability(w io.Writer, pr *prStatus) {
+	c := pr.Conflicts
+	switch {
+	case c != nil && c.Status == "conflicts":
+		unit := "files"
+		if len(c.Files) == 1 {
+			unit = "file"
+		}
+		fmt.Fprintf(w, "  %s\n", output.Colorize(output.Red, fmt.Sprintf("Has conflicts in %d %s", len(c.Files), unit)))
+		for _, f := range c.Files {
+			fmt.Fprintf(w, "    %s %s\n", output.Colorize(output.Red, "-"), f)
+		}
+		fmt.Fprintf(w, "    %s\n", output.Colorize(output.Gray, fmt.Sprintf("checked locally: %s...%s", c.Base, c.Head)))
+	case pr.Draft:
+		fmt.Fprintf(w, "  %s\n", output.Colorize(output.Yellow, "WIP / Draft"))
+	case c != nil && c.Status == "clean", pr.Mergeable:
+		fmt.Fprintf(w, "  %s\n", output.Colorize(output.Green, "Mergeable"))
+	default:
+		fmt.Fprintf(w, "  %s\n", output.Colorize(output.Red, "Has conflicts"))
 	}
 }
