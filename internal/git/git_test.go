@@ -8,6 +8,13 @@ import (
 	"testing"
 )
 
+func requireMergeTree(t *testing.T) {
+	t.Helper()
+	if ok, ver := SupportsMergeTree(); !ok {
+		t.Skipf("git %s lacks merge-tree --write-tree (needs 2.38+)", ver)
+	}
+}
+
 func gitT(t *testing.T, args ...string) {
 	t.Helper()
 	if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
@@ -53,6 +60,7 @@ func initConflictRepo(t *testing.T) string {
 }
 
 func TestMergeTreeConflictsReportsConflict(t *testing.T) {
+	requireMergeTree(t)
 	initConflictRepo(t)
 
 	files, clean, err := MergeTreeConflicts("main", "feature")
@@ -69,10 +77,20 @@ func TestMergeTreeConflictsReportsConflict(t *testing.T) {
 }
 
 func TestMergeTreeConflictsCleanMerge(t *testing.T) {
-	initConflictRepo(t)
-	gitT(t, "checkout", "-q", "-b", "clean-base", "main")
+	requireMergeTree(t)
+	dir := initConflictRepo(t)
 
-	files, clean, err := MergeTreeConflicts("clean-base", "main")
+	gitT(t, "checkout", "-q", "-b", "clean-side", "main")
+	writeFile(t, dir, "clean-side.txt", "side\n")
+	gitT(t, "add", "-A")
+	gitT(t, "commit", "-qm", "side")
+
+	gitT(t, "checkout", "-q", "main")
+	writeFile(t, dir, "main-only.txt", "main\n")
+	gitT(t, "add", "-A")
+	gitT(t, "commit", "-qm", "main-only")
+
+	files, clean, err := MergeTreeConflicts("main", "clean-side")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -84,11 +102,76 @@ func TestMergeTreeConflictsCleanMerge(t *testing.T) {
 	}
 }
 
+func TestMergeTreeConflictsMultipleFiles(t *testing.T) {
+	requireMergeTree(t)
+	dir := initConflictRepo(t)
+
+	gitT(t, "checkout", "-q", "feature")
+	writeFile(t, dir, "second.txt", "FEATURE\n")
+	gitT(t, "add", "-A")
+	gitT(t, "commit", "-qm", "feat-second")
+
+	gitT(t, "checkout", "-q", "main")
+	writeFile(t, dir, "second.txt", "MAIN\n")
+	gitT(t, "add", "-A")
+	gitT(t, "commit", "-qm", "main-second")
+
+	files, clean, err := MergeTreeConflicts("main", "feature")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if clean {
+		t.Fatal("expected conflicts, got clean")
+	}
+	slices.Sort(files)
+	want := []string{"second.txt", "shared file.txt"}
+	if !slices.Equal(files, want) {
+		t.Fatalf("conflicting files = %q, want %q", files, want)
+	}
+}
+
 func TestMergeTreeConflictsUnknownRev(t *testing.T) {
+	requireMergeTree(t)
 	initConflictRepo(t)
 
 	if _, _, err := MergeTreeConflicts("main", "does-not-exist"); err == nil {
 		t.Fatal("expected an error for a missing rev, got nil")
+	}
+}
+
+func TestMergeTreeConflictsUnrelatedHistories(t *testing.T) {
+	requireMergeTree(t)
+	dir := initConflictRepo(t)
+
+	gitT(t, "checkout", "-q", "--orphan", "orphan")
+	gitT(t, "rm", "-r", "-f", "-q", ".")
+	writeFile(t, dir, "orphan.txt", "o\n")
+	gitT(t, "add", "-A")
+	gitT(t, "commit", "-qm", "orphan")
+
+	if _, _, err := MergeTreeConflicts("main", "orphan"); err == nil {
+		t.Fatal("expected an error for unrelated histories, got nil")
+	}
+}
+
+func TestVersionAtLeast(t *testing.T) {
+	cases := []struct {
+		v    string
+		want bool
+	}{
+		{"2.38.0", true},
+		{"2.50.1", true},
+		{"3.0.0", true},
+		{"2.37.9", false},
+		{"2.34.1", false},
+		{"1.9.5", false},
+		{"weird", true},
+		{"2", true},
+	}
+	for _, c := range cases {
+		if got := versionAtLeast(c.v, 2, 38); got != c.want {
+			t.Errorf("versionAtLeast(%q, 2, 38) = %v, want %v", c.v, got, c.want)
+		}
 	}
 }
 

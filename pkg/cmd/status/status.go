@@ -102,16 +102,15 @@ type prStatus struct {
 	HeadSHA      string `json:"head_sha"`
 	LocalSHA     string `json:"local_sha"`
 	Synced       bool   `json:"synced"`
-	// Conflicts is a local git merge-tree check; the REST API only exposes a
-	// mergeable bool without the file list, and it can be stale. nil when the
-	// check couldn't run.
+	// Conflicts is a local git merge-tree check; nil when it couldn't run.
 	Conflicts *conflictInfo `json:"conflicts,omitempty"`
 }
 
 type conflictInfo struct {
-	Status string   `json:"status"` // "clean" or "conflicts"
-	Base   string   `json:"base"`
-	Head   string   `json:"head"`
+	Status string   `json:"status"` // "clean", "conflicts", or "unavailable"
+	Reason string   `json:"reason,omitempty"`
+	Base   string   `json:"base,omitempty"`
+	Head   string   `json:"head,omitempty"`
 	Files  []string `json:"files,omitempty"`
 }
 
@@ -412,15 +411,20 @@ func fetchPRDetails(f *cmdutil.Factory, repo cmdutil.Repo, prIndex int64) (addit
 	return result.Additions, result.Deletions, result.ChangedFiles, result.Draft, nil
 }
 
-// detectConflicts recovers the conflicting-file list the REST API omits by
-// running git merge-tree over the checkout, preferring the PR's own commits
-// (matching the server) and falling back to local refs. It returns nil when the
-// check can't be run.
+// detectConflicts runs git merge-tree over the local checkout to recover the
+// conflicting-file list the REST API omits. nil means the check couldn't run.
 func detectConflicts(pr *forgejo.PullRequest) *conflictInfo {
 	defer debug.Track(2, "fj status (conflict check)")()
 
 	if pr.Base == nil {
 		return nil
+	}
+	if ok, ver := git.SupportsMergeTree(); !ok {
+		debug.Logf(2, "conflict check unavailable: git %s < 2.38", ver)
+		return &conflictInfo{
+			Status: "unavailable",
+			Reason: fmt.Sprintf("conflict details need git 2.38+ (found %s)", ver),
+		}
 	}
 	base := firstLocalRev(pr.Base.Sha, "origin/"+pr.Base.Ref, pr.Base.Ref)
 	var headSha string
@@ -582,7 +586,7 @@ func printStatus(s *repoStatus) {
 func printMergeability(w io.Writer, pr *prStatus) {
 	c := pr.Conflicts
 	switch {
-	case c != nil && c.Status == "conflicts":
+	case c != nil && c.Status == "conflicts" && len(c.Files) > 0:
 		unit := "files"
 		if len(c.Files) == 1 {
 			unit = "file"
@@ -594,9 +598,21 @@ func printMergeability(w io.Writer, pr *prStatus) {
 		fmt.Fprintf(w, "    %s\n", output.Colorize(output.Gray, fmt.Sprintf("checked locally: %s...%s", c.Base, c.Head)))
 	case pr.Draft:
 		fmt.Fprintf(w, "  %s\n", output.Colorize(output.Yellow, "WIP / Draft"))
-	case c != nil && c.Status == "clean", pr.Mergeable:
-		fmt.Fprintf(w, "  %s\n", output.Colorize(output.Green, "Mergeable"))
+	case c != nil && c.Status == "clean":
+		if pr.Mergeable {
+			fmt.Fprintf(w, "  %s\n", output.Colorize(output.Green, "Mergeable"))
+		} else {
+			fmt.Fprintf(w, "  %s\n", output.Colorize(output.Yellow, "Local merge is clean, but the server reports conflicts"))
+		}
+		fmt.Fprintf(w, "    %s\n", output.Colorize(output.Gray, fmt.Sprintf("checked locally: %s...%s", c.Base, c.Head)))
 	default:
-		fmt.Fprintf(w, "  %s\n", output.Colorize(output.Red, "Has conflicts"))
+		if pr.Mergeable {
+			fmt.Fprintf(w, "  %s\n", output.Colorize(output.Green, "Mergeable"))
+		} else {
+			fmt.Fprintf(w, "  %s\n", output.Colorize(output.Red, "Has conflicts"))
+		}
+		if c != nil && c.Reason != "" {
+			fmt.Fprintf(w, "    %s\n", output.Colorize(output.Gray, c.Reason))
+		}
 	}
 }
