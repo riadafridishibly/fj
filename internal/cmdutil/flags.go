@@ -24,20 +24,6 @@ func AddWebFlag(cmd *cobra.Command, web *bool) {
 	cmd.Flags().BoolVarP(web, "web", "w", false, "Open in web browser")
 }
 
-// CheckRequiredFlags checks that mutually exclusive flags aren't both set
-func MutuallyExclusive(cmd *cobra.Command, flags ...string) error {
-	var set []string
-	for _, f := range flags {
-		if cmd.Flags().Changed(f) {
-			set = append(set, "--"+f)
-		}
-	}
-	if len(set) > 1 {
-		return FlagErrorf("specify only one of %s", fmt.Sprintf("%v", set))
-	}
-	return nil
-}
-
 // ReadBodyFromFile reads content from a file path for --body-file flags
 func ReadBodyFromFile(path string) (string, error) {
 	if path == "-" {
