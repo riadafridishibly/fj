@@ -1,6 +1,7 @@
 package status
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -107,11 +108,17 @@ type prStatus struct {
 }
 
 type conflictInfo struct {
-	Status string   `json:"status"` // "clean", "conflicts", or "unavailable"
-	Reason string   `json:"reason,omitempty"`
-	Base   string   `json:"base,omitempty"`
-	Head   string   `json:"head,omitempty"`
-	Files  []string `json:"files,omitempty"`
+	Status string `json:"status"` // "clean", "conflicts", or "unavailable"
+	Reason string `json:"reason,omitempty"`
+	// Base and Head are the git revs actually handed to merge-tree (a SHA, a
+	// remote ref, or a local ref — whichever resolved first). BaseRef and HeadRef
+	// are the PR's branch names from the API, so the output can name the branches
+	// the PR merges between rather than only showing opaque revs.
+	Base    string   `json:"base,omitempty"`
+	Head    string   `json:"head,omitempty"`
+	BaseRef string   `json:"base_ref,omitempty"`
+	HeadRef string   `json:"head_ref,omitempty"`
+	Files   []string `json:"files,omitempty"`
 }
 
 func statusRun(opts *statusOptions) error {
@@ -427,9 +434,10 @@ func detectConflicts(pr *forgejo.PullRequest) *conflictInfo {
 		}
 	}
 	base := firstLocalRev(pr.Base.Sha, "origin/"+pr.Base.Ref, pr.Base.Ref)
-	var headSha string
+	var headSha, headRef string
 	if pr.Head != nil {
 		headSha = pr.Head.Sha
+		headRef = pr.Head.Ref
 	}
 	head := firstLocalRev(headSha, "HEAD")
 	if base == "" || head == "" {
@@ -443,7 +451,14 @@ func detectConflicts(pr *forgejo.PullRequest) *conflictInfo {
 		return nil
 	}
 
-	ci := &conflictInfo{Base: base, Head: head, Status: "conflicts", Files: files}
+	ci := &conflictInfo{
+		Status:  "conflicts",
+		Base:    base,
+		Head:    head,
+		BaseRef: pr.Base.Ref,
+		HeadRef: headRef,
+		Files:   files,
+	}
 	if clean {
 		ci.Status = "clean"
 	}
@@ -595,7 +610,7 @@ func printMergeability(w io.Writer, pr *prStatus) {
 		for _, f := range c.Files {
 			fmt.Fprintf(w, "    %s %s\n", output.Colorize(output.Red, "-"), f)
 		}
-		fmt.Fprintf(w, "    %s\n", output.Colorize(output.Gray, fmt.Sprintf("checked locally: %s...%s", c.Base, c.Head)))
+		fmt.Fprintf(w, "    %s\n", output.Colorize(output.Gray, conflictScope(c)))
 	case pr.Draft:
 		fmt.Fprintf(w, "  %s\n", output.Colorize(output.Yellow, "WIP / Draft"))
 	case c != nil && c.Status == "clean":
@@ -604,7 +619,7 @@ func printMergeability(w io.Writer, pr *prStatus) {
 		} else {
 			fmt.Fprintf(w, "  %s\n", output.Colorize(output.Yellow, "Local merge is clean, but the server reports conflicts"))
 		}
-		fmt.Fprintf(w, "    %s\n", output.Colorize(output.Gray, fmt.Sprintf("checked locally: %s...%s", c.Base, c.Head)))
+		fmt.Fprintf(w, "    %s\n", output.Colorize(output.Gray, conflictScope(c)))
 	default:
 		if pr.Mergeable {
 			fmt.Fprintf(w, "  %s\n", output.Colorize(output.Green, "Mergeable"))
@@ -615,4 +630,38 @@ func printMergeability(w io.Writer, pr *prStatus) {
 			fmt.Fprintf(w, "    %s\n", output.Colorize(output.Gray, c.Reason))
 		}
 	}
+}
+
+// conflictScope describes what the local merge-tree check compared: the PR's
+// branch names when the API gave them, with the exact revs appended in
+// parentheses whenever they carry information the names don't (e.g. a SHA).
+func conflictScope(c *conflictInfo) string {
+	base := cmp.Or(c.BaseRef, c.Base)
+	head := cmp.Or(c.HeadRef, c.Head)
+
+	scope := fmt.Sprintf("checked locally: %s...%s", base, head)
+	if revBase, revHead := shortRev(c.Base), shortRev(c.Head); revBase != base || revHead != head {
+		scope += fmt.Sprintf(" (%s...%s)", revBase, revHead)
+	}
+	return scope
+}
+
+// shortRev abbreviates a full 40-char hex SHA to its first 8 characters and
+// leaves anything else (branch names, "HEAD", short SHAs) untouched.
+func shortRev(rev string) string {
+	if len(rev) == 40 && isHex(rev) {
+		return rev[:8]
+	}
+	return rev
+}
+
+func isHex(s string) bool {
+	for _, r := range s {
+		switch {
+		case r >= '0' && r <= '9', r >= 'a' && r <= 'f', r >= 'A' && r <= 'F':
+		default:
+			return false
+		}
+	}
+	return true
 }
