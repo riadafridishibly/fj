@@ -47,18 +47,6 @@ func (c *Client) CreatePullReviewComment(owner, repo string, index, reviewID int
 	return out, nil
 }
 
-// GetPullReviewComment fetches a single inline review comment.
-func (c *Client) GetPullReviewComment(owner, repo string, index, reviewID, commentID int64) (*forgejo.PullReviewComment, error) {
-	out := new(forgejo.PullReviewComment)
-	err := c.do(http.MethodGet,
-		fmt.Sprintf("/repos/%s/%s/pulls/%d/reviews/%d/comments/%d", owner, repo, index, reviewID, commentID),
-		nil, out)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // DeletePullReviewComment deletes a single inline review comment. The
 // regular issue-comment delete endpoint does not accept code comments;
 // this dedicated endpoint is the only way to delete one.

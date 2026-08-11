@@ -7,7 +7,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"golang.org/x/term"
@@ -28,11 +27,6 @@ const (
 )
 
 var isTTY = term.IsTerminal(int(os.Stdout.Fd()))
-
-// IsTerminal returns true if stdout is a terminal
-func IsTerminal() bool {
-	return isTTY
-}
 
 // Table layout width variables. These govern how much horizontal space a
 // rendered Table is allowed to use and how far flexible columns may shrink.
@@ -74,22 +68,13 @@ func Colorize(color, text string) string {
 	return color + text + Reset
 }
 
-func NewTabWriter(w io.Writer) *tabwriter.Writer {
-	return tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-}
-
+// PrintJSON writes v as indented JSON followed by a newline. It is the single
+// spelling of machine-readable output, so every --json command emits the same
+// two-space indentation.
 func PrintJSON(w io.Writer, v any) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(v)
-}
-
-func Stdout() io.Writer {
-	return os.Stdout
-}
-
-func Stderr() io.Writer {
-	return os.Stderr
 }
 
 func RelativeTimeStr(t time.Time) string {
@@ -149,23 +134,6 @@ func Truncate(s string, maxLen int) string {
 		return s[:maxLen]
 	}
 	return s[:maxLen-3] + "..."
-}
-
-func LabelNames(labels any) string {
-	switch v := labels.(type) {
-	case []string:
-		return strings.Join(v, ", ")
-	default:
-		return ""
-	}
-}
-
-func PrintHeader(w io.Writer, format string, args ...any) {
-	fmt.Fprintf(w, format+"\n", args...)
-}
-
-func PrintField(w io.Writer, label, value string) {
-	fmt.Fprintf(w, "%s:\t%s\n", label, value)
 }
 
 // Table prints aligned columns with proper ANSI color support.

@@ -1,7 +1,6 @@
 package release
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -71,9 +70,7 @@ func viewRun(opts *viewOptions) error {
 	}
 
 	if opts.JSONOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(rel)
+		return output.PrintJSON(os.Stdout, rel)
 	}
 
 	title := rel.Title

@@ -29,21 +29,3 @@ func IsFlagError(err error) bool {
 	var fe *FlagError
 	return errors.As(err, &fe)
 }
-
-// AuthError indicates the user needs to authenticate.
-type AuthError struct {
-	err error
-}
-
-func NewAuthError(format string, args ...any) *AuthError {
-	return &AuthError{err: fmt.Errorf(format, args...)}
-}
-
-func (e *AuthError) Error() string {
-	return e.err.Error()
-}
-
-func IsAuthError(err error) bool {
-	var ae *AuthError
-	return errors.As(err, &ae)
-}

@@ -1,7 +1,6 @@
 package pr
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -10,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
+	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type editOptions struct {
@@ -173,9 +173,7 @@ func editRun(opts *editOptions) error {
 	}
 
 	if opts.JSONOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(pr)
+		return output.PrintJSON(os.Stdout, pr)
 	}
 
 	fmt.Fprintf(os.Stderr, "✓ Edited pull request #%d\n", pr.Index)

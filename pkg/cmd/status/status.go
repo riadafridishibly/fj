@@ -322,9 +322,7 @@ func statusRun(opts *statusOptions) error {
 	}
 
 	if opts.JSONOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(status)
+		return output.PrintJSON(os.Stdout, status)
 	}
 
 	printStatus(status)

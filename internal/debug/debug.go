@@ -32,9 +32,6 @@ func parseLevel(s string) int {
 	return n
 }
 
-// Level returns the current debug level.
-func Level() int { return level }
-
 // Enabled reports whether logs at level l would be emitted.
 func Enabled(l int) bool { return level >= l }
 

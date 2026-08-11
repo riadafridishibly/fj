@@ -1,7 +1,6 @@
 package pr
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -131,9 +130,7 @@ func listRun(opts *listOptions) error {
 	}
 
 	if opts.JSONOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(allPRs)
+		return output.PrintJSON(os.Stdout, allPRs)
 	}
 
 	if len(allPRs) == 0 {

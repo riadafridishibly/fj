@@ -2,6 +2,7 @@ package cmdutil
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -191,12 +192,7 @@ func resolveCategories(names []string, flag string) (map[TimelineCategory]bool, 
 }
 
 func validCategory(c TimelineCategory) bool {
-	for _, known := range timelineCategories {
-		if known == c {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(timelineCategories, c)
 }
 
 // AddTimelineFilterFlags adds the --timeline-include and --timeline-exclude

@@ -16,9 +16,6 @@ func MaximumNArgs(n int) cobra.PositionalArgs { return wrapArgs(cobra.MaximumNAr
 // RangeArgs wraps cobra.RangeArgs with usage-on-failure.
 func RangeArgs(min, max int) cobra.PositionalArgs { return wrapArgs(cobra.RangeArgs(min, max)) }
 
-// NoArgs wraps cobra.NoArgs with usage-on-failure.
-func NoArgs() cobra.PositionalArgs { return wrapArgs(cobra.NoArgs) }
-
 func wrapArgs(validator cobra.PositionalArgs) cobra.PositionalArgs {
 	return func(cmd *cobra.Command, args []string) error {
 		if err := validator(cmd, args); err != nil {

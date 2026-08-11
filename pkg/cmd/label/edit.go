@@ -1,7 +1,6 @@
 package label
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -10,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
+	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type editOptions struct {
@@ -90,9 +90,7 @@ func editRun(opts *editOptions) error {
 	}
 
 	if opts.JSONOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(label)
+		return output.PrintJSON(os.Stdout, label)
 	}
 
 	fmt.Fprintf(os.Stderr, "✓ Edited label %q\n", label.Name)

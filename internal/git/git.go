@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/url"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -191,25 +190,7 @@ func Checkout(branch string) error {
 	return err
 }
 
-func CreateBranch(branch, startPoint string) error {
-	_, err := Run("checkout", "-b", branch, startPoint)
-	return err
-}
-
 func Fetch(remote, refspec string) error {
 	_, err := Run("fetch", remote, refspec)
 	return err
-}
-
-func AddRemote(name, url string) error {
-	_, err := Run("remote", "add", name, url)
-	return err
-}
-
-func TopLevelDir() (string, error) {
-	dir, err := Run("rev-parse", "--show-toplevel")
-	if err != nil {
-		return "", err
-	}
-	return filepath.Clean(dir), nil
 }

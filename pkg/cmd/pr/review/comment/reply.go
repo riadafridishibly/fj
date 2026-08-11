@@ -1,7 +1,6 @@
 package comment
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -10,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
+	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type replyOptions struct {
@@ -117,9 +117,7 @@ func replyRun(opts *replyOptions) error {
 	}
 
 	if opts.JSONOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(flatComment{PullReviewComment: created, ReviewID: reviewID})
+		return output.PrintJSON(os.Stdout, flatComment{PullReviewComment: created, ReviewID: reviewID})
 	}
 
 	fmt.Fprintf(os.Stderr, "✓ Replied to comment #%d (new comment #%d)\n", commentID, created.ID)

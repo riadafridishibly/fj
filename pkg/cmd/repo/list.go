@@ -1,7 +1,6 @@
 package repo
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -119,9 +118,7 @@ func listRun(opts *listOptions) error {
 	}
 
 	if opts.JSONOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(allRepos)
+		return output.PrintJSON(os.Stdout, allRepos)
 	}
 
 	if len(allRepos) == 0 {

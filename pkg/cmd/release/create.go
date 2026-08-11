@@ -1,7 +1,6 @@
 package release
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
+	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type createOptions struct {
@@ -107,9 +107,7 @@ func createRun(opts *createOptions) error {
 		if err != nil {
 			return fmt.Errorf("getting release: %w", err)
 		}
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(rel)
+		return output.PrintJSON(os.Stdout, rel)
 	}
 
 	fmt.Fprintf(os.Stdout, "%s\n", rel.HTMLURL)
