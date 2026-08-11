@@ -1,0 +1,6 @@
+.planning/
+/TODO
+/*.json
+/*.patch
+/*.md
+!/README.md
