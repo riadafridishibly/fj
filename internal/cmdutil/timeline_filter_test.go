@@ -2,6 +2,7 @@ package cmdutil
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -203,22 +204,13 @@ func TestTimelineFilter(t *testing.T) {
 func TestTimelineFilterValues(t *testing.T) {
 	values := TimelineFilterValues()
 	for _, cat := range timelineCategories {
-		if !contains(values, string(cat)) {
+		if !slices.Contains(values, string(cat)) {
 			t.Errorf("category %q is accepted but missing from the help", cat)
 		}
 	}
 	for group := range timelineGroups {
-		if !contains(values, group) {
+		if !slices.Contains(values, group) {
 			t.Errorf("group %q is accepted but missing from the help", group)
 		}
 	}
-}
-
-func contains(haystack []string, needle string) bool {
-	for _, s := range haystack {
-		if s == needle {
-			return true
-		}
-	}
-	return false
 }
