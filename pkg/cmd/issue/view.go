@@ -121,9 +121,7 @@ func viewRun(opts *viewOptions) error {
 				"files": paths,
 			}
 		}
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(result)
+		return output.PrintJSON(os.Stdout, result)
 	}
 
 	// Text output

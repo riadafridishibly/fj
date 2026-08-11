@@ -1,7 +1,6 @@
 package pr
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -10,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
+	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type mergeOptions struct {
@@ -114,9 +114,7 @@ func mergeRun(opts *mergeOptions) error {
 		if err != nil {
 			return fmt.Errorf("getting merged pull request: %w", err)
 		}
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(pr)
+		return output.PrintJSON(os.Stdout, pr)
 	}
 
 	if opts.Auto {

@@ -1,7 +1,6 @@
 package label
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -74,9 +73,7 @@ func listRun(opts *listOptions) error {
 	}
 
 	if opts.JSONOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(allLabels)
+		return output.PrintJSON(os.Stdout, allLabels)
 	}
 
 	if len(allLabels) == 0 {

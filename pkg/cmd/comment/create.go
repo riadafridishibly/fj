@@ -1,7 +1,6 @@
 package comment
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -10,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
+	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type createOptions struct {
@@ -77,9 +77,7 @@ func createRun(opts *createOptions, k Kind) error {
 	}
 
 	if opts.JSONOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(comment)
+		return output.PrintJSON(os.Stdout, comment)
 	}
 
 	fmt.Fprintf(os.Stdout, "%s\n", comment.HTMLURL)

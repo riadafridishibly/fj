@@ -1,6 +1,7 @@
 package output
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -65,6 +66,15 @@ func Colorize(color, text string) string {
 		return text
 	}
 	return color + text + Reset
+}
+
+// PrintJSON writes v as indented JSON followed by a newline. It is the single
+// spelling of machine-readable output, so every --json command emits the same
+// two-space indentation.
+func PrintJSON(w io.Writer, v any) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(v)
 }
 
 func RelativeTimeStr(t time.Time) string {

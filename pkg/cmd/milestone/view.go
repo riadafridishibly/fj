@@ -1,7 +1,6 @@
 package milestone
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -64,9 +63,7 @@ func viewRun(opts *viewOptions) error {
 	}
 
 	if opts.JSONOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(ms)
+		return output.PrintJSON(os.Stdout, ms)
 	}
 
 	fmt.Fprintf(os.Stdout, "%s\n", ms.Title)

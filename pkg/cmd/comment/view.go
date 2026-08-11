@@ -1,7 +1,6 @@
 package comment
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -67,9 +66,7 @@ func viewRun(opts *viewOptions) error {
 	}
 
 	if opts.JSONOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(comment)
+		return output.PrintJSON(os.Stdout, comment)
 	}
 
 	author := "unknown"

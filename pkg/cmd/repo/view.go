@@ -1,13 +1,13 @@
 package repo
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
+	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type viewOptions struct {
@@ -82,9 +82,7 @@ func viewRun(opts *viewOptions) error {
 	}
 
 	if opts.JSONOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(r)
+		return output.PrintJSON(os.Stdout, r)
 	}
 
 	fmt.Fprintf(os.Stdout, "%s\n", r.FullName)

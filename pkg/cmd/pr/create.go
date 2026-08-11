@@ -1,7 +1,6 @@
 package pr
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -10,6 +9,7 @@ import (
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
 	"github.com/riadafridishibly/fj/internal/git"
+	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type createOptions struct {
@@ -132,9 +132,7 @@ func createRun(opts *createOptions) error {
 	}
 
 	if opts.JSONOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(pr)
+		return output.PrintJSON(os.Stdout, pr)
 	}
 
 	fmt.Fprintf(os.Stdout, "%s\n", pr.HTMLURL)

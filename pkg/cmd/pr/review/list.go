@@ -1,7 +1,6 @@
 package review
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -86,9 +85,7 @@ func listRun(opts *listOptions) error {
 	}
 
 	if opts.JSONOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(all)
+		return output.PrintJSON(os.Stdout, all)
 	}
 
 	if len(all) == 0 {

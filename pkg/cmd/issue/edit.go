@@ -1,7 +1,6 @@
 package issue
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -10,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
+	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type editOptions struct {
@@ -161,9 +161,7 @@ func editRun(opts *editOptions) error {
 		if err != nil {
 			return fmt.Errorf("getting updated issue: %w", err)
 		}
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(issue)
+		return output.PrintJSON(os.Stdout, issue)
 	}
 
 	fmt.Fprintf(os.Stderr, "✓ Edited issue #%d\n", issue.Index)

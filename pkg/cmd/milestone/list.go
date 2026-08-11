@@ -1,7 +1,6 @@
 package milestone
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -87,9 +86,7 @@ func listRun(opts *listOptions) error {
 	}
 
 	if opts.JSONOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(allMilestones)
+		return output.PrintJSON(os.Stdout, allMilestones)
 	}
 
 	if len(allMilestones) == 0 {

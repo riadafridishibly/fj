@@ -1,13 +1,13 @@
 package auth
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
+	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type statusOptions struct {
@@ -89,9 +89,7 @@ func statusRun(opts *statusOptions) error {
 	}
 
 	if opts.JSONOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(statuses)
+		return output.PrintJSON(os.Stdout, statuses)
 	}
 
 	for _, s := range statuses {

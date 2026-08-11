@@ -1,7 +1,6 @@
 package repo
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -10,6 +9,7 @@ import (
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
 	"github.com/riadafridishibly/fj/internal/git"
+	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type forkOptions struct {
@@ -92,9 +92,7 @@ func forkRun(opts *forkOptions) error {
 	}
 
 	if opts.JSONOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(forked)
+		return output.PrintJSON(os.Stdout, forked)
 	}
 
 	fmt.Fprintf(os.Stdout, "%s\n", forked.HTMLURL)

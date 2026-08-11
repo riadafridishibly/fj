@@ -1,7 +1,6 @@
 package review
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -72,9 +71,7 @@ func viewRun(opts *viewOptions) error {
 	}
 
 	if opts.JSONOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(map[string]any{
+		return output.PrintJSON(os.Stdout, map[string]any{
 			"review":   review,
 			"comments": comments,
 		})

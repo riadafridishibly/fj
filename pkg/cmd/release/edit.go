@@ -1,7 +1,6 @@
 package release
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -9,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
+	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type editOptions struct {
@@ -106,9 +106,7 @@ func editRun(opts *editOptions) error {
 	}
 
 	if opts.JSONOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(updated)
+		return output.PrintJSON(os.Stdout, updated)
 	}
 
 	fmt.Fprintf(os.Stderr, "✓ Edited release %s\n", updated.TagName)

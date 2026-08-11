@@ -1,7 +1,6 @@
 package pr
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -102,9 +101,7 @@ func viewRun(opts *viewOptions) error {
 			}
 			result["timeline"] = timeline.Apply(events)
 		}
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(result)
+		return output.PrintJSON(os.Stdout, result)
 	}
 
 	// Text output
