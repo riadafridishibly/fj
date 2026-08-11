@@ -471,10 +471,27 @@ func renderTable(headers []string, rows [][]string, maxWidth int) string {
 		})
 	// Only pin a width (and enable wrapping) when the natural table would
 	// overflow the target — otherwise short columns get needlessly padded.
-	if naturalTableWidth(headers, rows) > maxWidth {
-		t.Width(maxWidth).Wrap(true)
+	if natural := naturalTableWidth(headers, rows); natural > maxWidth {
+		t.Width(shrinkTarget(natural, len(headers), maxWidth)).Wrap(true)
 	}
 	return t.String()
+}
+
+// shrinkTarget picks the width to hand lipgloss so it actually shrinks columns.
+//
+// lipgloss v2.0.5 decides between growing and shrinking by comparing the
+// summed column widths against the requested width — but that sum omits the
+// border characters, while the final render is hard-cropped to the requested
+// width. So for an overflow smaller than the border budget it takes the grow
+// path, leaves the columns alone, and crops the right edge off the table
+// instead of wrapping. Asking for one column less than the sum lipgloss
+// compares against keeps it on the shrink path.
+func shrinkTarget(natural, cols, maxWidth int) int {
+	border := cols + 1 // one separator per column, plus the leading edge
+	if forceShrink := natural - border - 1; forceShrink < maxWidth {
+		return forceShrink
+	}
+	return maxWidth
 }
 
 // naturalTableWidth estimates how wide the table would render with no
