@@ -21,7 +21,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 	opts := &viewOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:   "view [<owner/repo>]",
+		Use:   "view [<[HOST/]OWNER/REPO>]",
 		Short: "View a repository",
 		Example: `  $ fj repo view
   $ fj repo view owner/repo
@@ -47,19 +47,10 @@ func viewRun(opts *viewOptions) error {
 	var err error
 
 	if opts.Repo != "" {
-		repo, err = cmdutil.RepoFromFullName(opts.Repo)
+		repo, err = opts.Factory.RepoFromArg(opts.Repo)
 		if err != nil {
 			return err
 		}
-		cfg, err := opts.Factory.Config()
-		if err != nil {
-			return err
-		}
-		_, host, err := cfg.DefaultHost()
-		if err != nil {
-			return err
-		}
-		repo.Host = host
 	} else {
 		repo, err = opts.Factory.BaseRepo()
 		if err != nil {

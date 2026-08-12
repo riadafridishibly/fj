@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strconv"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 	"github.com/spf13/cobra"
@@ -15,7 +14,7 @@ import (
 
 type createOptions struct {
 	Factory *cmdutil.Factory
-	Number  string
+	Args    []string
 
 	Approve        bool
 	RequestChanges bool
@@ -36,12 +35,11 @@ type createOptions struct {
 }
 
 func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
-	opts := &createOptions{Factory: f}
-
-	cmd := &cobra.Command{
-		Use:   "create <number>",
-		Short: "Create a review on a pull request",
-		Long: `Create a review on a pull request.
+	cmd := newCreateCmd(f)
+	cmd.Use = "create [<number>]"
+	cmd.Short = "Create a review on a pull request"
+	cmd.Long = `Create a review on a pull request. With no number, the pull
+request for the current branch is used.
 
 Inline comments can be supplied either individually with the --comment-*
 flags, or in bulk via --comments-file pointing at a JSON array:
@@ -62,15 +60,30 @@ flags, or in bulk via --comments-file pointing at a JSON array:
   ]
 
 Use new_position for a line in the new file, old_position for a line in
-the old file. Set the unused side to 0 (or omit it).`,
-		Example: `  $ fj pr review create 42 --approve --body "LGTM"
+the old file. Set the unused side to 0 (or omit it).`
+	cmd.Example = `  $ fj pr review create 42 --approve --body "LGTM"
   $ fj pr review create 42 --request-changes --body-file review.md
   $ fj pr review create 42 --comment --comment-path main.go --comment-line 42 --comment-body "rename this"
   $ fj pr review create 42 --approve --comments-file inline.json
-  $ fj pr review create 42 --comment --commit abc123 --body "initial pass"`,
-		Args: cmdutil.ExactArgs(1),
+  $ fj pr review create 42 --comment --commit abc123 --body "initial pass"`
+	return cmd
+}
+
+// newCreateCmd builds the command that submits a review. It backs both the
+// `create` subcommand and the `review` group itself, so the two cannot
+// drift apart; callers set Use, Short, Long, and Example.
+func newCreateCmd(f *cmdutil.Factory) *cobra.Command {
+	opts := &createOptions{Factory: f}
+
+	cmd := &cobra.Command{
+		Args: cmdutil.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.Number = args[0]
+			// A bare `fj pr review` names the group, not an intent to
+			// review, so it gets help instead of a missing-state error.
+			if cmd.HasSubCommands() && len(args) == 0 && cmd.Flags().NFlag() == 0 {
+				return cmd.Help()
+			}
+			opts.Args = args
 			return createRun(opts)
 		},
 	}
@@ -125,9 +138,9 @@ func createRun(opts *createOptions) error {
 		return err
 	}
 
-	index, err := strconv.ParseInt(opts.Number, 10, 64)
+	index, err := opts.Factory.PRNumber(repo, opts.Args)
 	if err != nil {
-		return cmdutil.FlagErrorf("invalid pull request number: %s", opts.Number)
+		return err
 	}
 
 	client, err := opts.Factory.ClientForRepo(repo)

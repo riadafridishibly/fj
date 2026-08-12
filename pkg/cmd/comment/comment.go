@@ -5,6 +5,8 @@
 package comment
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
@@ -20,14 +22,29 @@ type Kind struct {
 	CLI string
 	// Arg is the positional-arg label for create/list, e.g. "issue" or "pr".
 	Arg string
+	// Resolver turns the positional argument into an issue or pull request
+	// index. The pull request form accepts no argument and falls back to
+	// the current branch.
+	Resolver cmdutil.NumberResolver
 }
 
-// NewCmdComment returns the `comment` parent with CRUD subcommands.
+// NewCmdComment returns the `comment` parent with CRUD subcommands. gh
+// spells comments as a leaf verb — `gh issue comment 42 --body x` — so the
+// group itself also posts a comment, dispatching to `create`.
 func NewCmdComment(f *cmdutil.Factory, k Kind) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "comment <command>",
-		Short: "Manage " + k.Noun + " comments",
-	}
+	cmd := newCreateCmd(f, k)
+	// The group takes no argument when it is only naming its subcommands,
+	// so the number is validated by the resolver rather than by cobra.
+	cmd.Args = cmdutil.MaximumNArgs(1)
+	cmd.Use = "comment " + k.Resolver.ArgSpec(k.Arg) + " [flags]"
+	cmd.Short = "Manage " + k.Noun + " comments"
+	cmd.Long = fmt.Sprintf(
+		"Manage %s comments.\n\nWith a body flag the command adds a comment, exactly as %s create does.",
+		k.Noun, k.CLI)
+	cmd.Example = fmt.Sprintf(`  $ %s 42 --body "This is a comment"
+  $ %s list 42
+  $ %s edit 12345 --body "Updated comment"`, k.CLI, k.CLI, k.CLI)
+
 	cmd.AddCommand(NewCmdCreate(f, k))
 	cmd.AddCommand(NewCmdList(f, k))
 	cmd.AddCommand(NewCmdView(f, k))

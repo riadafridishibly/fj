@@ -64,7 +64,10 @@ You can also set `FJ_TOKEN` to override the token for any command.
 
 ## Usage
 
-`fj` auto-detects the repository from your git remotes. Use `-R OWNER/REPO` to override.
+`fj` auto-detects the repository from your git remotes. Use `-R [HOST/]OWNER/REPO` to override.
+
+Pull request commands take the number as an optional argument: with it omitted,
+`fj` uses the open pull request for the checked-out branch.
 
 ### Repositories
 
@@ -117,6 +120,7 @@ fj milestone delete v1.0 --yes            # Delete (needs --yes; --dry-run previ
 ```sh
 fj pr list                                # List open PRs
 fj pr list --state all                    # List all PRs
+fj pr view                                # View the PR for the current branch
 fj pr view 10                             # View PR #10, with its timeline
 fj pr view 10 --show-timeline=false       # View PR #10 without events
 fj pr view 10 --timeline-exclude commits  # Hide commit references
@@ -125,13 +129,15 @@ fj pr merge 10                            # Merge a PR
 fj pr close 10                            # Close a PR
 fj pr diff 10                             # View PR diff
 fj pr checkout 10                         # Check out a PR locally
-fj pr comment 10 --body "LGTM"           # Comment on a PR
+fj pr comment 10 --body "LGTM"            # Comment on a PR
+fj pr comment --body "LGTM"               # Comment on the current branch's PR
 ```
 
 ### Reviews
 
 ```sh
-fj pr review create 10 --approve --body "LGTM"                # Review a PR
+fj pr review 10 --approve --body "LGTM"                       # Review a PR
+fj pr review --approve --body "LGTM"                          # Review the current branch's PR
 fj pr review create 10 --comment \
   --comment-path main.go --comment-line 42 \
   --comment-body "rename this"                                # Inline comment

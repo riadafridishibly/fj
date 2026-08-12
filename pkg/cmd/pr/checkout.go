@@ -3,7 +3,6 @@ package pr
 import (
 	"fmt"
 	"os"
-	"strconv"
 
 	"github.com/spf13/cobra"
 
@@ -13,19 +12,20 @@ import (
 
 type checkoutOptions struct {
 	Factory *cmdutil.Factory
-	Number  string
+	Args    []string
 }
 
 func NewCmdCheckout(f *cmdutil.Factory) *cobra.Command {
 	opts := &checkoutOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:     "checkout <number>",
+		Use:     "checkout [<number>]",
 		Short:   "Check out a pull request locally",
+		Long:    "Check out a pull request locally. With no number, the pull request for the current branch is used.",
 		Example: `  $ fj pr checkout 42`,
-		Args:    cmdutil.ExactArgs(1),
+		Args:    cmdutil.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.Number = args[0]
+			opts.Args = args
 			return checkoutRun(opts)
 		},
 	}
@@ -39,9 +39,9 @@ func checkoutRun(opts *checkoutOptions) error {
 		return err
 	}
 
-	index, err := strconv.ParseInt(opts.Number, 10, 64)
+	index, err := opts.Factory.PRNumber(repo, opts.Args)
 	if err != nil {
-		return cmdutil.FlagErrorf("invalid pull request number: %s", opts.Number)
+		return err
 	}
 
 	client, err := opts.Factory.ClientForRepo(repo)

@@ -3,7 +3,6 @@ package pr
 import (
 	"fmt"
 	"os"
-	"strconv"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 	"github.com/spf13/cobra"
@@ -13,7 +12,7 @@ import (
 
 type closeOptions struct {
 	Factory *cmdutil.Factory
-	Number  string
+	Args    []string
 	Comment string
 }
 
@@ -21,13 +20,15 @@ func NewCmdClose(f *cmdutil.Factory) *cobra.Command {
 	opts := &closeOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:   "close <number>",
+		Use:   "close [<number>]",
 		Short: "Close a pull request",
-		Example: `  $ fj pr close 42
+		Long:  "Close a pull request. With no number, the pull request for the current branch is used.",
+		Example: `  $ fj pr close
+  $ fj pr close 42
   $ fj pr close 42 --comment "Closing this PR"`,
-		Args: cmdutil.ExactArgs(1),
+		Args: cmdutil.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.Number = args[0]
+			opts.Args = args
 			return closeRun(opts)
 		},
 	}
@@ -43,9 +44,9 @@ func closeRun(opts *closeOptions) error {
 		return err
 	}
 
-	index, err := strconv.ParseInt(opts.Number, 10, 64)
+	index, err := opts.Factory.PRNumber(repo, opts.Args)
 	if err != nil {
-		return cmdutil.FlagErrorf("invalid pull request number: %s", opts.Number)
+		return err
 	}
 
 	client, err := opts.Factory.ClientForRepo(repo)

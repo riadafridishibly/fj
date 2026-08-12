@@ -9,11 +9,21 @@ import (
 	"github.com/riadafridishibly/fj/pkg/cmd/pr/review/comment"
 )
 
+// NewCmdReview returns the `review` parent. gh spells reviewing as a leaf
+// verb — `gh pr review 42 --approve` — so the group itself submits a
+// review, dispatching to `create`.
 func NewCmdReview(f *cmdutil.Factory) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "review <command>",
-		Short: "Manage pull request reviews",
-	}
+	cmd := newCreateCmd(f)
+	cmd.Use = "review [<number>] [flags]"
+	cmd.Short = "Manage pull request reviews"
+	cmd.Long = "Manage pull request reviews.\n\n" +
+		"With a review-state flag the command submits a review, exactly as " +
+		"fj pr review create does. With no number, the pull request for the " +
+		"current branch is used."
+	cmd.Example = `  $ fj pr review 42 --approve --body "LGTM"
+  $ fj pr review --request-changes --body "see comments"
+  $ fj pr review list 42`
+
 	cmd.AddCommand(NewCmdCreate(f))
 	cmd.AddCommand(NewCmdList(f))
 	cmd.AddCommand(NewCmdView(f))

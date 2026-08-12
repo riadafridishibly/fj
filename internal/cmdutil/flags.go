@@ -9,9 +9,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// AddRepoOverrideFlags adds the -R OWNER/REPO flag to a command
+// AddRepoOverrideFlags adds the -R [HOST/]OWNER/REPO flag to a command
 func AddRepoOverrideFlags(cmd *cobra.Command, f *Factory) {
-	cmd.PersistentFlags().StringVarP(&f.RepoOverride, "repo", "R", "", "Select a repository using the OWNER/REPO format")
+	cmd.PersistentFlags().StringVarP(&f.RepoOverride, "repo", "R", "", "Select a repository using the [HOST/]OWNER/REPO format")
 }
 
 // AddJSONFlag adds a --json flag for machine-readable output

@@ -48,26 +48,37 @@ func (f *Factory) BaseRepo() (Repo, error) {
 	}
 
 	if f.RepoOverride != "" {
-		repo, err := RepoFromFullName(f.RepoOverride)
-		if err != nil {
-			return Repo{}, err
-		}
-		// If no host on the repo, use default or override
-		if repo.Host == "" {
-			if f.HostOverride != "" {
-				repo.Host = f.HostOverride
-			} else {
-				_, host, err := cfg.DefaultHost()
-				if err != nil {
-					return Repo{}, err
-				}
-				repo.Host = host
-			}
-		}
-		return repo, nil
+		return f.RepoFromArg(f.RepoOverride)
 	}
 
 	return RepoFromGitRemotes(cfg)
+}
+
+// RepoFromArg resolves an explicit [HOST/]OWNER/REPO selector, filling in
+// the host from --hostname or the configured default when the selector
+// omits it.
+func (f *Factory) RepoFromArg(name string) (Repo, error) {
+	repo, err := RepoFromFullName(name)
+	if err != nil {
+		return Repo{}, err
+	}
+	if repo.Host != "" {
+		return repo, nil
+	}
+	if f.HostOverride != "" {
+		repo.Host = f.HostOverride
+		return repo, nil
+	}
+	cfg, err := f.Config()
+	if err != nil {
+		return Repo{}, err
+	}
+	_, host, err := cfg.DefaultHost()
+	if err != nil {
+		return Repo{}, err
+	}
+	repo.Host = host
+	return repo, nil
 }
 
 func (f *Factory) Client(hostname string) (*forgejo.Client, error) {
