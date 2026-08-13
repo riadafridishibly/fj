@@ -15,7 +15,6 @@ import (
 	prCmd "github.com/riadafridishibly/fj/pkg/cmd/pr"
 	releaseCmd "github.com/riadafridishibly/fj/pkg/cmd/release"
 	repoCmd "github.com/riadafridishibly/fj/pkg/cmd/repo"
-	statusCmd "github.com/riadafridishibly/fj/pkg/cmd/status"
 )
 
 var (
@@ -61,7 +60,7 @@ func NewCmdRoot(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(milestoneCmd.NewCmdMilestone(f))
 	cmd.AddCommand(prCmd.NewCmdPR(f))
 	cmd.AddCommand(releaseCmd.NewCmdRelease(f))
-	cmd.AddCommand(statusCmd.NewCmdStatus(f))
+	cmd.AddCommand(newCmdRemovedStatus())
 
 	// Version command
 	cmd.AddCommand(&cobra.Command{
@@ -78,6 +77,26 @@ func NewCmdRoot(f *cmdutil.Factory) *cobra.Command {
 	})
 
 	return cmd
+}
+
+// newCmdRemovedStatus keeps `fj status` from degrading into "unknown
+// command" while the name changes hands: the repository summary it used to
+// print now lives at `fj repo status`, and the name itself is reserved for
+// gh's cross-repository meaning. Hidden, so help does not advertise a
+// command that only ever fails.
+//
+// The next slice replaces this with the real cross-repository status.
+func newCmdRemovedStatus() *cobra.Command {
+	return &cobra.Command{
+		Use:    "status",
+		Hidden: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmdutil.FlagErrorf(
+				"`fj status` no longer prints the repository summary — that moved to `fj repo status`.\n" +
+					"The name is being reworked to match `gh status`: issues, pull requests and mentions " +
+					"relevant to you across repositories.")
+		},
+	}
 }
 
 func versionInfo() (version, commit string) {

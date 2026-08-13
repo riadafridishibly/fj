@@ -126,9 +126,8 @@ func TestPickBranchPR(t *testing.T) {
 			want: 3,
 		},
 		{
-			name:    "no match",
-			prs:     []*forgejo.PullRequest{pr(1, "other", "")},
-			wantErr: "no open pull request found",
+			name: "no match",
+			prs:  []*forgejo.PullRequest{pr(1, "other", "")},
 		},
 		{
 			name:    "ambiguous",
@@ -136,29 +135,36 @@ func TestPickBranchPR(t *testing.T) {
 			wantErr: "#3, #7",
 		},
 		{
-			name:    "missing head",
-			prs:     []*forgejo.PullRequest{{Index: 1}},
-			wantErr: "no open pull request found",
+			name: "missing head",
+			prs:  []*forgejo.PullRequest{{Index: 1}},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := pickBranchPR(tt.prs, repo, "feature")
+			got, err := PickBranchPR(tt.prs, repo, "feature")
 			if tt.wantErr != "" {
 				if err == nil {
-					t.Fatalf("pickBranchPR = %d, want error containing %q", got, tt.wantErr)
+					t.Fatalf("PickBranchPR = %+v, want error containing %q", got, tt.wantErr)
 				}
 				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Errorf("pickBranchPR error = %q, want it to contain %q", err, tt.wantErr)
+					t.Errorf("PickBranchPR error = %q, want it to contain %q", err, tt.wantErr)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("pickBranchPR: %v", err)
+				t.Fatalf("PickBranchPR: %v", err)
 			}
-			if got != tt.want {
-				t.Errorf("pickBranchPR = %d, want %d", got, tt.want)
+			// A branch with no pull request is not an error here; callers
+			// that require one supply their own message.
+			if tt.want == 0 {
+				if got != nil {
+					t.Errorf("PickBranchPR = #%d, want nil", got.Index)
+				}
+				return
+			}
+			if got == nil || got.Index != tt.want {
+				t.Errorf("PickBranchPR = %+v, want #%d", got, tt.want)
 			}
 		})
 	}

@@ -113,3 +113,23 @@ func TestTruncateDisplayResetsColor(t *testing.T) {
 		t.Errorf("colored truncation exceeded width: display %d", DisplayWidth(got))
 	}
 }
+
+func TestStatusSectionEmptyState(t *testing.T) {
+	var b strings.Builder
+	StatusSection(&b, "Issues assigned to you", "There are no issues assigned to you", nil)
+
+	want := "Issues assigned to you\n  There are no issues assigned to you\n\n"
+	if b.String() != want {
+		t.Errorf("StatusSection = %q, want %q", b.String(), want)
+	}
+}
+
+func TestStatusSectionIndentsEveryLine(t *testing.T) {
+	var b strings.Builder
+	StatusSection(&b, "Current branch", "There is no current branch", []string{"#6  Fix it", "✓ Checks passing"})
+
+	want := "Current branch\n  #6  Fix it\n  ✓ Checks passing\n\n"
+	if b.String() != want {
+		t.Errorf("StatusSection = %q, want %q", b.String(), want)
+	}
+}
