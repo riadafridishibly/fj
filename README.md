@@ -66,12 +66,17 @@ You can also set `FJ_TOKEN` to override the token for any command.
 
 `fj` auto-detects the repository from your git remotes. Use `-R [HOST/]OWNER/REPO` to override.
 
+When `-R` omits the host, `fj` takes the host of the current clone's remote, then
+the `default_host` config key, then the sole configured host — and otherwise asks
+you to spell the host out.
+
 Some pull request commands take the number as an optional argument: with it
 omitted, `pr view`, `pr diff`, `pr edit`, `pr merge`, `pr close`, `pr comment`,
-`pr review`, `pr review list`, and `pr review comment list` use the open pull
-request for the checked-out branch. In that implicit form, `pr merge` and
-`pr close` report the pull request they resolved and require `--yes` to act on
-it. `pr checkout` always requires the number.
+`pr comment create`, `pr comment list`, `pr review`, `pr review list`, and
+`pr review comment list` use the open pull request for the checked-out branch.
+In that implicit form, `pr merge` and `pr close` report the pull request they
+resolved and require `--yes` to act on it. `pr checkout` always requires the
+number.
 
 ### Repositories
 
