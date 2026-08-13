@@ -23,8 +23,9 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 	opts := &listOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:     "list [<number>]",
+		Use:     "list " + cmdutil.PRRefSpec,
 		Short:   "List reviews on a pull request",
+		Long:    "List reviews on a pull request.\n\n" + cmdutil.PRRefHelp,
 		Aliases: []string{"ls"},
 		Example: `  $ fj pr review list 42
   $ fj pr review list 42 --limit 100
@@ -43,12 +44,7 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 }
 
 func listRun(opts *listOptions) error {
-	repo, err := opts.Factory.BaseRepo()
-	if err != nil {
-		return err
-	}
-
-	index, err := opts.Factory.PRNumber(repo, opts.Args)
+	repo, index, err := opts.Factory.PRNumber(opts.Args)
 	if err != nil {
 		return err
 	}

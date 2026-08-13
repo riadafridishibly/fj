@@ -19,9 +19,9 @@ func NewCmdCheckout(f *cmdutil.Factory) *cobra.Command {
 	opts := &checkoutOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:     "checkout [<number>]",
+		Use:     "checkout " + cmdutil.PRRefSpec,
 		Short:   "Check out a pull request locally",
-		Long:    "Check out a pull request locally. With no number, the pull request for the current branch is used.",
+		Long:    "Check out a pull request locally.\n\n" + cmdutil.PRRefHelp,
 		Example: `  $ fj pr checkout 42`,
 		Args:    cmdutil.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -34,12 +34,7 @@ func NewCmdCheckout(f *cmdutil.Factory) *cobra.Command {
 }
 
 func checkoutRun(opts *checkoutOptions) error {
-	repo, err := opts.Factory.BaseRepo()
-	if err != nil {
-		return err
-	}
-
-	index, err := opts.Factory.PRNumber(repo, opts.Args)
+	repo, index, err := opts.Factory.PRNumber(opts.Args)
 	if err != nil {
 		return err
 	}

@@ -11,78 +11,146 @@ import (
 	"github.com/riadafridishibly/fj/internal/git"
 )
 
-// branchPRPageSize and branchPRMaxPages bound the search for the current
-// branch's pull request. Open pull requests come back newest first, so the
-// branch just pushed is near the front; the cap keeps a busy repository
-// from turning one command into dozens of requests.
+// branchPRPageSize and branchPRMaxPages bound the search for a branch's
+// pull request. Open pull requests come back newest first, so the branch
+// just pushed is near the front; the cap keeps a busy repository from
+// turning one command into dozens of requests.
 const (
 	branchPRPageSize = 50
 	branchPRMaxPages = 10
 )
 
+// Argument specs for Use lines, spelled exactly as gh spells them so that
+// `fj help` and `gh help` describe the same shapes for the same command.
+const (
+	IssueRefSpec = "{<number> | <url>}"
+	PRRefSpec    = "[<number> | <url> | <branch>]"
+)
+
+// Reference help for command long text. gh documents the URL form there
+// rather than in the usage line; OWNER/REPO#42 is fj's addition on top.
+const (
+	IssueRefHelp = "The issue may be given as a number, an issue URL, or OWNER/REPO#42."
+	PRRefHelp    = "The pull request may be given as a number, a pull request URL, a branch " +
+		"name, or OWNER/REPO#42. With no argument, the pull request for the current branch is used."
+)
+
 // NumberResolver pairs a command's argument validator with the function
-// that turns those arguments into an issue or pull request index, so
-// commands shared between the two differ only in this value.
+// that turns those arguments into a repository and an issue or pull
+// request index, so commands shared between the two differ only in this
+// value.
 type NumberResolver struct {
 	Args   cobra.PositionalArgs
-	Number func(f *Factory, repo Repo, args []string) (int64, error)
-	// Optional reports whether the argument may be omitted, for help text.
-	Optional bool
+	Number func(f *Factory, args []string) (Repo, int64, error)
+	// Spec is the positional argument as it appears in the Use line.
+	Spec string
 }
 
-// ArgSpec renders the positional argument for a command's Use line.
-func (r NumberResolver) ArgSpec(label string) string {
-	if r.Optional {
-		return "[<" + label + ">]"
-	}
-	return "<" + label + ">"
-}
-
-// IssueNumberResolver requires the number: issues have no per-branch form.
+// IssueNumberResolver requires the reference: issues have no branch form.
 func IssueNumberResolver() NumberResolver {
-	return NumberResolver{Args: ExactArgs(1), Number: (*Factory).IssueNumber}
+	return NumberResolver{Args: ExactArgs(1), Number: (*Factory).IssueNumber, Spec: IssueRefSpec}
 }
 
-// PRNumberResolver makes the number optional, falling back to the branch.
+// PRNumberResolver makes the reference optional, falling back to the branch.
 func PRNumberResolver() NumberResolver {
-	return NumberResolver{Args: MaximumNArgs(1), Number: (*Factory).PRNumber, Optional: true}
+	return NumberResolver{Args: MaximumNArgs(1), Number: (*Factory).PRNumber, Spec: PRRefSpec}
 }
 
-// IssueNumber parses the positional argument as an issue number.
-func (f *Factory) IssueNumber(_ Repo, args []string) (int64, error) {
+// IssueNumber resolves the positional argument to an issue and the
+// repository holding it. A reference that names its own repository — an
+// issue URL, or OWNER/REPO#42 — resolves outside a git checkout, so the
+// base repository is looked up only when the reference omits one.
+func (f *Factory) IssueNumber(args []string) (Repo, int64, error) {
 	if len(args) == 0 {
-		return 0, FlagErrorf("an issue number is required")
+		return Repo{}, 0, FlagErrorf("an issue number is required")
 	}
-	return parseNumber(args[0], "issue")
-}
-
-// PRNumber parses the positional argument as a pull request number. When
-// the argument is omitted it resolves the open pull request for the
-// currently checked-out branch, as gh does.
-func (f *Factory) PRNumber(repo Repo, args []string) (int64, error) {
-	if len(args) > 0 {
-		return parseNumber(args[0], "pull request")
-	}
-	return f.currentBranchPR(repo)
-}
-
-func parseNumber(arg, noun string) (int64, error) {
-	index, err := strconv.ParseInt(arg, 10, 64)
-	if err != nil || index < 1 {
-		return 0, FlagErrorf("invalid %s number: %s", noun, arg)
-	}
-	return index, nil
-}
-
-func (f *Factory) currentBranchPR(repo Repo) (int64, error) {
-	branch, err := git.CurrentBranch()
+	ref, err := ParseRef(args[0], IssueRefKind)
 	if err != nil {
-		return 0, fmt.Errorf("could not determine the current branch: %w", err)
+		return Repo{}, 0, err
+	}
+	if ref.Branch != "" {
+		return Repo{}, 0, FlagErrorf(
+			"invalid reference %q: issues have no branch form, expected a number, "+
+				"an issue URL, or OWNER/REPO#42", ref.Branch)
+	}
+	repo, err := f.refRepo(ref)
+	if err != nil {
+		return Repo{}, 0, err
+	}
+	return repo, ref.Number, nil
+}
+
+// PRNumber resolves the positional argument to a pull request and the
+// repository holding it, accepting the same references as IssueNumber
+// plus a branch name. When the argument is omitted it resolves the open
+// pull request for the currently checked-out branch, as gh does.
+func (f *Factory) PRNumber(args []string) (Repo, int64, error) {
+	if len(args) == 0 {
+		repo, err := f.BaseRepo()
+		if err != nil {
+			return Repo{}, 0, err
+		}
+		branch, err := git.CurrentBranch()
+		if err != nil {
+			return Repo{}, 0, fmt.Errorf("could not determine the current branch: %w", err)
+		}
+		return f.branchPR(repo, branch)
 	}
 
+	ref, err := ParseRef(args[0], PRRefKind)
+	if err != nil {
+		return Repo{}, 0, err
+	}
+	repo, err := f.refRepo(ref)
+	if err != nil {
+		return Repo{}, 0, err
+	}
+	if ref.Branch != "" {
+		return f.branchPR(repo, ref.Branch)
+	}
+	return repo, ref.Number, nil
+}
+
+// refRepo resolves the repository a reference belongs to: the one it
+// names, or the base repository when it names none. A reference that
+// disagrees with -R is a mistake worth reporting rather than silently
+// letting one of the two win.
+func (f *Factory) refRepo(ref Ref) (Repo, error) {
+	if ref.Repo == (Repo{}) {
+		return f.BaseRepo()
+	}
+	repo, err := f.fillHost(ref.Repo)
+	if err != nil {
+		return Repo{}, err
+	}
+	if f.RepoOverride == "" {
+		return repo, nil
+	}
+	override, err := f.RepoFromArg(f.RepoOverride)
+	if err != nil {
+		return Repo{}, err
+	}
+	if !sameRepo(repo, override) {
+		return Repo{}, FlagErrorf(
+			"the reference names %s/%s but -R names %s/%s",
+			repo.Host, repo.FullName(), override.Host, override.FullName())
+	}
+	return repo, nil
+}
+
+func sameRepo(a, b Repo) bool {
+	return strings.EqualFold(a.Host, b.Host) &&
+		strings.EqualFold(a.Owner, b.Owner) &&
+		strings.EqualFold(a.Name, b.Name)
+}
+
+// branchPR resolves the open pull request whose head is branch. It backs
+// both the explicit branch reference and the no-argument current-branch
+// default, so the two cannot disagree about what a branch resolves to.
+func (f *Factory) branchPR(repo Repo, branch string) (Repo, int64, error) {
 	client, err := f.ClientForRepo(repo)
 	if err != nil {
-		return 0, err
+		return Repo{}, 0, err
 	}
 
 	opt := forgejo.ListPullRequestsOptions{
@@ -95,7 +163,7 @@ func (f *Factory) currentBranchPR(repo Repo) (int64, error) {
 		opt.Page = page
 		prs, _, err := client.ListRepoPullRequests(repo.Owner, repo.Name, opt)
 		if err != nil {
-			return 0, fmt.Errorf("listing pull requests: %w", err)
+			return Repo{}, 0, fmt.Errorf("listing pull requests: %w", err)
 		}
 		all = append(all, prs...)
 		if len(prs) < branchPRPageSize {
@@ -103,7 +171,11 @@ func (f *Factory) currentBranchPR(repo Repo) (int64, error) {
 		}
 	}
 
-	return pickBranchPR(all, repo, branch)
+	index, err := pickBranchPR(all, repo, branch)
+	if err != nil {
+		return Repo{}, 0, err
+	}
+	return repo, index, nil
 }
 
 // pickBranchPR chooses the pull request whose head is branch. Pull requests

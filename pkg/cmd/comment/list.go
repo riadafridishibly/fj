@@ -23,8 +23,9 @@ func NewCmdList(f *cmdutil.Factory, k Kind) *cobra.Command {
 	opts := &listOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:     "list " + k.Resolver.ArgSpec(k.Arg),
+		Use:     "list " + k.Resolver.Spec,
 		Short:   "List comments on " + articleA(k.Noun) + " " + k.Noun,
+		Long:    "List comments on " + articleA(k.Noun) + " " + k.Noun + ".\n\n" + k.RefHelp,
 		Aliases: []string{"ls"},
 		Example: fmt.Sprintf(`  $ %s list 42
   $ %s list 42 --limit 100
@@ -43,12 +44,7 @@ func NewCmdList(f *cmdutil.Factory, k Kind) *cobra.Command {
 }
 
 func listRun(opts *listOptions, k Kind) error {
-	repo, err := opts.Factory.BaseRepo()
-	if err != nil {
-		return err
-	}
-
-	index, err := k.Resolver.Number(opts.Factory, repo, opts.Args)
+	repo, index, err := k.Resolver.Number(opts.Factory, opts.Args)
 	if err != nil {
 		return err
 	}

@@ -30,8 +30,8 @@ func NewCmdEdit(f *cmdutil.Factory) *cobra.Command {
 	opts := &editOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:   "edit [<number>]",
-		Long:  "Edit a pull request. With no number, the pull request for the current branch is used.",
+		Use:   "edit " + cmdutil.PRRefSpec,
+		Long:  "Edit a pull request.\n\n" + cmdutil.PRRefHelp,
 		Short: "Edit a pull request",
 		Example: `  $ fj pr edit 42 --title "New title"
   $ fj pr edit 42 --body "Updated description"
@@ -67,12 +67,7 @@ func NewCmdEdit(f *cmdutil.Factory) *cobra.Command {
 }
 
 func editRun(opts *editOptions) error {
-	repo, err := opts.Factory.BaseRepo()
-	if err != nil {
-		return err
-	}
-
-	index, err := opts.Factory.PRNumber(repo, opts.Args)
+	repo, index, err := opts.Factory.PRNumber(opts.Args)
 	if err != nil {
 		return err
 	}

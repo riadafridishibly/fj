@@ -26,8 +26,8 @@ func NewCmdMerge(f *cmdutil.Factory) *cobra.Command {
 	opts := &mergeOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:   "merge [<number>]",
-		Long:  "Merge a pull request. With no number, the pull request for the current branch is used.",
+		Use:   "merge " + cmdutil.PRRefSpec,
+		Long:  "Merge a pull request.\n\n" + cmdutil.PRRefHelp,
 		Short: "Merge a pull request",
 		Example: `  $ fj pr merge 42
   $ fj pr merge 42 --squash
@@ -81,12 +81,7 @@ func NewCmdMerge(f *cmdutil.Factory) *cobra.Command {
 }
 
 func mergeRun(opts *mergeOptions) error {
-	repo, err := opts.Factory.BaseRepo()
-	if err != nil {
-		return err
-	}
-
-	index, err := opts.Factory.PRNumber(repo, opts.Args)
+	repo, index, err := opts.Factory.PRNumber(opts.Args)
 	if err != nil {
 		return err
 	}

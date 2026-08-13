@@ -19,9 +19,9 @@ func NewCmdDiff(f *cmdutil.Factory) *cobra.Command {
 	opts := &diffOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:   "diff [<number>]",
+		Use:   "diff " + cmdutil.PRRefSpec,
 		Short: "View the diff of a pull request",
-		Long:  "View the diff of a pull request. With no number, the pull request for the current branch is used.",
+		Long:  "View the diff of a pull request.\n\n" + cmdutil.PRRefHelp,
 		Example: `  $ fj pr diff
   $ fj pr diff 42
   $ fj pr diff 42 | less`,
@@ -36,12 +36,7 @@ func NewCmdDiff(f *cmdutil.Factory) *cobra.Command {
 }
 
 func diffRun(opts *diffOptions) error {
-	repo, err := opts.Factory.BaseRepo()
-	if err != nil {
-		return err
-	}
-
-	index, err := opts.Factory.PRNumber(repo, opts.Args)
+	repo, index, err := opts.Factory.PRNumber(opts.Args)
 	if err != nil {
 		return err
 	}

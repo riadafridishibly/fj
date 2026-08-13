@@ -14,12 +14,11 @@ import (
 // review, dispatching to `create`.
 func NewCmdReview(f *cmdutil.Factory) *cobra.Command {
 	cmd := newCreateCmd(f)
-	cmd.Use = "review [<number>] [flags]"
+	cmd.Use = "review " + cmdutil.PRRefSpec + " [flags]"
 	cmd.Short = "Manage pull request reviews"
 	cmd.Long = "Manage pull request reviews.\n\n" +
 		"With a review-state flag the command submits a review, exactly as " +
-		"fj pr review create does. With no number, the pull request for the " +
-		"current branch is used."
+		"fj pr review create does.\n\n" + cmdutil.PRRefHelp
 	cmd.Example = `  $ fj pr review 42 --approve --body "LGTM"
   $ fj pr review --request-changes --body "see comments"
   $ fj pr review list 42`

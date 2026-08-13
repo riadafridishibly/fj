@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
@@ -19,7 +18,7 @@ import (
 
 type viewOptions struct {
 	Factory         *cmdutil.Factory
-	Number          string
+	Args            []string
 	Comments        bool
 	ShowTimeline    bool
 	TimelineInclude []string
@@ -34,8 +33,9 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 	opts := &viewOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:   "view <number>",
+		Use:   "view " + cmdutil.IssueRefSpec,
 		Short: "View an issue",
+		Long:  "View an issue.\n\n" + cmdutil.IssueRefHelp,
 		Example: `  $ fj issue view 42
   $ fj issue view 42 --comments
   $ fj issue view 42 --show-timeline=false
@@ -47,7 +47,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
   $ fj issue view 42 --download --download-dir ./tmp`,
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.Number = args[0]
+			opts.Args = args
 			return viewRun(opts)
 		},
 	}
@@ -64,14 +64,9 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 }
 
 func viewRun(opts *viewOptions) error {
-	repo, err := opts.Factory.BaseRepo()
+	repo, index, err := opts.Factory.IssueNumber(opts.Args)
 	if err != nil {
 		return err
-	}
-
-	index, err := strconv.ParseInt(opts.Number, 10, 64)
-	if err != nil {
-		return cmdutil.FlagErrorf("invalid issue number: %s", opts.Number)
 	}
 
 	timeline, err := cmdutil.NewTimelineFilter(opts.TimelineInclude, opts.TimelineExclude)

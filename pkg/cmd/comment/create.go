@@ -21,8 +21,9 @@ type createOptions struct {
 
 func NewCmdCreate(f *cmdutil.Factory, k Kind) *cobra.Command {
 	cmd := newCreateCmd(f, k)
-	cmd.Use = "create " + k.Resolver.ArgSpec(k.Arg)
+	cmd.Use = "create " + k.Resolver.Spec
 	cmd.Short = "Add a comment to " + articleA(k.Noun) + " " + k.Noun
+	cmd.Long = cmd.Short + ".\n\n" + k.RefHelp
 	cmd.Example = fmt.Sprintf(`  $ %s create 42 --body "This is a comment"
   $ %s create 42 --body-file comment.md
   $ echo "comment" | %s create 42 --body-file -`, k.CLI, k.CLI, k.CLI)
@@ -31,7 +32,7 @@ func NewCmdCreate(f *cmdutil.Factory, k Kind) *cobra.Command {
 
 // newCreateCmd builds the command that posts a comment. It backs both the
 // `create` subcommand and the `comment` group itself, so the two cannot
-// drift apart; callers set Use, Short, and Example for their spelling.
+// drift apart; callers set Use, Short, Long, and Example for their spelling.
 func newCreateCmd(f *cmdutil.Factory, k Kind) *cobra.Command {
 	opts := &createOptions{Factory: f}
 
@@ -71,12 +72,7 @@ func newCreateCmd(f *cmdutil.Factory, k Kind) *cobra.Command {
 }
 
 func createRun(opts *createOptions, k Kind) error {
-	repo, err := opts.Factory.BaseRepo()
-	if err != nil {
-		return err
-	}
-
-	index, err := k.Resolver.Number(opts.Factory, repo, opts.Args)
+	repo, index, err := k.Resolver.Number(opts.Factory, opts.Args)
 	if err != nil {
 		return err
 	}

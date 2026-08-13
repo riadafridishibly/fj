@@ -27,9 +27,9 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 	opts := &viewOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:   "view [<number>]",
+		Use:   "view " + cmdutil.PRRefSpec,
 		Short: "View a pull request",
-		Long:  "View a pull request. With no number, the pull request for the current branch is used.",
+		Long:  "View a pull request.\n\n" + cmdutil.PRRefHelp,
 		Example: `  $ fj pr view
   $ fj pr view 42
   $ fj pr view 42 --comments
@@ -55,12 +55,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 }
 
 func viewRun(opts *viewOptions) error {
-	repo, err := opts.Factory.BaseRepo()
-	if err != nil {
-		return err
-	}
-
-	index, err := opts.Factory.PRNumber(repo, opts.Args)
+	repo, index, err := opts.Factory.PRNumber(opts.Args)
 	if err != nil {
 		return err
 	}

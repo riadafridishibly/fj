@@ -7,25 +7,37 @@ import (
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 )
 
-func TestPRNumberFromArg(t *testing.T) {
-	f := &Factory{}
-	repo := Repo{Host: "forgejo.example.com", Owner: "example-org", Name: "example-repo"}
+// refTestRepo doubles as the -R override so the factory resolves a base
+// repository without reading configuration.
+var refTestRepo = Repo{Host: "forgejo.example.com", Owner: "example-org", Name: "example-repo"}
 
+func testFactory() *Factory {
+	return &Factory{
+		RepoOverride: refTestRepo.Host + "/" + refTestRepo.FullName(),
+		HostOverride: refTestRepo.Host,
+	}
+}
+
+func TestPRNumberFromArg(t *testing.T) {
 	tests := []struct {
-		name    string
-		args    []string
-		want    int64
-		wantErr bool
+		name     string
+		args     []string
+		wantRepo Repo
+		want     int64
+		wantErr  bool
 	}{
-		{"number", []string{"42"}, 42, false},
-		{"not a number", []string{"main"}, 0, true},
-		{"zero", []string{"0"}, 0, true},
-		{"negative", []string{"-1"}, 0, true},
+		{"number", []string{"42"}, refTestRepo, 42, false},
+		{"hash number", []string{"#42"}, refTestRepo, 42, false},
+		{"repo reference", []string{"example-org/example-repo#42"}, refTestRepo, 42, false},
+		{"url", []string{"https://forgejo.example.com/example-org/example-repo/pulls/42"}, refTestRepo, 42, false},
+		{"repo reference disagreeing with -R", []string{"other-org/other-repo#42"}, Repo{}, 0, true},
+		{"zero", []string{"0"}, Repo{}, 0, true},
+		{"negative", []string{"-1"}, Repo{}, 0, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := f.PRNumber(repo, tt.args)
+			repo, got, err := testFactory().PRNumber(tt.args)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("PRNumber(%q) = %d, want error", tt.args, got)
@@ -38,22 +50,46 @@ func TestPRNumberFromArg(t *testing.T) {
 			if err != nil {
 				t.Fatalf("PRNumber(%q): %v", tt.args, err)
 			}
-			if got != tt.want {
-				t.Errorf("PRNumber(%q) = %d, want %d", tt.args, got, tt.want)
+			if repo != tt.wantRepo || got != tt.want {
+				t.Errorf("PRNumber(%q) = %+v, %d, want %+v, %d", tt.args, repo, got, tt.wantRepo, tt.want)
 			}
 		})
 	}
 }
 
+func TestIssueNumberFromArg(t *testing.T) {
+	repo, index, err := testFactory().IssueNumber([]string{"https://forgejo.example.com/example-org/example-repo/issues/42"})
+	if err != nil {
+		t.Fatalf("IssueNumber: %v", err)
+	}
+	if repo != refTestRepo || index != 42 {
+		t.Errorf("IssueNumber = %+v, %d, want %+v, 42", repo, index, refTestRepo)
+	}
+}
+
 func TestIssueNumberRequiresArg(t *testing.T) {
-	f := &Factory{}
-	if _, err := f.IssueNumber(Repo{}, nil); err == nil {
+	if _, _, err := testFactory().IssueNumber(nil); err == nil {
 		t.Fatal("IssueNumber(nil) = nil error, want error")
 	}
 }
 
+// Only pull requests have a branch form; an issue command must say so
+// rather than looking up a branch that can never match.
+func TestIssueNumberRejectsBranch(t *testing.T) {
+	_, _, err := testFactory().IssueNumber([]string{"feature-1"})
+	if err == nil {
+		t.Fatal("IssueNumber(branch) = nil error, want error")
+	}
+	if !IsFlagError(err) {
+		t.Errorf("IssueNumber(branch) error is not a FlagError: %v", err)
+	}
+	if !strings.Contains(err.Error(), "branch") {
+		t.Errorf("IssueNumber(branch) error = %q, want it to mention the branch form", err)
+	}
+}
+
 func TestPickBranchPR(t *testing.T) {
-	repo := Repo{Host: "forgejo.example.com", Owner: "example-org", Name: "example-repo"}
+	repo := refTestRepo
 
 	pr := func(index int64, ref, headRepo string) *forgejo.PullRequest {
 		head := &forgejo.PRBranchInfo{Ref: ref}
@@ -128,11 +164,12 @@ func TestPickBranchPR(t *testing.T) {
 	}
 }
 
-func TestNumberResolverArgSpec(t *testing.T) {
-	if got := IssueNumberResolver().ArgSpec("issue"); got != "<issue>" {
-		t.Errorf("issue ArgSpec = %q, want %q", got, "<issue>")
+// The usage specs are gh's verbatim, so a change here is a parity break.
+func TestNumberResolverSpec(t *testing.T) {
+	if got := IssueNumberResolver().Spec; got != "{<number> | <url>}" {
+		t.Errorf("issue spec = %q, want %q", got, "{<number> | <url>}")
 	}
-	if got := PRNumberResolver().ArgSpec("pr"); got != "[<pr>]" {
-		t.Errorf("pr ArgSpec = %q, want %q", got, "[<pr>]")
+	if got := PRNumberResolver().Spec; got != "[<number> | <url> | <branch>]" {
+		t.Errorf("pr spec = %q, want %q", got, "[<number> | <url> | <branch>]")
 	}
 }

@@ -31,7 +31,7 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 	opts := &listOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:     "list [<pr>]",
+		Use:     "list " + cmdutil.PRRefSpec,
 		Aliases: []string{"ls"},
 		Short:   "List all inline review comments on a pull request",
 		Long: `List inline review comments across every review on a pull request.
@@ -40,7 +40,9 @@ JSON output attaches a review_id field to each comment so it can be
 addressed back to the Forgejo API.
 
 Pass --review-id to limit the output to a single review (you can get
-review ids from 'fj pr review list <pr>').`,
+review ids from 'fj pr review list <pr>').
+
+` + cmdutil.PRRefHelp,
 		Example: `  # All inline comments across every review on pr #70
   $ fj pr review comment list 70
 
@@ -62,12 +64,7 @@ review ids from 'fj pr review list <pr>').`,
 }
 
 func listRun(opts *listOptions) error {
-	repo, err := opts.Factory.BaseRepo()
-	if err != nil {
-		return err
-	}
-
-	index, err := opts.Factory.PRNumber(repo, opts.Args)
+	repo, index, err := opts.Factory.PRNumber(opts.Args)
 	if err != nil {
 		return err
 	}
