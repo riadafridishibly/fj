@@ -16,6 +16,7 @@ func NewCmdRepo(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(NewCmdList(f))
 	cmd.AddCommand(NewCmdCreate(f))
 	cmd.AddCommand(NewCmdView(f))
+	cmd.AddCommand(NewCmdStatus(f))
 	cmd.AddCommand(NewCmdClone(f))
 	cmd.AddCommand(NewCmdFork(f))
 	cmd.AddCommand(NewCmdDelete(f))

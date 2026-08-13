@@ -472,7 +472,7 @@ func TestReleaseDelete(t *testing.T) {
 	}
 }
 
-// TestStatusIncludesLatestRelease verifies fj status surfaces the latest release.
+// TestStatusIncludesLatestRelease verifies fj repo status surfaces the latest release.
 func TestStatusIncludesLatestRelease(t *testing.T) {
 	repo := adminUser + "/another-repo"
 	tag := "v1.0.0-status"
@@ -484,7 +484,7 @@ func TestStatusIncludesLatestRelease(t *testing.T) {
 		t.Fatalf("setup create failed: %v\n%s", err, stderr)
 	}
 
-	stdout := mustRunFJ(t, "status", "-R", repo, "--json")
+	stdout := mustRunFJ(t, "repo", "status", "-R", repo, "--json")
 
 	var result map[string]any
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {

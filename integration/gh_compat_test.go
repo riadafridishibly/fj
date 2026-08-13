@@ -207,3 +207,82 @@ func TestRepoOverrideWithHost(t *testing.T) {
 		t.Errorf("expected a format error naming the accepted shape, got: %s", stderr)
 	}
 }
+
+// TestRepoStatusRename covers tier 0.5: the repository summary answers to
+// `fj repo status`, and the freed `fj status` name says so rather than
+// degrading into an unknown command.
+func TestRepoStatusRename(t *testing.T) {
+	stdout := mustRunFJ(t, "repo", "status", "-R", adminUser+"/test-repo")
+	if !strings.Contains(stdout, adminUser+"/test-repo") {
+		t.Errorf("expected the repository summary:\n%s", stdout)
+	}
+
+	stdout, stderr, err := runFJ("status", "-R", adminUser+"/test-repo")
+	if err == nil {
+		t.Fatalf("expected `fj status` to fail while the name changes hands, got:\n%s", stdout)
+	}
+	if !strings.Contains(stderr, "fj repo status") {
+		t.Errorf("expected the error to point at `fj repo status`, got: %s", stderr)
+	}
+}
+
+// TestIssueStatusSections covers tier 0.5: `fj issue status` reports the
+// issues relevant to you under gh's section headings.
+func TestIssueStatusSections(t *testing.T) {
+	stdout := mustRunFJ(t, "issue", "status", "-R", adminUser+"/test-repo")
+
+	for _, want := range []string{
+		"Relevant issues in " + adminUser + "/test-repo",
+		"Issues assigned to you",
+		"Issues mentioning you",
+		"Issues opened by you",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("expected %q in output:\n%s", want, stdout)
+		}
+	}
+
+	// The fixture issues are all the admin's, so the last section has rows.
+	if strings.Contains(stdout, "There are no issues opened by you") {
+		t.Errorf("expected the fixture issues under \"Issues opened by you\":\n%s", stdout)
+	}
+}
+
+// TestPRStatusSections covers tier 0.5 for pull requests, including the
+// current-branch section that only resolves inside a checkout.
+func TestPRStatusSections(t *testing.T) {
+	dir := gitRepoOnBranch(t, "feature-1") // PR #4
+
+	stdout, stderr, err := runFJIn(dir, "pr", "status")
+	if err != nil {
+		t.Fatalf("fj pr status failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+
+	for _, want := range []string{
+		"Relevant pull requests in " + adminUser + "/test-repo",
+		"Current branch",
+		"#4",
+		"[feature-1]",
+		"Created by you",
+		"Requesting a code review from you",
+		// Nothing in the fixture asks the admin for a review, which is the
+		// only assertion that the review_requested filter reached the server.
+		"You have no pull requests to review",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("expected %q in output:\n%s", want, stdout)
+		}
+	}
+}
+
+func TestPRStatusCurrentBranchWithoutPullRequest(t *testing.T) {
+	dir := gitRepoOnBranch(t, "branch-without-a-pr")
+
+	stdout, stderr, err := runFJIn(dir, "pr", "status")
+	if err != nil {
+		t.Fatalf("fj pr status failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "There is no pull request associated with [branch-without-a-pr]") {
+		t.Errorf("expected the current-branch empty state:\n%s", stdout)
+	}
+}

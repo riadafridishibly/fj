@@ -77,6 +77,21 @@ func PrintJSON(w io.Writer, v any) error {
 	return enc.Encode(v)
 }
 
+// StatusSection prints one section of a "relevant to you" report: a bold
+// heading, the section's lines indented beneath it, and a trailing blank
+// line. A section with no lines prints its empty-state sentence instead, so
+// every heading is always followed by something.
+func StatusSection(w io.Writer, heading, empty string, lines []string) {
+	fmt.Fprintln(w, Colorize(Bold, heading))
+	if len(lines) == 0 {
+		fmt.Fprintf(w, "  %s\n", Colorize(Gray, empty))
+	}
+	for _, line := range lines {
+		fmt.Fprintf(w, "  %s\n", line)
+	}
+	fmt.Fprintln(w)
+}
+
 func RelativeTimeStr(t time.Time) string {
 	d := time.Since(t)
 	switch {

@@ -144,13 +144,14 @@ func sameRepo(a, b Repo) bool {
 		strings.EqualFold(a.Name, b.Name)
 }
 
-// branchPR resolves the open pull request whose head is branch. It backs
-// both the explicit branch reference and the no-argument current-branch
-// default, so the two cannot disagree about what a branch resolves to.
-func (f *Factory) branchPR(repo Repo, branch string) (Repo, int64, error) {
+// ListOpenPRs returns the repository's open pull requests, newest first,
+// within the paging bounds above. Callers that need several views of the
+// same set — a branch lookup and a poster filter, say — share one call
+// rather than paging twice.
+func (f *Factory) ListOpenPRs(repo Repo) ([]*forgejo.PullRequest, error) {
 	client, err := f.ClientForRepo(repo)
 	if err != nil {
-		return Repo{}, 0, err
+		return nil, err
 	}
 
 	opt := forgejo.ListPullRequestsOptions{
@@ -163,34 +164,54 @@ func (f *Factory) branchPR(repo Repo, branch string) (Repo, int64, error) {
 		opt.Page = page
 		prs, _, err := client.ListRepoPullRequests(repo.Owner, repo.Name, opt)
 		if err != nil {
-			return Repo{}, 0, fmt.Errorf("listing pull requests: %w", err)
+			return nil, fmt.Errorf("listing pull requests: %w", err)
 		}
 		all = append(all, prs...)
 		if len(prs) < branchPRPageSize {
 			break
 		}
 	}
+	return all, nil
+}
 
-	index, err := pickBranchPR(all, repo, branch)
+// FindBranchPR resolves the open pull request whose head is branch, or nil
+// when the branch has none. Commands that must have one turn the nil into
+// an error; status reports render the absence instead.
+func (f *Factory) FindBranchPR(repo Repo, branch string) (*forgejo.PullRequest, error) {
+	prs, err := f.ListOpenPRs(repo)
+	if err != nil {
+		return nil, err
+	}
+	return PickBranchPR(prs, repo, branch)
+}
+
+// branchPR resolves the open pull request whose head is branch. It backs
+// both the explicit branch reference and the no-argument current-branch
+// default, so the two cannot disagree about what a branch resolves to.
+func (f *Factory) branchPR(repo Repo, branch string) (Repo, int64, error) {
+	pr, err := f.FindBranchPR(repo, branch)
 	if err != nil {
 		return Repo{}, 0, err
 	}
-	return repo, index, nil
+	if pr == nil {
+		return Repo{}, 0, fmt.Errorf("no open pull request found for branch %q in %s", branch, repo.FullName())
+	}
+	return repo, pr.Index, nil
 }
 
-// pickBranchPR chooses the pull request whose head is branch. Pull requests
-// opened from the base repository itself win over same-named branches on
-// forks, which are somebody else's work.
-func pickBranchPR(prs []*forgejo.PullRequest, repo Repo, branch string) (int64, error) {
-	var local, foreign []int64
+// PickBranchPR chooses the pull request whose head is branch, or nil when
+// none matches. Pull requests opened from the base repository itself win
+// over same-named branches on forks, which are somebody else's work.
+func PickBranchPR(prs []*forgejo.PullRequest, repo Repo, branch string) (*forgejo.PullRequest, error) {
+	var local, foreign []*forgejo.PullRequest
 	for _, pr := range prs {
 		if pr.Head == nil || pr.Head.Ref != branch {
 			continue
 		}
 		if pr.Head.Repository != nil && !strings.EqualFold(pr.Head.Repository.FullName, repo.FullName()) {
-			foreign = append(foreign, pr.Index)
+			foreign = append(foreign, pr)
 		} else {
-			local = append(local, pr.Index)
+			local = append(local, pr)
 		}
 	}
 
@@ -200,18 +221,18 @@ func pickBranchPR(prs []*forgejo.PullRequest, repo Repo, branch string) (int64, 
 	}
 	switch len(matches) {
 	case 0:
-		return 0, fmt.Errorf("no open pull request found for branch %q in %s", branch, repo.FullName())
+		return nil, nil
 	case 1:
 		return matches[0], nil
 	}
-	return 0, fmt.Errorf("branch %q has %d open pull requests (%s); specify one by number",
+	return nil, fmt.Errorf("branch %q has %d open pull requests (%s); specify one by number",
 		branch, len(matches), joinNumbers(matches))
 }
 
-func joinNumbers(numbers []int64) string {
-	parts := make([]string, len(numbers))
-	for i, n := range numbers {
-		parts[i] = "#" + strconv.FormatInt(n, 10)
+func joinNumbers(prs []*forgejo.PullRequest) string {
+	parts := make([]string, len(prs))
+	for i, pr := range prs {
+		parts[i] = "#" + strconv.FormatInt(pr.Index, 10)
 	}
 	return strings.Join(parts, ", ")
 }

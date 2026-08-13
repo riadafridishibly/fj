@@ -1,4 +1,4 @@
-package status
+package repo
 
 import (
 	"cmp"
@@ -37,9 +37,9 @@ func NewCmdStatus(f *cmdutil.Factory) *cobra.Command {
 By default the "closed" PR count is the total from the server and includes merged PRs.
 Pass --full to paginate every closed PR and produce a merged-vs-closed breakdown; this
 can take tens of seconds on repositories with many closed PRs.`,
-		Example: `  $ fj status
-  $ fj status --json
-  $ fj status --full`,
+		Example: `  $ fj repo status
+  $ fj repo status --json
+  $ fj repo status --full`,
 		Aliases: []string{"st"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return statusRun(opts)
@@ -122,7 +122,7 @@ type conflictInfo struct {
 }
 
 func statusRun(opts *statusOptions) error {
-	defer debug.Track(1, "fj status (total)")()
+	defer debug.Track(1, "fj repo status (total)")()
 
 	repo, err := opts.Factory.BaseRepo()
 	if err != nil {
@@ -419,7 +419,7 @@ func fetchPRDetails(f *cmdutil.Factory, repo cmdutil.Repo, prIndex int64) (addit
 // detectConflicts runs git merge-tree over the local checkout to recover the
 // conflicting-file list the REST API omits. nil means the check couldn't run.
 func detectConflicts(pr *forgejo.PullRequest) *conflictInfo {
-	defer debug.Track(2, "fj status (conflict check)")()
+	defer debug.Track(2, "fj repo status (conflict check)")()
 
 	if pr.Base == nil {
 		return nil

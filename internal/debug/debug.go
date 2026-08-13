@@ -85,7 +85,7 @@ func writeIndented(w io.Writer, data []byte, indent string) {
 // Track logs "→ name" immediately and returns a function that logs
 // "← name (duration)" when called. It is a no-op if level < l.
 //
-//	defer debug.Track(1, "fj status (total)")()
+//	defer debug.Track(1, "fj repo status (total)")()
 func Track(l int, name string) func() {
 	if level < l {
 		return func() {}
