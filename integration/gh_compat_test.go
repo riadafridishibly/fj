@@ -287,6 +287,13 @@ func TestGroupUnknownSubcommand(t *testing.T) {
 		if !strings.Contains(stderr, tc.want) {
 			t.Errorf("fj %s stderr = %q, want it to contain %q", strings.Join(tc.args, " "), stderr, tc.want)
 		}
+		// 1, not the 2 that TestUsageErrorExitCodes pins for arity errors:
+		// this matches what cobra already does for an unknown command at the
+		// root (`fj bogus`). Unifying the two is part of the exit-codes slice
+		// of issue #5.
+		if code := exitCode(t, err); code != 1 {
+			t.Errorf("fj %s exit code = %d, want 1", strings.Join(tc.args, " "), code)
+		}
 	}
 }
 
