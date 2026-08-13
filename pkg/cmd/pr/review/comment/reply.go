@@ -73,14 +73,9 @@ func replyRun(opts *replyOptions) error {
 		return cmdutil.FlagErrorf("--body or --body-file is required")
 	}
 
-	repo, err := opts.Factory.BaseRepo()
+	repo, index, err := opts.Factory.PRNumber([]string{opts.Number})
 	if err != nil {
 		return err
-	}
-
-	index, err := strconv.ParseInt(opts.Number, 10, 64)
-	if err != nil {
-		return cmdutil.FlagErrorf("invalid pull request number: %s", opts.Number)
 	}
 
 	commentID, err := strconv.ParseInt(opts.CommentID, 10, 64)

@@ -20,11 +20,11 @@ type Kind struct {
 	// CLI is the command prefix shown in examples,
 	// e.g. "fj issue comment" or "fj pr comment".
 	CLI string
-	// Arg is the positional-arg label for create/list, e.g. "issue" or "pr".
-	Arg string
-	// Resolver turns the positional argument into an issue or pull request
-	// index. The pull request form accepts no argument and falls back to
-	// the current branch.
+	// RefHelp describes the accepted reference forms in long help.
+	RefHelp string
+	// Resolver turns the positional argument into the repository and the
+	// issue or pull request index. The pull request form accepts no
+	// argument and falls back to the current branch.
 	Resolver cmdutil.NumberResolver
 }
 
@@ -36,11 +36,11 @@ func NewCmdComment(f *cmdutil.Factory, k Kind) *cobra.Command {
 	// The group takes no argument when it is only naming its subcommands,
 	// so the number is validated by the resolver rather than by cobra.
 	cmd.Args = cmdutil.MaximumNArgs(1)
-	cmd.Use = "comment " + k.Resolver.ArgSpec(k.Arg) + " [flags]"
+	cmd.Use = "comment " + k.Resolver.Spec + " [flags]"
 	cmd.Short = "Manage " + k.Noun + " comments"
 	cmd.Long = fmt.Sprintf(
-		"Manage %s comments.\n\nWith a body flag the command adds a comment, exactly as %s create does.",
-		k.Noun, k.CLI)
+		"Manage %s comments.\n\nWith a body flag the command adds a comment, exactly as %s create does.\n\n%s",
+		k.Noun, k.CLI, k.RefHelp)
 	cmd.Example = fmt.Sprintf(`  $ %s 42 --body "This is a comment"
   $ %s list 42
   $ %s edit 12345 --body "Updated comment"`, k.CLI, k.CLI, k.CLI)

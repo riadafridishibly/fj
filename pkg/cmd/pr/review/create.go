@@ -36,10 +36,11 @@ type createOptions struct {
 
 func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
 	cmd := newCreateCmd(f)
-	cmd.Use = "create [<number>]"
+	cmd.Use = "create " + cmdutil.PRRefSpec
 	cmd.Short = "Create a review on a pull request"
-	cmd.Long = `Create a review on a pull request. With no number, the pull
-request for the current branch is used.
+	cmd.Long = `Create a review on a pull request.
+
+` + cmdutil.PRRefHelp + `
 
 Inline comments can be supplied either individually with the --comment-*
 flags, or in bulk via --comments-file pointing at a JSON array:
@@ -133,12 +134,7 @@ func createRun(opts *createOptions) error {
 		return cmdutil.FlagErrorf("a comment review requires --body, --body-file, --comment-path, or --comments-file")
 	}
 
-	repo, err := opts.Factory.BaseRepo()
-	if err != nil {
-		return err
-	}
-
-	index, err := opts.Factory.PRNumber(repo, opts.Args)
+	repo, index, err := opts.Factory.PRNumber(opts.Args)
 	if err != nil {
 		return err
 	}

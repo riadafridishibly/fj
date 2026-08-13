@@ -20,9 +20,11 @@ func NewCmdClose(f *cmdutil.Factory) *cobra.Command {
 	opts := &closeOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:   "close [<number>]",
+		// gh spells close's argument with braces though it is optional
+		// there too; matched verbatim so the usage lines agree.
+		Use:   "close {<number> | <url> | <branch>}",
 		Short: "Close a pull request",
-		Long:  "Close a pull request. With no number, the pull request for the current branch is used.",
+		Long:  "Close a pull request.\n\n" + cmdutil.PRRefHelp,
 		Example: `  $ fj pr close
   $ fj pr close 42
   $ fj pr close 42 --comment "Closing this PR"`,
@@ -39,12 +41,7 @@ func NewCmdClose(f *cmdutil.Factory) *cobra.Command {
 }
 
 func closeRun(opts *closeOptions) error {
-	repo, err := opts.Factory.BaseRepo()
-	if err != nil {
-		return err
-	}
-
-	index, err := opts.Factory.PRNumber(repo, opts.Args)
+	repo, index, err := opts.Factory.PRNumber(opts.Args)
 	if err != nil {
 		return err
 	}

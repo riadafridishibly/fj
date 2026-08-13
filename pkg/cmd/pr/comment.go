@@ -11,7 +11,7 @@ func NewCmdComment(f *cmdutil.Factory) *cobra.Command {
 	return comment.NewCmdComment(f, comment.Kind{
 		Noun:     "pull request",
 		CLI:      "fj pr comment",
-		Arg:      "pr",
+		RefHelp:  cmdutil.PRRefHelp,
 		Resolver: cmdutil.PRNumberResolver(),
 	})
 }

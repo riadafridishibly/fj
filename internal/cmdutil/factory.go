@@ -42,15 +42,14 @@ func NewFactory() *Factory {
 }
 
 func (f *Factory) BaseRepo() (Repo, error) {
-	cfg, err := f.Config()
-	if err != nil {
-		return Repo{}, err
-	}
-
 	if f.RepoOverride != "" {
 		return f.RepoFromArg(f.RepoOverride)
 	}
 
+	cfg, err := f.Config()
+	if err != nil {
+		return Repo{}, err
+	}
 	return RepoFromGitRemotes(cfg)
 }
 
@@ -62,6 +61,13 @@ func (f *Factory) RepoFromArg(name string) (Repo, error) {
 	if err != nil {
 		return Repo{}, err
 	}
+	return f.fillHost(repo)
+}
+
+// fillHost supplies the host for a repository parsed out of a selector or
+// a reference that omitted one: --hostname when given, else the
+// configured default host.
+func (f *Factory) fillHost(repo Repo) (Repo, error) {
 	if repo.Host != "" {
 		return repo, nil
 	}

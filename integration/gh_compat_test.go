@@ -135,6 +135,62 @@ func TestReviewGroupDispatch(t *testing.T) {
 	}
 }
 
+// TestRefFromURL covers tier 0.4: a web URL is a reference, as it is for
+// every gh command that takes an issue or pull request.
+func TestRefFromURL(t *testing.T) {
+	issueURL := forgejoURL + "/" + adminUser + "/test-repo/issues/1"
+	stdout := mustRunFJ(t, "issue", "view", issueURL)
+	if !strings.Contains(stdout, "First issue") {
+		t.Errorf("expected issue #1 from its URL:\n%s", stdout)
+	}
+
+	prURL := forgejoURL + "/" + adminUser + "/test-repo/pulls/4"
+	stdout = mustRunFJ(t, "pr", "view", prURL)
+	if !strings.Contains(stdout, "Add feature-1") {
+		t.Errorf("expected pr #4 from its URL:\n%s", stdout)
+	}
+}
+
+// TestRefFromBranchArgument covers the branch form gh accepts on pull
+// request commands. The command runs on feature-2 to prove the argument
+// wins over the checked-out branch.
+func TestRefFromBranchArgument(t *testing.T) {
+	dir := gitRepoOnBranch(t, "feature-2") // PR #5
+
+	stdout, stderr, err := runFJIn(dir, "pr", "view", "feature-1") // PR #4
+	if err != nil {
+		t.Fatalf("fj pr view feature-1 failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	for _, want := range []string{"Add feature-1", "#4"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("expected %q in output:\n%s", want, stdout)
+		}
+	}
+}
+
+// TestRefWithRepository covers fj's OWNER/REPO#N form, whose point is
+// addressing a repository from anywhere: this runs with no git remote at
+// all and without -R.
+func TestRefWithRepository(t *testing.T) {
+	stdout := mustRunFJ(t, "issue", "view", adminUser+"/test-repo#1")
+	if !strings.Contains(stdout, "First issue") {
+		t.Errorf("expected issue #1 from OWNER/REPO#N:\n%s", stdout)
+	}
+}
+
+// TestRefMalformed keeps a mistyped URL a usage error rather than a
+// branch lookup or a 404 against the wrong repository.
+func TestRefMalformed(t *testing.T) {
+	stdout, stderr, err := runFJ("issue", "view", "https://example.com/not-an-issue",
+		"-R", adminUser+"/test-repo")
+	if err == nil {
+		t.Fatalf("expected failure for a malformed reference, got:\n%s", stdout)
+	}
+	if !strings.Contains(stderr, "invalid reference") {
+		t.Errorf("expected a usage error naming the accepted forms, got: %s", stderr)
+	}
+}
+
 // TestRepoOverrideWithHost covers tier 0.3: -R takes [HOST/]OWNER/REPO and
 // rejects anything else instead of silently splitting it wrong.
 func TestRepoOverrideWithHost(t *testing.T) {

@@ -3,7 +3,6 @@ package issue
 import (
 	"fmt"
 	"os"
-	"strconv"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 	"github.com/spf13/cobra"
@@ -14,7 +13,7 @@ import (
 
 type editOptions struct {
 	Factory         *cmdutil.Factory
-	Number          string
+	Args            []string
 	Title           string
 	Body            string
 	BodyFile        string
@@ -30,8 +29,9 @@ func NewCmdEdit(f *cmdutil.Factory) *cobra.Command {
 	opts := &editOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:   "edit <number>",
+		Use:   "edit " + cmdutil.IssueRefSpec,
 		Short: "Edit an issue",
+		Long:  "Edit an issue.\n\n" + cmdutil.IssueRefHelp,
 		Example: `  $ fj issue edit 42 --title "New title"
   $ fj issue edit 42 --body "Updated description"
   $ fj issue edit 42 --add-label bug --remove-label wontfix
@@ -40,7 +40,7 @@ func NewCmdEdit(f *cmdutil.Factory) *cobra.Command {
   $ fj issue edit 42 --json`,
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.Number = args[0]
+			opts.Args = args
 			if opts.BodyFile != "" {
 				body, err := cmdutil.ReadBodyFromFile(opts.BodyFile)
 				if err != nil {
@@ -66,14 +66,9 @@ func NewCmdEdit(f *cmdutil.Factory) *cobra.Command {
 }
 
 func editRun(opts *editOptions) error {
-	repo, err := opts.Factory.BaseRepo()
+	repo, index, err := opts.Factory.IssueNumber(opts.Args)
 	if err != nil {
 		return err
-	}
-
-	index, err := strconv.ParseInt(opts.Number, 10, 64)
-	if err != nil {
-		return cmdutil.FlagErrorf("invalid issue number: %s", opts.Number)
 	}
 
 	client, err := opts.Factory.ClientForRepo(repo)

@@ -58,14 +58,9 @@ If you already know which review the comment belongs to (e.g. from
 }
 
 func viewRun(opts *viewOptions) error {
-	repo, err := opts.Factory.BaseRepo()
+	repo, index, err := opts.Factory.PRNumber([]string{opts.Number})
 	if err != nil {
 		return err
-	}
-
-	index, err := strconv.ParseInt(opts.Number, 10, 64)
-	if err != nil {
-		return cmdutil.FlagErrorf("invalid pull request number: %s", opts.Number)
 	}
 
 	commentID, err := strconv.ParseInt(opts.CommentID, 10, 64)
