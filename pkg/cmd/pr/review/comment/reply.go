@@ -3,7 +3,6 @@ package comment
 import (
 	"fmt"
 	"os"
-	"strconv"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 	"github.com/spf13/cobra"
@@ -78,14 +77,14 @@ func replyRun(opts *replyOptions) error {
 		return err
 	}
 
-	index, err := strconv.ParseInt(opts.Number, 10, 64)
+	index, err := cmdutil.ParseNumber(opts.Number, "pull request number")
 	if err != nil {
-		return cmdutil.FlagErrorf("invalid pull request number: %s", opts.Number)
+		return err
 	}
 
-	commentID, err := strconv.ParseInt(opts.CommentID, 10, 64)
+	commentID, err := cmdutil.ParseNumber(opts.CommentID, "comment id")
 	if err != nil {
-		return cmdutil.FlagErrorf("invalid comment id: %s", opts.CommentID)
+		return err
 	}
 
 	client, err := opts.Factory.ClientForRepo(repo)
