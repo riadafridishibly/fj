@@ -56,7 +56,11 @@ func (f *Factory) BaseRepo() (Repo, error) {
 }
 
 // RepoFromArg resolves an explicit [HOST/]OWNER/REPO selector, filling in
-// the configured default host when the selector omits it.
+// the host when the selector omits it: the host of the current clone first,
+// then the configured default. A two-segment selector reads as "another
+// repository on the host I am already working against", so standing in a
+// clone beats the default_host key; outside a git repository the lookup
+// simply falls through.
 func (f *Factory) RepoFromArg(name string) (Repo, error) {
 	repo, err := RepoFromFullName(name)
 	if err != nil {
@@ -68,6 +72,10 @@ func (f *Factory) RepoFromArg(name string) (Repo, error) {
 	cfg, err := f.Config()
 	if err != nil {
 		return Repo{}, err
+	}
+	if local, err := RepoFromGitRemotes(cfg); err == nil {
+		repo.Host = local.Host
+		return repo, nil
 	}
 	_, host, err := cfg.DefaultHost()
 	if err != nil {
