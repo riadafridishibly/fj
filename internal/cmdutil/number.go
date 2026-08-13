@@ -60,7 +60,7 @@ func (f *Factory) IssueNumber(repo Repo, args []string) (int64, Repo, error) {
 	if len(args) == 0 {
 		return 0, repo, FlagErrorf("an issue number is required")
 	}
-	index, err := parseNumber(args[0], "issue")
+	index, err := ParseNumber(args[0], "issue number")
 	return index, repo, err
 }
 
@@ -71,7 +71,7 @@ func (f *Factory) RequiredPRNumber(repo Repo, args []string) (int64, Repo, error
 	if len(args) == 0 {
 		return 0, repo, FlagErrorf("a pull request number is required")
 	}
-	index, err := parseNumber(args[0], "pull request")
+	index, err := ParseNumber(args[0], "pull request number")
 	return index, repo, err
 }
 
@@ -82,16 +82,20 @@ func (f *Factory) RequiredPRNumber(repo Repo, args []string) (int64, Repo, error
 // branch's pull request was opened from a fork against upstream.
 func (f *Factory) PRNumber(repo Repo, args []string) (int64, Repo, error) {
 	if len(args) > 0 {
-		index, err := parseNumber(args[0], "pull request")
+		index, err := ParseNumber(args[0], "pull request number")
 		return index, repo, err
 	}
 	return f.currentBranchPR(repo)
 }
 
-func parseNumber(arg, noun string) (int64, error) {
+// ParseNumber parses a positional index. Anything that is not a positive
+// integer is a usage error, so a typo exits 2 instead of reaching the API and
+// coming back as a 404. label names the value in the message, for example
+// "issue number" or "review id".
+func ParseNumber(arg, label string) (int64, error) {
 	index, err := strconv.ParseInt(arg, 10, 64)
 	if err != nil || index < 1 {
-		return 0, FlagErrorf("invalid %s number: %s", noun, arg)
+		return 0, FlagErrorf("invalid %s: %s", label, arg)
 	}
 	return index, nil
 }
@@ -107,6 +111,12 @@ func (f *Factory) currentBranchPR(repo Repo) (int64, Repo, error) {
 		return 0, repo, err
 	}
 
+	return branchPR(client, repo, branch)
+}
+
+// branchPR resolves branch's open pull request, looking first in repo and
+// then, when repo is a fork, in the repository it was forked from.
+func branchPR(client *forgejo.Client, repo Repo, branch string) (int64, Repo, error) {
 	index, found, err := findBranchPR(client, repo, repo, branch)
 	if err != nil {
 		return 0, repo, err
@@ -115,10 +125,10 @@ func (f *Factory) currentBranchPR(repo Repo) (int64, Repo, error) {
 		return index, repo, nil
 	}
 
-	parent, err := parentRepo(client, repo)
-	if err != nil {
-		return 0, repo, err
-	}
+	// The fork fallback is best-effort: when the parent lookup fails there is
+	// no parent to search, which is the stable no-pull-request message rather
+	// than an unrelated API error.
+	parent := parentRepo(client, repo)
 	if parent == nil {
 		return 0, repo, noBranchPRError(branch, repo.FullName())
 	}
@@ -139,16 +149,14 @@ func noBranchPRError(branch, searched string) error {
 	return fmt.Errorf("no open pull request found for branch %q in %s", branch, searched)
 }
 
-// parentRepo returns the repository repo was forked from, or nil.
-func parentRepo(client *forgejo.Client, repo Repo) (*Repo, error) {
+// parentRepo returns the repository repo was forked from, or nil when it is
+// not a fork or the lookup failed.
+func parentRepo(client *forgejo.Client, repo Repo) *Repo {
 	r, _, err := client.GetRepo(repo.Owner, repo.Name)
-	if err != nil {
-		return nil, fmt.Errorf("getting repository %s: %w", repo.FullName(), err)
+	if err != nil || r.Parent == nil || r.Parent.Owner == nil {
+		return nil
 	}
-	if r.Parent == nil || r.Parent.Owner == nil {
-		return nil, nil
-	}
-	return &Repo{Host: repo.Host, Owner: r.Parent.Owner.UserName, Name: r.Parent.Name}, nil
+	return &Repo{Host: repo.Host, Owner: r.Parent.Owner.UserName, Name: r.Parent.Name}
 }
 
 // findBranchPR searches base's open pull requests for the one whose head is

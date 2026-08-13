@@ -49,6 +49,26 @@ func TestPRNumberFromArg(t *testing.T) {
 	}
 }
 
+func TestParseNumber(t *testing.T) {
+	if got, err := ParseNumber("12345", "review id"); err != nil || got != 12345 {
+		t.Fatalf("ParseNumber(12345) = (%d, %v), want (12345, nil)", got, err)
+	}
+
+	for _, arg := range []string{"0", "-1", "1.5", "", "abc"} {
+		_, err := ParseNumber(arg, "review id")
+		if err == nil {
+			t.Errorf("ParseNumber(%q) = nil error, want a usage error", arg)
+			continue
+		}
+		if !IsFlagError(err) {
+			t.Errorf("ParseNumber(%q) error is not a FlagError: %v", arg, err)
+		}
+		if want := "invalid review id: " + arg; err.Error() != want {
+			t.Errorf("ParseNumber(%q) error = %q, want %q", arg, err, want)
+		}
+	}
+}
+
 func TestIssueNumberRequiresArg(t *testing.T) {
 	f := &Factory{}
 	if _, _, err := f.IssueNumber(Repo{}, nil); err == nil {
