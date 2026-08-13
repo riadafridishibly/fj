@@ -26,9 +26,9 @@ func NewCmdList(f *cmdutil.Factory, k Kind) *cobra.Command {
 		Use:     "list " + k.Resolver.ArgSpec(k.Arg),
 		Short:   "List comments on " + articleA(k.Noun) + " " + k.Noun,
 		Aliases: []string{"ls"},
-		Example: fmt.Sprintf(`  $ %s list 42
+		Example: k.example(`  $ %s list 42
   $ %s list 42 --limit 100
-  $ %s list 42 --json`, k.CLI, k.CLI, k.CLI),
+  $ %s list 42 --json`, `  $ %s list`),
 		Args: k.Resolver.Args(),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Args = args

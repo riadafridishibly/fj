@@ -23,9 +23,9 @@ func NewCmdCreate(f *cmdutil.Factory, k Kind) *cobra.Command {
 	cmd := newCreateCmd(f, k)
 	cmd.Use = "create " + k.Resolver.ArgSpec(k.Arg)
 	cmd.Short = "Add a comment to " + articleA(k.Noun) + " " + k.Noun
-	cmd.Example = fmt.Sprintf(`  $ %s create 42 --body "This is a comment"
+	cmd.Example = k.example(`  $ %s create 42 --body "This is a comment"
   $ %s create 42 --body-file comment.md
-  $ echo "comment" | %s create 42 --body-file -`, k.CLI, k.CLI, k.CLI)
+  $ echo "comment" | %s create 42 --body-file -`, `  $ %s create --body "This is a comment"`)
 	return cmd
 }
 
@@ -41,6 +41,10 @@ func newCreateCmd(f *cmdutil.Factory, k Kind) *cobra.Command {
 			if cmdutil.IsBareGroupInvocation(cmd, args) {
 				return cmd.Help()
 			}
+			// The group mounts this with the laxer GroupDispatchArgs, which
+			// accepts zero arguments so `fj pr comment --body x` works; the
+			// resolver's own validator is what rejects the same spelling for
+			// issues, with usage.
 			if err := k.Resolver.Args()(cmd, args); err != nil {
 				return err
 			}

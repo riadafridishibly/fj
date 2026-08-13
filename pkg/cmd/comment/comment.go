@@ -6,6 +6,7 @@ package comment
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -28,6 +29,17 @@ type Kind struct {
 	Resolver cmdutil.NumberResolver
 }
 
+// example renders help examples. Every %s is the command prefix; the
+// implicit block is kept only for the kind whose number is optional, so
+// `fj issue comment` never advertises a form it rejects.
+func (k Kind) example(explicit, implicit string) string {
+	text := explicit
+	if k.Resolver.Optional {
+		text += "\n" + implicit
+	}
+	return strings.ReplaceAll(text, "%s", k.CLI)
+}
+
 // NewCmdComment returns the `comment` parent with CRUD subcommands. gh
 // spells comments as a leaf verb — `gh issue comment 42 --body x` — so the
 // group itself also posts a comment, dispatching to `create`.
@@ -39,9 +51,9 @@ func NewCmdComment(f *cmdutil.Factory, k Kind) *cobra.Command {
 	cmd.Long = fmt.Sprintf(
 		"Manage %s comments.\n\nWith a body flag the command adds a comment, exactly as %s create does.",
 		k.Noun, k.CLI)
-	cmd.Example = fmt.Sprintf(`  $ %s 42 --body "This is a comment"
+	cmd.Example = k.example(`  $ %s 42 --body "This is a comment"
   $ %s list 42
-  $ %s edit 12345 --body "Updated comment"`, k.CLI, k.CLI, k.CLI)
+  $ %s edit 12345 --body "Updated comment"`, `  $ %s --body "This is a comment"`)
 
 	cmd.AddCommand(NewCmdCreate(f, k))
 	cmd.AddCommand(NewCmdList(f, k))
