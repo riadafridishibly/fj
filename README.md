@@ -66,8 +66,12 @@ You can also set `FJ_TOKEN` to override the token for any command.
 
 `fj` auto-detects the repository from your git remotes. Use `-R [HOST/]OWNER/REPO` to override.
 
-Pull request commands take the number as an optional argument: with it omitted,
-`fj` uses the open pull request for the checked-out branch.
+Some pull request commands take the number as an optional argument: with it
+omitted, `pr view`, `pr diff`, `pr edit`, `pr merge`, `pr close`, `pr comment`,
+`pr review`, `pr review list`, and `pr review comment list` use the open pull
+request for the checked-out branch. In that implicit form, `pr merge` and
+`pr close` report the pull request they resolved and require `--yes` to act on
+it. `pr checkout` always requires the number.
 
 ### Repositories
 
@@ -126,7 +130,9 @@ fj pr view 10 --show-timeline=false       # View PR #10 without events
 fj pr view 10 --timeline-exclude commits  # Hide commit references
 fj pr create --title "Fix" --body "…"     # Create a PR
 fj pr merge 10                            # Merge a PR
+fj pr merge --yes                         # Merge the current branch's PR
 fj pr close 10                            # Close a PR
+fj pr close --yes                         # Close the current branch's PR
 fj pr diff 10                             # View PR diff
 fj pr checkout 10                         # Check out a PR locally
 fj pr comment 10 --body "LGTM"            # Comment on a PR
