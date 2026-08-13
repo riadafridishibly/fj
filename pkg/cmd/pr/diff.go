@@ -3,7 +3,6 @@ package pr
 import (
 	"fmt"
 	"os"
-	"strconv"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 	"github.com/spf13/cobra"
@@ -13,20 +12,22 @@ import (
 
 type diffOptions struct {
 	Factory *cmdutil.Factory
-	Number  string
+	Args    []string
 }
 
 func NewCmdDiff(f *cmdutil.Factory) *cobra.Command {
 	opts := &diffOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:   "diff <number>",
+		Use:   "diff [<number>]",
 		Short: "View the diff of a pull request",
-		Example: `  $ fj pr diff 42
+		Long:  "View the diff of a pull request. With no number, the pull request for the current branch is used.",
+		Example: `  $ fj pr diff
+  $ fj pr diff 42
   $ fj pr diff 42 | less`,
-		Args: cmdutil.ExactArgs(1),
+		Args: cmdutil.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.Number = args[0]
+			opts.Args = args
 			return diffRun(opts)
 		},
 	}
@@ -40,9 +41,9 @@ func diffRun(opts *diffOptions) error {
 		return err
 	}
 
-	index, err := strconv.ParseInt(opts.Number, 10, 64)
+	index, repo, err := opts.Factory.PRNumber(repo, opts.Args)
 	if err != nil {
-		return cmdutil.FlagErrorf("invalid pull request number: %s", opts.Number)
+		return err
 	}
 
 	client, err := opts.Factory.ClientForRepo(repo)

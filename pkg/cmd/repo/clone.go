@@ -21,10 +21,11 @@ func NewCmdClone(f *cmdutil.Factory) *cobra.Command {
 	opts := &cloneOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:   "clone <owner/repo> [<directory>]",
+		Use:   "clone <[HOST/]OWNER/REPO> [<directory>]",
 		Short: "Clone a repository locally",
 		Example: `  $ fj repo clone owner/repo
-  $ fj repo clone owner/repo my-directory`,
+  $ fj repo clone owner/repo my-directory
+  $ fj repo clone forgejo.example.com/owner/repo`,
 		Args: cmdutil.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Repo = args[0]
@@ -44,16 +45,6 @@ func cloneRun(opts *cloneOptions) error {
 		return err
 	}
 
-	_, hostname, err := cfg.DefaultHost()
-	if err != nil {
-		return err
-	}
-
-	host, err := cfg.HostByName(hostname)
-	if err != nil {
-		return err
-	}
-
 	// If it's already a full URL, clone directly
 	if strings.HasPrefix(opts.Repo, "http://") || strings.HasPrefix(opts.Repo, "https://") || strings.HasPrefix(opts.Repo, "git@") {
 		if err := git.Clone(opts.Repo, opts.Directory); err != nil {
@@ -62,12 +53,17 @@ func cloneRun(opts *cloneOptions) error {
 		return nil
 	}
 
-	repo, err := cmdutil.RepoFromFullName(opts.Repo)
+	repo, err := opts.Factory.RepoFromArg(opts.Repo)
 	if err != nil {
 		return err
 	}
 
-	client, err := opts.Factory.Client(hostname)
+	host, err := cfg.HostByName(repo.Host)
+	if err != nil {
+		return err
+	}
+
+	client, err := opts.Factory.ClientForRepo(repo)
 	if err != nil {
 		return err
 	}

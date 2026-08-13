@@ -20,8 +20,9 @@ type Factory struct {
 	// RepoOverride is set by the -R flag
 	RepoOverride string
 
-	// HostOverride is set by the --hostname flag on some commands
-	HostOverride string
+	// clients memoizes API clients by hostname, so an invocation that first
+	// resolves a pull request and then acts on it shares one client.
+	clients map[string]*forgejo.Client
 }
 
 func NewFactory() *Factory {
@@ -48,29 +49,47 @@ func (f *Factory) BaseRepo() (Repo, error) {
 	}
 
 	if f.RepoOverride != "" {
-		repo, err := RepoFromFullName(f.RepoOverride)
-		if err != nil {
-			return Repo{}, err
-		}
-		// If no host on the repo, use default or override
-		if repo.Host == "" {
-			if f.HostOverride != "" {
-				repo.Host = f.HostOverride
-			} else {
-				_, host, err := cfg.DefaultHost()
-				if err != nil {
-					return Repo{}, err
-				}
-				repo.Host = host
-			}
-		}
-		return repo, nil
+		return f.RepoFromArg(f.RepoOverride)
 	}
 
 	return RepoFromGitRemotes(cfg)
 }
 
+// RepoFromArg resolves an explicit [HOST/]OWNER/REPO selector, filling in
+// the host when the selector omits it: the host of the current clone first,
+// then the configured default. A two-segment selector reads as "another
+// repository on the host I am already working against", so standing in a
+// clone beats the default_host key; outside a git repository the lookup
+// simply falls through.
+func (f *Factory) RepoFromArg(name string) (Repo, error) {
+	repo, err := RepoFromFullName(name)
+	if err != nil {
+		return Repo{}, err
+	}
+	if repo.Host != "" {
+		return repo, nil
+	}
+	cfg, err := f.Config()
+	if err != nil {
+		return Repo{}, err
+	}
+	if local, err := RepoFromGitRemotes(cfg); err == nil {
+		repo.Host = local.Host
+		return repo, nil
+	}
+	_, host, err := cfg.DefaultHost()
+	if err != nil {
+		return Repo{}, err
+	}
+	repo.Host = host
+	return repo, nil
+}
+
 func (f *Factory) Client(hostname string) (*forgejo.Client, error) {
+	if client, ok := f.clients[hostname]; ok {
+		return client, nil
+	}
+
 	cfg, err := f.Config()
 	if err != nil {
 		return nil, err
@@ -97,7 +116,15 @@ func (f *Factory) Client(hostname string) (*forgejo.Client, error) {
 		scheme = "http"
 	}
 	baseURL := fmt.Sprintf("%s://%s", scheme, hostname)
-	return NewForgejoClient(baseURL, token)
+	client, err := NewForgejoClient(baseURL, token)
+	if err != nil {
+		return nil, err
+	}
+	if f.clients == nil {
+		f.clients = make(map[string]*forgejo.Client)
+	}
+	f.clients[hostname] = client
+	return client, nil
 }
 
 // NewForgejoClient builds a forgejo.Client with fj's standard options

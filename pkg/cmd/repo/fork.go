@@ -25,7 +25,7 @@ func NewCmdFork(f *cmdutil.Factory) *cobra.Command {
 	opts := &forkOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:   "fork [<owner/repo>]",
+		Use:   "fork [<[HOST/]OWNER/REPO>]",
 		Short: "Create a fork of a repository",
 		Example: `  $ fj repo fork owner/repo
   $ fj repo fork owner/repo --org myorg
@@ -53,19 +53,10 @@ func forkRun(opts *forkOptions) error {
 	var err error
 
 	if opts.Repo != "" {
-		repo, err = cmdutil.RepoFromFullName(opts.Repo)
+		repo, err = opts.Factory.RepoFromArg(opts.Repo)
 		if err != nil {
 			return err
 		}
-		cfg, err := opts.Factory.Config()
-		if err != nil {
-			return err
-		}
-		_, host, err := cfg.DefaultHost()
-		if err != nil {
-			return err
-		}
-		repo.Host = host
 	} else {
 		repo, err = opts.Factory.BaseRepo()
 		if err != nil {

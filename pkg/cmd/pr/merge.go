@@ -3,7 +3,6 @@ package pr
 import (
 	"fmt"
 	"os"
-	"strconv"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 	"github.com/spf13/cobra"
@@ -14,12 +13,13 @@ import (
 
 type mergeOptions struct {
 	Factory      *cmdutil.Factory
-	Number       string
+	Args         []string
 	Method       string
 	Title        string
 	Message      string
 	DeleteBranch bool
 	Auto         bool
+	Yes          bool
 	JSONOutput   bool
 }
 
@@ -27,17 +27,19 @@ func NewCmdMerge(f *cmdutil.Factory) *cobra.Command {
 	opts := &mergeOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:   "merge <number>",
+		Use:   "merge [<number>]",
+		Long:  "Merge a pull request. With no number, the pull request for the current branch is used; that form reports what it resolved and requires --yes.",
 		Short: "Merge a pull request",
 		Example: `  $ fj pr merge 42
+  $ fj pr merge --yes
   $ fj pr merge 42 --squash
   $ fj pr merge 42 --rebase
   $ fj pr merge 42 --delete-branch
   $ fj pr merge 42 --merge --title "Merge feature" --message "Detailed description"
   $ fj pr merge 42 --auto`,
-		Args: cmdutil.ExactArgs(1),
+		Args: cmdutil.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.Number = args[0]
+			opts.Args = args
 
 			// Determine merge method from flags
 			squash, _ := cmd.Flags().GetBool("squash")
@@ -75,6 +77,7 @@ func NewCmdMerge(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVar(&opts.Message, "message", "", "Message for the merge commit")
 	cmd.Flags().BoolVarP(&opts.DeleteBranch, "delete-branch", "d", false, "Delete the branch after merge")
 	cmd.Flags().BoolVar(&opts.Auto, "auto", false, "Merge when all checks pass")
+	cmd.Flags().BoolVar(&opts.Yes, "yes", false, "Confirm merging the pull request resolved from the current branch")
 	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
 
 	return cmd
@@ -86,9 +89,14 @@ func mergeRun(opts *mergeOptions) error {
 		return err
 	}
 
-	index, err := strconv.ParseInt(opts.Number, 10, 64)
+	var index int64
+	if len(opts.Args) == 0 {
+		index, repo, err = confirmedCurrentBranchPR(opts.Factory, repo, opts.Yes, "merge")
+	} else {
+		index, repo, err = opts.Factory.PRNumber(repo, opts.Args)
+	}
 	if err != nil {
-		return cmdutil.FlagErrorf("invalid pull request number: %s", opts.Number)
+		return err
 	}
 
 	client, err := opts.Factory.ClientForRepo(repo)

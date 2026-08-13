@@ -45,14 +45,14 @@ func viewRun(opts *viewOptions) error {
 		return err
 	}
 
-	index, err := strconv.ParseInt(opts.Number, 10, 64)
+	index, err := cmdutil.ParseNumber(opts.Number, "pull request number")
 	if err != nil {
-		return cmdutil.FlagErrorf("invalid pull request number: %s", opts.Number)
+		return err
 	}
 
-	reviewID, err := strconv.ParseInt(opts.ReviewID, 10, 64)
+	reviewID, err := cmdutil.ParseNumber(opts.ReviewID, "review id")
 	if err != nil {
-		return cmdutil.FlagErrorf("invalid review id: %s", opts.ReviewID)
+		return err
 	}
 
 	client, err := opts.Factory.ClientForRepo(repo)

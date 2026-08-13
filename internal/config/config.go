@@ -2,8 +2,11 @@ package config
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -15,6 +18,10 @@ const SchemaJSON = `{
   "description": "Configuration file for the fj Forgejo CLI",
   "type": "object",
   "properties": {
+    "default_host": {
+      "type": "string",
+      "description": "Host to use when a command does not name one; must match a key under hosts"
+    },
     "hosts": {
       "type": "object",
       "description": "Forgejo host configurations",
@@ -57,7 +64,11 @@ type HostConfig struct {
 }
 
 type Config struct {
-	Hosts map[string]*HostConfig `yaml:"hosts" json:"hosts"`
+	// DefaultHostName names the entry in Hosts that commands target when
+	// neither a selector nor a flag picks one. Optional with a single host;
+	// required to disambiguate multiple hosts.
+	DefaultHostName string                 `yaml:"default_host,omitempty" json:"default_host,omitempty"`
+	Hosts           map[string]*HostConfig `yaml:"hosts" json:"hosts"`
 }
 
 func ConfigDir() string {
@@ -115,14 +126,35 @@ func (c *Config) Save() error {
 	return WriteSchema()
 }
 
+// DefaultHost returns the host commands should target when nothing else
+// selects one: the host named by the default_host config key, or the sole
+// configured host. With several hosts and no default_host the choice is
+// ambiguous and an error.
 func (c *Config) DefaultHost() (*HostConfig, string, error) {
 	if len(c.Hosts) == 0 {
 		return nil, "", fmt.Errorf("not logged in to any host. Run 'fj auth login' to authenticate")
+	}
+	if c.DefaultHostName != "" {
+		h, ok := c.Hosts[c.DefaultHostName]
+		if !ok {
+			return nil, "", fmt.Errorf("default_host %q is not a configured host (configured: %s)",
+				c.DefaultHostName, strings.Join(c.hostNames(), ", "))
+		}
+		return h, c.DefaultHostName, nil
+	}
+	if names := c.hostNames(); len(names) > 1 {
+		return nil, "", fmt.Errorf(
+			"multiple hosts configured (%s); pass HOST/OWNER/REPO or set default_host in %s",
+			strings.Join(names, ", "), ConfigPath())
 	}
 	for name, h := range c.Hosts {
 		return h, name, nil
 	}
 	return nil, "", nil // unreachable
+}
+
+func (c *Config) hostNames() []string {
+	return slices.Sorted(maps.Keys(c.Hosts))
 }
 
 func (c *Config) HostByName(name string) (*HostConfig, error) {

@@ -3,7 +3,6 @@ package issue
 import (
 	"fmt"
 	"os"
-	"strconv"
 
 	"github.com/spf13/cobra"
 
@@ -12,7 +11,7 @@ import (
 
 type deleteOptions struct {
 	Factory *cmdutil.Factory
-	Number  string
+	Args    []string
 	Yes     bool
 	DryRun  bool
 }
@@ -27,7 +26,7 @@ func NewCmdDelete(f *cmdutil.Factory) *cobra.Command {
   $ fj issue delete 42 --dry-run`,
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.Number = args[0]
+			opts.Args = args
 			return deleteRun(opts)
 		},
 	}
@@ -48,9 +47,9 @@ func deleteRun(opts *deleteOptions) error {
 		return err
 	}
 
-	index, err := strconv.ParseInt(opts.Number, 10, 64)
+	index, _, err := opts.Factory.IssueNumber(repo, opts.Args)
 	if err != nil {
-		return cmdutil.FlagErrorf("invalid issue number: %s", opts.Number)
+		return err
 	}
 
 	client, err := opts.Factory.ClientForRepo(repo)

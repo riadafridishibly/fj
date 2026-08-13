@@ -14,7 +14,7 @@ import (
 
 type listOptions struct {
 	Factory    *cmdutil.Factory
-	Number     string
+	Args       []string
 	Limit      int
 	JSONOutput bool
 }
@@ -23,15 +23,15 @@ func NewCmdList(f *cmdutil.Factory, k Kind) *cobra.Command {
 	opts := &listOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:     "list <" + k.Arg + ">",
+		Use:     "list " + k.Resolver.ArgSpec(k.Arg),
 		Short:   "List comments on " + articleA(k.Noun) + " " + k.Noun,
 		Aliases: []string{"ls"},
-		Example: fmt.Sprintf(`  $ %s list 42
+		Example: k.example(`  $ %s list 42
   $ %s list 42 --limit 100
-  $ %s list 42 --json`, k.CLI, k.CLI, k.CLI),
-		Args: cmdutil.ExactArgs(1),
+  $ %s list 42 --json`, `  $ %s list`),
+		Args: k.Resolver.Args(),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.Number = args[0]
+			opts.Args = args
 			return listRun(opts, k)
 		},
 	}
@@ -48,9 +48,9 @@ func listRun(opts *listOptions, k Kind) error {
 		return err
 	}
 
-	index, err := strconv.ParseInt(opts.Number, 10, 64)
+	index, repo, err := k.Resolver.Number(opts.Factory, repo, opts.Args)
 	if err != nil {
-		return cmdutil.FlagErrorf("invalid %s number: %s", k.Noun, opts.Number)
+		return err
 	}
 
 	client, err := opts.Factory.ClientForRepo(repo)

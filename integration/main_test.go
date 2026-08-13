@@ -354,6 +354,12 @@ func populateTestData() error {
 
 // runFJ executes the fj binary with the given args and returns stdout, stderr, and error.
 func runFJ(args ...string) (string, string, error) {
+	return runFJIn(os.TempDir(), args...) // temp dir avoids git remote detection
+}
+
+// runFJIn is runFJ with an explicit working directory, for commands whose
+// behaviour depends on the surrounding git repository.
+func runFJIn(dir string, args ...string) (string, string, error) {
 	cmd := exec.Command(fjBinary, args...)
 	cmd.Env = append(
 		os.Environ(),
@@ -361,7 +367,7 @@ func runFJ(args ...string) (string, string, error) {
 		"FJ_INSECURE=1",
 		"NO_COLOR=1",
 	)
-	cmd.Dir = os.TempDir() // avoid git remote detection
+	cmd.Dir = dir
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

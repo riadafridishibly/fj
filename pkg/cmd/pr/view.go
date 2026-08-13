@@ -3,7 +3,6 @@ package pr
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
@@ -15,7 +14,7 @@ import (
 
 type viewOptions struct {
 	Factory         *cmdutil.Factory
-	Number          string
+	Args            []string
 	Comments        bool
 	ShowTimeline    bool
 	TimelineInclude []string
@@ -28,18 +27,20 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 	opts := &viewOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:   "view <number>",
+		Use:   "view [<number>]",
 		Short: "View a pull request",
-		Example: `  $ fj pr view 42
+		Long:  "View a pull request. With no number, the pull request for the current branch is used.",
+		Example: `  $ fj pr view
+  $ fj pr view 42
   $ fj pr view 42 --comments
   $ fj pr view 42 --show-timeline=false
   $ fj pr view 42 --timeline-exclude commits
   $ fj pr view 42 --timeline-include refs --timeline-exclude commits
   $ fj pr view 42 --web
   $ fj pr view 42 --json`,
-		Args: cmdutil.ExactArgs(1),
+		Args: cmdutil.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.Number = args[0]
+			opts.Args = args
 			return viewRun(opts)
 		},
 	}
@@ -59,9 +60,9 @@ func viewRun(opts *viewOptions) error {
 		return err
 	}
 
-	index, err := strconv.ParseInt(opts.Number, 10, 64)
+	index, repo, err := opts.Factory.PRNumber(repo, opts.Args)
 	if err != nil {
-		return cmdutil.FlagErrorf("invalid pull request number: %s", opts.Number)
+		return err
 	}
 
 	timeline, err := cmdutil.NewTimelineFilter(opts.TimelineInclude, opts.TimelineExclude)

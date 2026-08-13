@@ -3,7 +3,6 @@ package comment
 import (
 	"fmt"
 	"os"
-	"strconv"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 	"github.com/spf13/cobra"
@@ -59,9 +58,9 @@ func editRun(opts *editOptions) error {
 		return err
 	}
 
-	id, err := strconv.ParseInt(opts.ID, 10, 64)
+	id, err := cmdutil.ParseNumber(opts.ID, "comment id")
 	if err != nil {
-		return cmdutil.FlagErrorf("invalid comment id: %s", opts.ID)
+		return err
 	}
 
 	client, err := opts.Factory.ClientForRepo(repo)

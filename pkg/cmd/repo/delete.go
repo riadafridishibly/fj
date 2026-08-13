@@ -20,7 +20,7 @@ func NewCmdDelete(f *cmdutil.Factory) *cobra.Command {
 	opts := &deleteOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:   "delete <owner/repo>",
+		Use:   "delete <[HOST/]OWNER/REPO>",
 		Short: "Delete a repository",
 		Example: `  $ fj repo delete owner/repo --yes
   $ fj repo delete owner/repo --dry-run`,
@@ -42,20 +42,10 @@ func deleteRun(opts *deleteOptions) error {
 		return err
 	}
 
-	repo, err := cmdutil.RepoFromFullName(opts.Repo)
+	repo, err := opts.Factory.RepoFromArg(opts.Repo)
 	if err != nil {
 		return err
 	}
-
-	cfg, err := opts.Factory.Config()
-	if err != nil {
-		return err
-	}
-	_, host, err := cfg.DefaultHost()
-	if err != nil {
-		return err
-	}
-	repo.Host = host
 
 	client, err := opts.Factory.ClientForRepo(repo)
 	if err != nil {

@@ -3,7 +3,6 @@ package comment
 import (
 	"fmt"
 	"os"
-	"strconv"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 	"github.com/spf13/cobra"
@@ -14,24 +13,42 @@ import (
 
 type createOptions struct {
 	Factory    *cmdutil.Factory
-	Number     string
+	Args       []string
 	Body       string
 	BodyFile   string
 	JSONOutput bool
 }
 
 func NewCmdCreate(f *cmdutil.Factory, k Kind) *cobra.Command {
+	cmd := newCreateCmd(f, k)
+	cmd.Use = "create " + k.Resolver.ArgSpec(k.Arg)
+	cmd.Short = "Add a comment to " + articleA(k.Noun) + " " + k.Noun
+	cmd.Example = k.example(`  $ %s create 42 --body "This is a comment"
+  $ %s create 42 --body-file comment.md
+  $ echo "comment" | %s create 42 --body-file -`, `  $ %s create --body "This is a comment"`)
+	return cmd
+}
+
+// newCreateCmd builds the command that posts a comment. It backs both the
+// `create` subcommand and the `comment` group itself, so the two cannot
+// drift apart; callers set Use, Short, and Example for their spelling.
+func newCreateCmd(f *cmdutil.Factory, k Kind) *cobra.Command {
 	opts := &createOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:   "create <" + k.Arg + ">",
-		Short: "Add a comment to " + articleA(k.Noun) + " " + k.Noun,
-		Example: fmt.Sprintf(`  $ %s create 42 --body "This is a comment"
-  $ %s create 42 --body-file comment.md
-  $ echo "comment" | %s create 42 --body-file -`, k.CLI, k.CLI, k.CLI),
-		Args: cmdutil.ExactArgs(1),
+		Args: k.Resolver.Args(),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.Number = args[0]
+			if cmdutil.IsBareGroupInvocation(cmd, args) {
+				return cmd.Help()
+			}
+			// The group mounts this with the laxer GroupDispatchArgs, which
+			// accepts zero arguments so `fj pr comment --body x` works; the
+			// resolver's own validator is what rejects the same spelling for
+			// issues, with usage.
+			if err := k.Resolver.Args()(cmd, args); err != nil {
+				return err
+			}
+			opts.Args = args
 			if opts.BodyFile != "" {
 				body, err := cmdutil.ReadBodyFromFile(opts.BodyFile)
 				if err != nil {
@@ -59,9 +76,9 @@ func createRun(opts *createOptions, k Kind) error {
 		return err
 	}
 
-	index, err := strconv.ParseInt(opts.Number, 10, 64)
+	index, repo, err := k.Resolver.Number(opts.Factory, repo, opts.Args)
 	if err != nil {
-		return cmdutil.FlagErrorf("invalid %s number: %s", k.Noun, opts.Number)
+		return err
 	}
 
 	client, err := opts.Factory.ClientForRepo(repo)

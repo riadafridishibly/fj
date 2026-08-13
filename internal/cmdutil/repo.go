@@ -2,6 +2,7 @@ package cmdutil
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/riadafridishibly/fj/internal/config"
@@ -18,12 +19,25 @@ func (r Repo) FullName() string {
 	return r.Owner + "/" + r.Name
 }
 
+// RepoFromFullName parses a repository selector in gh's [HOST/]OWNER/REPO
+// form. The two-segment form leaves Host empty for the caller to fill in
+// from configuration.
 func RepoFromFullName(name string) (Repo, error) {
-	parts := strings.SplitN(name, "/", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return Repo{}, fmt.Errorf("expected OWNER/REPO format, got %q", name)
+	parts := strings.Split(name, "/")
+	if slices.Contains(parts, "") {
+		return Repo{}, invalidRepoName(name)
 	}
-	return Repo{Owner: parts[0], Name: parts[1]}, nil
+	switch len(parts) {
+	case 2:
+		return Repo{Owner: parts[0], Name: parts[1]}, nil
+	case 3:
+		return Repo{Host: parts[0], Owner: parts[1], Name: parts[2]}, nil
+	}
+	return Repo{}, invalidRepoName(name)
+}
+
+func invalidRepoName(name string) error {
+	return fmt.Errorf("expected [HOST/]OWNER/REPO format, got %q", name)
 }
 
 // RepoFromGitRemotes resolves the repository from git remotes by matching

@@ -14,7 +14,7 @@ import (
 
 type listOptions struct {
 	Factory    *cmdutil.Factory
-	Number     string
+	Args       []string
 	Limit      int
 	JSONOutput bool
 }
@@ -23,15 +23,15 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 	opts := &listOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:     "list <number>",
+		Use:     "list [<number>]",
 		Short:   "List reviews on a pull request",
 		Aliases: []string{"ls"},
 		Example: `  $ fj pr review list 42
   $ fj pr review list 42 --limit 100
   $ fj pr review list 42 --json`,
-		Args: cmdutil.ExactArgs(1),
+		Args: cmdutil.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.Number = args[0]
+			opts.Args = args
 			return listRun(opts)
 		},
 	}
@@ -48,9 +48,9 @@ func listRun(opts *listOptions) error {
 		return err
 	}
 
-	index, err := strconv.ParseInt(opts.Number, 10, 64)
+	index, repo, err := opts.Factory.PRNumber(repo, opts.Args)
 	if err != nil {
-		return cmdutil.FlagErrorf("invalid pull request number: %s", opts.Number)
+		return err
 	}
 
 	client, err := opts.Factory.ClientForRepo(repo)

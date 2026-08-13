@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
@@ -19,7 +18,7 @@ import (
 
 type viewOptions struct {
 	Factory         *cmdutil.Factory
-	Number          string
+	Args            []string
 	Comments        bool
 	ShowTimeline    bool
 	TimelineInclude []string
@@ -47,7 +46,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
   $ fj issue view 42 --download --download-dir ./tmp`,
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.Number = args[0]
+			opts.Args = args
 			return viewRun(opts)
 		},
 	}
@@ -69,9 +68,9 @@ func viewRun(opts *viewOptions) error {
 		return err
 	}
 
-	index, err := strconv.ParseInt(opts.Number, 10, 64)
+	index, _, err := opts.Factory.IssueNumber(repo, opts.Args)
 	if err != nil {
-		return cmdutil.FlagErrorf("invalid issue number: %s", opts.Number)
+		return err
 	}
 
 	timeline, err := cmdutil.NewTimelineFilter(opts.TimelineInclude, opts.TimelineExclude)
