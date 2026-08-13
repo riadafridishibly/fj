@@ -20,8 +20,9 @@ type Factory struct {
 	// RepoOverride is set by the -R flag
 	RepoOverride string
 
-	// HostOverride is set by the --hostname flag on some commands
-	HostOverride string
+	// clients memoizes API clients by hostname, so an invocation that first
+	// resolves a pull request and then acts on it shares one client.
+	clients map[string]*forgejo.Client
 }
 
 func NewFactory() *Factory {
@@ -55,18 +56,13 @@ func (f *Factory) BaseRepo() (Repo, error) {
 }
 
 // RepoFromArg resolves an explicit [HOST/]OWNER/REPO selector, filling in
-// the host from --hostname or the configured default when the selector
-// omits it.
+// the configured default host when the selector omits it.
 func (f *Factory) RepoFromArg(name string) (Repo, error) {
 	repo, err := RepoFromFullName(name)
 	if err != nil {
 		return Repo{}, err
 	}
 	if repo.Host != "" {
-		return repo, nil
-	}
-	if f.HostOverride != "" {
-		repo.Host = f.HostOverride
 		return repo, nil
 	}
 	cfg, err := f.Config()
@@ -82,6 +78,10 @@ func (f *Factory) RepoFromArg(name string) (Repo, error) {
 }
 
 func (f *Factory) Client(hostname string) (*forgejo.Client, error) {
+	if client, ok := f.clients[hostname]; ok {
+		return client, nil
+	}
+
 	cfg, err := f.Config()
 	if err != nil {
 		return nil, err
@@ -108,7 +108,15 @@ func (f *Factory) Client(hostname string) (*forgejo.Client, error) {
 		scheme = "http"
 	}
 	baseURL := fmt.Sprintf("%s://%s", scheme, hostname)
-	return NewForgejoClient(baseURL, token)
+	client, err := NewForgejoClient(baseURL, token)
+	if err != nil {
+		return nil, err
+	}
+	if f.clients == nil {
+		f.clients = make(map[string]*forgejo.Client)
+	}
+	f.clients[hostname] = client
+	return client, nil
 }
 
 // NewForgejoClient builds a forgejo.Client with fj's standard options

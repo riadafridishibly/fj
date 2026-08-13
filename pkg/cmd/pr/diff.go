@@ -41,7 +41,7 @@ func diffRun(opts *diffOptions) error {
 		return err
 	}
 
-	index, err := opts.Factory.PRNumber(repo, opts.Args)
+	index, repo, err := opts.Factory.PRNumber(repo, opts.Args)
 	if err != nil {
 		return err
 	}

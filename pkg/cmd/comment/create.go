@@ -36,16 +36,12 @@ func newCreateCmd(f *cmdutil.Factory, k Kind) *cobra.Command {
 	opts := &createOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Args: k.Resolver.Args,
+		Args: k.Resolver.Args(),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// A bare `fj pr comment` names the group, not an intent to
-			// comment, so it gets help instead of a missing-body error.
-			if cmd.HasSubCommands() && len(args) == 0 && cmd.Flags().NFlag() == 0 {
+			if cmdutil.IsBareGroupInvocation(cmd, args) {
 				return cmd.Help()
 			}
-			// The group relaxed its own arity to allow the help case above,
-			// so a kind that requires the number enforces it here instead.
-			if err := k.Resolver.Args(cmd, args); err != nil {
+			if err := k.Resolver.Args()(cmd, args); err != nil {
 				return err
 			}
 			opts.Args = args
@@ -76,7 +72,7 @@ func createRun(opts *createOptions, k Kind) error {
 		return err
 	}
 
-	index, err := k.Resolver.Number(opts.Factory, repo, opts.Args)
+	index, repo, err := k.Resolver.Number(opts.Factory, repo, opts.Args)
 	if err != nil {
 		return err
 	}

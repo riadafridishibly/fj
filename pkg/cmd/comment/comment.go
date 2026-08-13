@@ -33,9 +33,7 @@ type Kind struct {
 // group itself also posts a comment, dispatching to `create`.
 func NewCmdComment(f *cmdutil.Factory, k Kind) *cobra.Command {
 	cmd := newCreateCmd(f, k)
-	// The group takes no argument when it is only naming its subcommands,
-	// so the number is validated by the resolver rather than by cobra.
-	cmd.Args = cmdutil.MaximumNArgs(1)
+	cmd.Args = cmdutil.GroupDispatchArgs
 	cmd.Use = "comment " + k.Resolver.ArgSpec(k.Arg) + " [flags]"
 	cmd.Short = "Manage " + k.Noun + " comments"
 	cmd.Long = fmt.Sprintf(

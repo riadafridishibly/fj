@@ -78,9 +78,7 @@ func newCreateCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Args: cmdutil.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// A bare `fj pr review` names the group, not an intent to
-			// review, so it gets help instead of a missing-state error.
-			if cmd.HasSubCommands() && len(args) == 0 && cmd.Flags().NFlag() == 0 {
+			if cmdutil.IsBareGroupInvocation(cmd, args) {
 				return cmd.Help()
 			}
 			opts.Args = args
@@ -138,7 +136,7 @@ func createRun(opts *createOptions) error {
 		return err
 	}
 
-	index, err := opts.Factory.PRNumber(repo, opts.Args)
+	index, repo, err := opts.Factory.PRNumber(repo, opts.Args)
 	if err != nil {
 		return err
 	}

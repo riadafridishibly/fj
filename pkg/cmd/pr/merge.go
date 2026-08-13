@@ -19,6 +19,7 @@ type mergeOptions struct {
 	Message      string
 	DeleteBranch bool
 	Auto         bool
+	Yes          bool
 	JSONOutput   bool
 }
 
@@ -27,9 +28,10 @@ func NewCmdMerge(f *cmdutil.Factory) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "merge [<number>]",
-		Long:  "Merge a pull request. With no number, the pull request for the current branch is used.",
+		Long:  "Merge a pull request. With no number, the pull request for the current branch is used; that form reports what it resolved and requires --yes.",
 		Short: "Merge a pull request",
 		Example: `  $ fj pr merge 42
+  $ fj pr merge --yes
   $ fj pr merge 42 --squash
   $ fj pr merge 42 --rebase
   $ fj pr merge 42 --delete-branch
@@ -75,6 +77,7 @@ func NewCmdMerge(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVar(&opts.Message, "message", "", "Message for the merge commit")
 	cmd.Flags().BoolVarP(&opts.DeleteBranch, "delete-branch", "d", false, "Delete the branch after merge")
 	cmd.Flags().BoolVar(&opts.Auto, "auto", false, "Merge when all checks pass")
+	cmd.Flags().BoolVar(&opts.Yes, "yes", false, "Confirm merging the pull request resolved from the current branch")
 	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
 
 	return cmd
@@ -86,7 +89,12 @@ func mergeRun(opts *mergeOptions) error {
 		return err
 	}
 
-	index, err := opts.Factory.PRNumber(repo, opts.Args)
+	var index int64
+	if len(opts.Args) == 0 {
+		index, repo, err = confirmedCurrentBranchPR(opts.Factory, repo, opts.Yes, "merge")
+	} else {
+		index, repo, err = opts.Factory.PRNumber(repo, opts.Args)
+	}
 	if err != nil {
 		return err
 	}

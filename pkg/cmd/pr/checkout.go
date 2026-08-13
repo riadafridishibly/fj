@@ -19,11 +19,11 @@ func NewCmdCheckout(f *cmdutil.Factory) *cobra.Command {
 	opts := &checkoutOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:     "checkout [<number>]",
+		Use:     "checkout <number>",
 		Short:   "Check out a pull request locally",
-		Long:    "Check out a pull request locally. With no number, the pull request for the current branch is used.",
+		Long:    "Check out a pull request locally.",
 		Example: `  $ fj pr checkout 42`,
-		Args:    cmdutil.MaximumNArgs(1),
+		Args:    cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Args = args
 			return checkoutRun(opts)
@@ -39,7 +39,7 @@ func checkoutRun(opts *checkoutOptions) error {
 		return err
 	}
 
-	index, err := opts.Factory.PRNumber(repo, opts.Args)
+	index, repo, err := opts.Factory.RequiredPRNumber(repo, opts.Args)
 	if err != nil {
 		return err
 	}
@@ -59,6 +59,10 @@ func checkoutRun(opts *checkoutOptions) error {
 	}
 
 	branchName := pr.Head.Ref
+	if current, err := git.CurrentBranch(); err == nil && current == branchName {
+		fmt.Fprintf(os.Stderr, "Branch '%s' is already checked out\n", branchName)
+		return nil
+	}
 
 	// Fetch the PR branch
 	refSpec := fmt.Sprintf("pull/%d/head:%s", index, branchName)

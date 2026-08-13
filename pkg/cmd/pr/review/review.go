@@ -14,6 +14,7 @@ import (
 // review, dispatching to `create`.
 func NewCmdReview(f *cmdutil.Factory) *cobra.Command {
 	cmd := newCreateCmd(f)
+	cmd.Args = cmdutil.GroupDispatchArgs
 	cmd.Use = "review [<number>] [flags]"
 	cmd.Short = "Manage pull request reviews"
 	cmd.Long = "Manage pull request reviews.\n\n" +

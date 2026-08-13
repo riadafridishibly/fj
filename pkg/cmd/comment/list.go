@@ -29,7 +29,7 @@ func NewCmdList(f *cmdutil.Factory, k Kind) *cobra.Command {
 		Example: fmt.Sprintf(`  $ %s list 42
   $ %s list 42 --limit 100
   $ %s list 42 --json`, k.CLI, k.CLI, k.CLI),
-		Args: k.Resolver.Args,
+		Args: k.Resolver.Args(),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Args = args
 			return listRun(opts, k)
@@ -48,7 +48,7 @@ func listRun(opts *listOptions, k Kind) error {
 		return err
 	}
 
-	index, err := k.Resolver.Number(opts.Factory, repo, opts.Args)
+	index, repo, err := k.Resolver.Number(opts.Factory, repo, opts.Args)
 	if err != nil {
 		return err
 	}

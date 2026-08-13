@@ -7,6 +7,7 @@ require (
 	charm.land/lipgloss/v2 v2.0.5
 	codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3 v3.0.0
 	github.com/spf13/cobra v1.10.2
+	github.com/spf13/pflag v1.0.9
 	github.com/testcontainers/testcontainers-go v0.41.0
 	go.yaml.in/yaml/v3 v3.0.4
 	golang.org/x/term v0.43.0
@@ -92,7 +93,6 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/shirou/gopsutil/v4 v4.26.2 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
-	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
 	github.com/tklauser/numcpus v0.11.0 // indirect

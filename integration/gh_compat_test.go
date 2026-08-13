@@ -3,12 +3,29 @@
 package integration
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os/exec"
 	"slices"
 	"strings"
 	"testing"
+
+	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 )
+
+func exitCode(t *testing.T, err error) int {
+	t.Helper()
+	if err == nil {
+		return 0
+	}
+	var ee *exec.ExitError
+	if !errors.As(err, &ee) {
+		t.Fatalf("fj did not run to completion: %v", err)
+	}
+	return ee.ExitCode()
+}
 
 // gitRepoOnBranch creates a throwaway repository whose only remote points
 // at the test server and whose HEAD is branch. Nothing is fetched: repo
@@ -63,8 +80,132 @@ func TestPRCurrentBranchNoPullRequest(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected failure for a branch with no PR, got:\n%s", stdout)
 	}
-	if !strings.Contains(stderr, "no open pull request found") {
-		t.Errorf("expected a clear no-PR error, got: %s", stderr)
+	// The message prefix is the stable, greppable contract for scripts.
+	if !strings.Contains(stderr, `no open pull request found for branch "branch-without-a-pr"`) {
+		t.Errorf("expected the stable no-PR error, got: %s", stderr)
+	}
+	if code := exitCode(t, err); code != 1 {
+		t.Errorf("no-PR-for-branch exit code = %d, want 1", code)
+	}
+}
+
+// TestUsageErrorExitCodes pins missing/invalid-number usage errors at exit
+// code 2 — the current contract. gh reserves 2 for "cancelled" and 4 for
+// auth failures; renumbering is deferred to the exit-codes slice of the
+// gh-compat work (issue #5).
+func TestUsageErrorExitCodes(t *testing.T) {
+	repo := adminUser + "/test-repo"
+
+	stdout, stderr, err := runFJ("pr", "view", "abc", "-R", repo)
+	if err == nil {
+		t.Fatalf("expected failure for a non-numeric argument, got:\n%s", stdout)
+	}
+	if code := exitCode(t, err); code != 2 {
+		t.Errorf("invalid-number exit code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr, "invalid pull request number") {
+		t.Errorf("expected an invalid-number error, got: %s", stderr)
+	}
+
+	stdout, stderr, err = runFJ("pr", "checkout", "-R", repo)
+	if err == nil {
+		t.Fatalf("expected failure for checkout without a number, got:\n%s", stdout)
+	}
+	if code := exitCode(t, err); code != 2 {
+		t.Errorf("missing-number exit code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr, "Usage:") {
+		t.Errorf("expected usage output for checkout without a number, got: %s", stderr)
+	}
+}
+
+// TestPRCheckoutCurrentBranch covers the short circuit: checking out the
+// pull request whose head is already the checked-out branch must not run
+// git fetch (which would exit 128 refusing to fetch into the current
+// branch).
+func TestPRCheckoutCurrentBranch(t *testing.T) {
+	dir := gitRepoOnBranch(t, "feature-1") // PR #4
+
+	stdout, stderr, err := runFJIn(dir, "pr", "checkout", "4")
+	if err != nil {
+		t.Fatalf("fj pr checkout 4 failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	if !strings.Contains(stderr, "already checked out") {
+		t.Errorf("expected an already-checked-out notice, got: %s", stderr)
+	}
+}
+
+// TestPRMergeCloseImplicitRequireYes covers the confirmation gate: with no
+// number, merge and close report the pull request they resolved from the
+// current branch and refuse to act without --yes.
+func TestPRMergeCloseImplicitRequireYes(t *testing.T) {
+	repo := adminUser + "/test-repo"
+
+	cases := []struct {
+		verb   string
+		branch string
+		pr     string
+	}{
+		{"merge", "feature-1", "#4"},
+		{"close", "feature-2", "#5"},
+	}
+	for _, tc := range cases {
+		dir := gitRepoOnBranch(t, tc.branch)
+
+		stdout, stderr, err := runFJIn(dir, "pr", tc.verb)
+		if err == nil {
+			t.Fatalf("fj pr %s without --yes succeeded:\n%s", tc.verb, stdout)
+		}
+		if code := exitCode(t, err); code != 2 {
+			t.Errorf("pr %s without --yes exit code = %d, want 2", tc.verb, code)
+		}
+		for _, want := range []string{"Resolved pull request " + tc.pr, "--yes"} {
+			if !strings.Contains(stderr, want) {
+				t.Errorf("pr %s stderr missing %q: %s", tc.verb, want, stderr)
+			}
+		}
+	}
+
+	// Neither pull request was touched.
+	for _, number := range []string{"4", "5"} {
+		out := mustRunFJ(t, "pr", "view", number, "-R", repo)
+		if !strings.Contains(out, "State: open") {
+			t.Errorf("PR %s is no longer open:\n%s", number, out)
+		}
+	}
+}
+
+func TestPRCloseImplicitWithYes(t *testing.T) {
+	branch := "close-implicit-yes"
+	if _, _, err := testClient.CreateBranch(adminUser, "test-repo", forgejo.CreateBranchOption{
+		BranchName:    branch,
+		OldBranchName: "main",
+	}); err != nil {
+		t.Fatalf("creating branch: %v", err)
+	}
+	if _, _, err := testClient.CreateFile(adminUser, "test-repo", branch+".txt", forgejo.CreateFileOptions{
+		FileOptions: forgejo.FileOptions{Message: "Add " + branch, BranchName: branch},
+		Content:     base64.StdEncoding.EncodeToString([]byte(branch + "\n")),
+	}); err != nil {
+		t.Fatalf("creating file: %v", err)
+	}
+	pr, _, err := testClient.CreatePullRequest(adminUser, "test-repo", forgejo.CreatePullRequestOption{
+		Head:  branch,
+		Base:  "main",
+		Title: "Close via implicit --yes",
+	})
+	if err != nil {
+		t.Fatalf("creating PR: %v", err)
+	}
+
+	dir := gitRepoOnBranch(t, branch)
+	stdout, stderr, err := runFJIn(dir, "pr", "close", "--yes")
+	if err != nil {
+		t.Fatalf("fj pr close --yes failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	want := fmt.Sprintf("Closed pull request #%d", pr.Index)
+	if !strings.Contains(stderr, want) {
+		t.Errorf("expected %q, got: %s", want, stderr)
 	}
 }
 
@@ -100,12 +241,51 @@ func TestCommentGroupDispatchCurrentBranch(t *testing.T) {
 }
 
 // TestCommentGroupHelp keeps the bare group printing help rather than
-// failing on a missing body.
+// failing on a missing body. Inherited flags like -R do not make an
+// invocation non-bare, so those spellings print help too — consistently
+// across issue comment, pr comment, and pr review.
 func TestCommentGroupHelp(t *testing.T) {
+	repo := adminUser + "/test-repo"
+
 	stdout := mustRunFJ(t, "issue", "comment")
 	for _, want := range []string{"Available Commands:", "create", "--body"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("expected %q in group help:\n%s", want, stdout)
+		}
+	}
+
+	for _, args := range [][]string{
+		{"issue", "comment", "-R", repo},
+		{"pr", "comment", "-R", repo},
+		{"pr", "review", "-R", repo},
+	} {
+		stdout := mustRunFJ(t, args...)
+		if !strings.Contains(stdout, "Available Commands:") {
+			t.Errorf("fj %s: expected group help, got:\n%s", strings.Join(args, " "), stdout)
+		}
+	}
+}
+
+// TestGroupUnknownSubcommand keeps mistyped subcommands from falling
+// through to the group's leaf verb and failing with a misleading
+// missing-flag error.
+func TestGroupUnknownSubcommand(t *testing.T) {
+	repo := adminUser + "/test-repo"
+
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"issue", "comment", "lst", "1", "-R", repo}, `unknown command "lst" for "fj issue comment"`},
+		{[]string{"pr", "comment", "lst", "4", "-R", repo}, `unknown command "lst" for "fj pr comment"`},
+		{[]string{"pr", "review", "lst", "-R", repo}, `unknown command "lst" for "fj pr review"`},
+	} {
+		stdout, stderr, err := runFJ(tc.args...)
+		if err == nil {
+			t.Fatalf("fj %s succeeded, want unknown-command error:\n%s", strings.Join(tc.args, " "), stdout)
+		}
+		if !strings.Contains(stderr, tc.want) {
+			t.Errorf("fj %s stderr = %q, want it to contain %q", strings.Join(tc.args, " "), stderr, tc.want)
 		}
 	}
 }
