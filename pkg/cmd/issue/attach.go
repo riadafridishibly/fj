@@ -52,8 +52,10 @@ command instead of leaving half the files attached.`,
 }
 
 func attachRun(opts *attachOptions) error {
+	// Forgejo indexes issues from 1, so 0 and negatives are rejected here
+	// rather than sent as a path that can only 404 after the upload.
 	index, err := strconv.ParseInt(opts.Number, 10, 64)
-	if err != nil {
+	if err != nil || index < 1 {
 		return cmdutil.FlagErrorf("invalid issue number: %s", opts.Number)
 	}
 
@@ -88,9 +90,16 @@ func attachRun(opts *attachOptions) error {
 		}
 	}
 
-	if opts.JSONOutput && len(attachments) > 0 {
+	// Printed even when nothing landed: a consumer parsing stdout gets an
+	// empty array rather than an empty stream it cannot parse at all.
+	if opts.JSONOutput {
 		if err := output.PrintJSON(os.Stdout, attachments); err != nil {
-			return err
+			// A failed upload is the more useful error to return, and the
+			// notice below still has to report what stayed attached.
+			if uploadErr == nil {
+				return err
+			}
+			fmt.Fprintf(os.Stderr, "writing JSON output: %v\n", err)
 		}
 	}
 
