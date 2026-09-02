@@ -130,7 +130,7 @@ func (opt *ListIssueTimelineOptions) QueryEncode() string {
 // The SDK has no timeline support at all: ListIssueComments covers a
 // different endpoint that returns only plain comments, with no events.
 func (c *Client) ListIssueTimeline(owner, repo string, index int64, opt ListIssueTimelineOptions) ([]*TimelineEvent, error) {
-	path := fmt.Sprintf("/repos/%s/%s/issues/%d/timeline", owner, repo, index)
+	path := repoPath(owner, repo, "/issues/%d/timeline", index)
 	if q := opt.QueryEncode(); q != "" {
 		path += "?" + q
 	}

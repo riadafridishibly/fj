@@ -96,6 +96,7 @@ fj issue close 42                         # Close an issue
 fj issue reopen 42                        # Reopen an issue
 fj issue comment 42 --body "Fixed in …"   # Comment on an issue
 fj issue edit 42 --title "New title"      # Edit an issue
+fj issue attach 42 screenshot.png         # Attach a file, print its URL
 ```
 
 ### Milestones
