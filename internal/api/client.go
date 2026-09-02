@@ -69,21 +69,32 @@ func (c *Client) Get(path string) (*http.Response, error) {
 
 func (c *Client) newRequest(method, path string, body any) (*http.Request, error) {
 	var reader io.Reader
+	var contentType string
 	if body != nil {
 		payload, err := json.Marshal(body)
 		if err != nil {
 			return nil, err
 		}
 		reader = bytes.NewReader(payload)
+		contentType = "application/json"
 	}
-	req, err := http.NewRequest(method, c.baseURL+"/api/v1"+path, reader)
+	return c.newBodyRequest(method, path, reader, contentType)
+}
+
+// newBodyRequest builds an authenticated request against /api/v1<path> whose
+// body is sent verbatim. newRequest wraps it for JSON payloads; callers whose
+// payload is not JSON — a multipart upload, whose Content-Type carries a
+// generated boundary — build the body themselves and use this directly.
+// An empty contentType sets no header, as a bodiless request wants.
+func (c *Client) newBodyRequest(method, path string, body io.Reader, contentType string) (*http.Request, error) {
+	req, err := http.NewRequest(method, c.baseURL+"/api/v1"+path, body)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Authorization", "token "+c.token)
 	req.Header.Set("Accept", "application/json")
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
 	}
 	return req, nil
 }
