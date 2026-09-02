@@ -165,15 +165,49 @@ func TestCreateIssueAttachmentError(t *testing.T) {
 	}
 }
 
-func TestCreateIssueAttachmentRequiresFilename(t *testing.T) {
+// TestCreateIssueAttachmentRejectsFilename covers the names that must never
+// reach the wire: an empty one the endpoint rejects anyway, and control
+// characters, which multipart does not escape and which would therefore write
+// attacker-chosen headers into the part.
+func TestCreateIssueAttachmentRejectsFilename(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Error("request sent despite an empty filename")
+		t.Error("request sent despite a rejected filename")
 	}))
 	defer srv.Close()
 
 	client := NewClient(srv.URL, "sekrit", srv.Client())
+	names := map[string]string{
+		"empty":           "",
+		"newline":         "note.txt\nContent-Type: text/html",
+		"carriage return": "note.txt\r\nContent-Type: text/html",
+		"nul":             "note\x00.txt",
+		"delete":          "note\x7f.txt",
+	}
+	for label, name := range names {
+		t.Run(label, func(t *testing.T) {
+			if _, err := client.CreateIssueAttachment("owner", "repo", 42,
+				strings.NewReader("bytes"), name); err == nil {
+				t.Fatalf("CreateIssueAttachment(%q) error = nil, want a rejection", name)
+			}
+		})
+	}
+}
+
+// TestCreateIssueAttachmentKeepsOrdinaryNames guards the check above from
+// growing teeth it should not have: a quote or a space is legal in a filename
+// and multipart already escapes what it needs to.
+func TestCreateIssueAttachmentKeepsOrdinaryNames(t *testing.T) {
+	var got upload
+	srv := attachmentServer(t, &got)
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "sekrit", srv.Client())
+	name := `my "best" shot.png`
 	if _, err := client.CreateIssueAttachment("owner", "repo", 42,
-		strings.NewReader("bytes"), ""); err == nil {
-		t.Fatal("CreateIssueAttachment() error = nil, want an error for an empty filename")
+		strings.NewReader("bytes"), name); err != nil {
+		t.Fatalf("CreateIssueAttachment(%q) error = %v", name, err)
+	}
+	if got.filename != name {
+		t.Errorf("filename = %q, want %q", got.filename, name)
 	}
 }
