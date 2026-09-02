@@ -83,8 +83,13 @@ func TestMain(m *testing.M) {
 				"FORGEJO__server__HTTP_PORT":             "3000",
 				"FORGEJO__service__DISABLE_REGISTRATION": "true",
 				"FORGEJO__log__LEVEL":                    "Warn",
-				"USER_UID":                               "1000",
-				"USER_GID":                               "1000",
+				// Pinned so the attachment tests do not depend on the image's
+				// default allowlist: the extensions those tests upload are
+				// accepted, and anything else is refused no matter what a
+				// later Forgejo release changes the default to.
+				"FORGEJO__attachment__ALLOWED_TYPES": ".txt,.png,.log",
+				"USER_UID":                           "1000",
+				"USER_GID":                           "1000",
 			},
 			WaitingFor: wait.ForHTTP("/api/v1/version").
 				WithPort("3000/tcp").

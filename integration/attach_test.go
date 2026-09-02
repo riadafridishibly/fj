@@ -163,11 +163,21 @@ func TestIssueAttachValidatesPathsUpFront(t *testing.T) {
 	}
 }
 
-// forgejoMaxAttachmentSize is Forgejo's default [attachment] MAX_SIZE, in
-// MiB. The test container does not override it, so a file comfortably above
-// it is a deterministic way to make one upload fail on the server after an
-// earlier one has already succeeded.
-const forgejoMaxAttachmentSize = 4 << 20
+// writeRejectedFile writes a file the server is guaranteed to refuse: its
+// extension is outside the [attachment] ALLOWED_TYPES allowlist main_test.go
+// pins on the container. The path is valid and holds a readable regular file,
+// so the up-front check passes it and only the upload fails — which is what a
+// partial-failure test needs. Size is not the lever: the issue assets endpoint
+// does not enforce [attachment] MAX_SIZE.
+func writeRejectedFile(t *testing.T, dir string) string {
+	t.Helper()
+
+	path := filepath.Join(dir, "rejected.bin")
+	if err := os.WriteFile(path, []byte("not an allowed type\n"), 0o644); err != nil {
+		t.Fatalf("writing %s: %v", path, err)
+	}
+	return path
+}
 
 // TestIssueAttachPartialFailureJSON is the subtlest case in the command: the
 // first file lands, the second is rejected by the server, and --json is set.
@@ -183,15 +193,10 @@ func TestIssueAttachPartialFailureJSON(t *testing.T) {
 	if err := os.WriteFile(small, []byte("this one lands\n"), 0o644); err != nil {
 		t.Fatalf("writing %s: %v", small, err)
 	}
-	// Oversized, but a valid path holding a readable regular file: the
-	// up-front check passes it, and only the server refuses it.
-	oversized := filepath.Join(dir, "oversized.bin")
-	if err := os.WriteFile(oversized, make([]byte, forgejoMaxAttachmentSize+(1<<20)), 0o644); err != nil {
-		t.Fatalf("writing %s: %v", oversized, err)
-	}
+	rejected := writeRejectedFile(t, dir)
 
 	stdout, stderr, err := runFJ("issue", "attach", strconv.FormatInt(index, 10),
-		small, oversized, "-R", repo, "--json")
+		small, rejected, "-R", repo, "--json")
 	if err == nil {
 		t.Fatalf("expected a non-zero exit when the second upload is refused\nstdout: %s\nstderr: %s", stdout, stderr)
 	}
@@ -215,12 +220,63 @@ func TestIssueAttachPartialFailureJSON(t *testing.T) {
 	if !strings.Contains(stderr, "still attached") {
 		t.Errorf("expected stderr to say the uploaded file stays attached:\n%s", stderr)
 	}
-	if !strings.Contains(stderr, "oversized.bin") {
+	if !strings.Contains(stderr, "rejected.bin") {
 		t.Errorf("expected stderr to name the file that failed:\n%s", stderr)
 	}
 
 	// The attachment fj reported is real, not just an object it printed.
 	if got := fetchAttachment(t, attachments[0].DownloadURL); string(got) != "this one lands\n" {
 		t.Errorf("downloaded content = %q, want %q", got, "this one lands\n")
+	}
+}
+
+// TestIssueAttachTotalFailureJSON covers the case a partial run does not: when
+// the very first upload is refused, --json still has to hand its consumer a
+// parseable empty array rather than an empty stream.
+func TestIssueAttachTotalFailureJSON(t *testing.T) {
+	repo := adminUser + "/test-repo"
+	index := newAttachTarget(t, "Attachment target for total failure")
+
+	rejected := writeRejectedFile(t, t.TempDir())
+
+	stdout, stderr, err := runFJ("issue", "attach", strconv.FormatInt(index, 10),
+		rejected, "-R", repo, "--json")
+	if err == nil {
+		t.Fatalf("expected a non-zero exit when the only upload is refused\nstdout: %s\nstderr: %s", stdout, stderr)
+	}
+
+	var attachments []forgejo.Attachment
+	if jsonErr := json.Unmarshal([]byte(stdout), &attachments); jsonErr != nil {
+		t.Fatalf("parsing --json output: %v\n%s", jsonErr, stdout)
+	}
+	if len(attachments) != 0 {
+		t.Errorf("got %d attachments, want none:\n%s", len(attachments), stdout)
+	}
+	// Nothing landed, so there is nothing to report as still attached.
+	if strings.Contains(stderr, "still attached") {
+		t.Errorf("stderr claims files stayed attached when none uploaded:\n%s", stderr)
+	}
+}
+
+// TestIssueAttachRejectsBadNumber checks that an issue number Forgejo cannot
+// have is refused locally, before any bytes go out.
+func TestIssueAttachRejectsBadNumber(t *testing.T) {
+	repo := adminUser + "/test-repo"
+
+	path := filepath.Join(t.TempDir(), "notes.txt")
+	if err := os.WriteFile(path, []byte("some notes\n"), 0o644); err != nil {
+		t.Fatalf("writing %s: %v", path, err)
+	}
+
+	for _, number := range []string{"0", "-5"} {
+		// "--" so cobra reads a negative number as the argument it is,
+		// not as a shorthand flag.
+		stdout, stderr, err := runFJ("issue", "attach", "-R", repo, "--", number, path)
+		if err == nil {
+			t.Errorf("issue number %s accepted\nstdout: %s\nstderr: %s", number, stdout, stderr)
+		}
+		if !strings.Contains(stderr, "invalid issue number") {
+			t.Errorf("issue number %s: stderr = %q, want it to name the bad number", number, stderr)
+		}
 	}
 }
