@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
-	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type editOptions struct {
@@ -18,7 +17,7 @@ type editOptions struct {
 	NewName     string
 	Color       string
 	Description string
-	JSONOutput  bool
+	JSONOutput  cmdutil.JSONFlags
 }
 
 func NewCmdEdit(f *cmdutil.Factory) *cobra.Command {
@@ -29,7 +28,8 @@ func NewCmdEdit(f *cmdutil.Factory) *cobra.Command {
 		Short: "Edit a label",
 		Example: `  $ fj label edit bug --color "#ff0000"
   $ fj label edit bug --new-name bugfix
-  $ fj label edit bug --description "Something is broken"`,
+  $ fj label edit bug --description "Something is broken"
+  $ fj label edit bug --color "#ff0000" --json color`,
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Name = args[0]
@@ -40,7 +40,7 @@ func NewCmdEdit(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVar(&opts.NewName, "new-name", "", "Rename the label")
 	cmd.Flags().StringVarP(&opts.Color, "color", "c", "", "Change label color (hex)")
 	cmd.Flags().StringVarP(&opts.Description, "description", "d", "", "Change label description")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, labelFields, nil, false)
 
 	return cmd
 }
@@ -89,8 +89,8 @@ func editRun(opts *editOptions) error {
 		return fmt.Errorf("editing label: %w", err)
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, label)
+	if opts.JSONOutput.Enabled() {
+		return opts.JSONOutput.Write(os.Stdout, cmdutil.JSONLabels([]*forgejo.Label{label})[0])
 	}
 
 	fmt.Fprintf(os.Stderr, "✓ Edited label %q\n", label.Name)

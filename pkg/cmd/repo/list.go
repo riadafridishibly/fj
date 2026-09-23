@@ -1,13 +1,17 @@
 package repo
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/url"
 	"os"
 	"strings"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 	"github.com/spf13/cobra"
 
+	"github.com/riadafridishibly/fj/internal/api"
 	"github.com/riadafridishibly/fj/internal/cmdutil"
 	"github.com/riadafridishibly/fj/internal/output"
 )
@@ -19,7 +23,7 @@ type listOptions struct {
 	Visibility string
 	Fork       bool
 	Source     bool
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdList(f *cmdutil.Factory) *cobra.Command {
@@ -32,7 +36,8 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 		Example: `  $ fj repo list
   $ fj repo list --limit 50
   $ fj repo list myorg
-  $ fj repo list --json`,
+  $ fj repo list --json nameWithOwner,visibility
+  $ fj repo list --json name,isFork --jq '.[] | select(.isFork) | .name'`,
 		Args: cmdutil.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
@@ -46,7 +51,7 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVar(&opts.Visibility, "visibility", "", "Filter by visibility: public, private")
 	cmd.Flags().BoolVar(&opts.Fork, "fork", false, "Show only forks")
 	cmd.Flags().BoolVar(&opts.Source, "source", false, "Show only non-forks")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, repoFields, nil, true)
 
 	return cmd
 }
@@ -68,28 +73,25 @@ func listRun(opts *listOptions) error {
 
 	pageSize := min(opts.Limit, 50)
 
-	var allRepos []*forgejo.Repository
+	apiClient, err := opts.Factory.APIClientForHost(hostname)
+	if err != nil {
+		return err
+	}
+	path := "/user/repos"
+	if opts.Owner != "" {
+		path = "/users/" + url.PathEscape(opts.Owner) + "/repos"
+	}
+
+	var allRepos []*apiRepository
 	var totalCount int
 	page := 1
 	for len(allRepos) < opts.Limit {
-		var repos []*forgejo.Repository
-		var resp *forgejo.Response
-		var err error
-
-		if opts.Owner != "" {
-			repos, resp, err = client.ListUserRepos(opts.Owner, forgejo.ListReposOptions{
-				ListOptions: forgejo.ListOptions{Page: page, PageSize: pageSize},
-			})
-		} else {
-			repos, resp, err = client.ListMyRepos(forgejo.ListReposOptions{
-				ListOptions: forgejo.ListOptions{Page: page, PageSize: pageSize},
-			})
-		}
+		repos, total, err := fetchRepos(apiClient, fmt.Sprintf("%s?page=%d&limit=%d", path, page, pageSize))
 		if err != nil {
-			return fmt.Errorf("listing repositories: %w", err)
+			return err
 		}
 		if page == 1 {
-			totalCount = cmdutil.TotalCount(resp)
+			totalCount = total
 		}
 		if len(repos) == 0 {
 			break
@@ -116,8 +118,17 @@ func listRun(opts *listOptions) error {
 		page++
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, allRepos)
+	if opts.JSONOutput.Enabled() {
+		data := make([]map[string]any, len(allRepos))
+		for i, r := range allRepos {
+			// ponytail: assignableUsers, labels, languages, latestRelease and
+			// milestones cost one request per repository each, up to --limit
+			// requests per field.
+			if data[i], err = repoJSON(opts.Factory, hostname, r, &opts.JSONOutput); err != nil {
+				return err
+			}
+		}
+		return opts.JSONOutput.Write(os.Stdout, data)
 	}
 
 	if len(allRepos) == 0 {
@@ -168,4 +179,26 @@ func listRun(opts *listOptions) error {
 	}
 	t.Render(os.Stdout)
 	return nil
+}
+
+// fetchRepos fetches one page of repositories via the raw REST endpoint, since
+// the SDK drops topics, language and the other apiRepository fields. It
+// returns the page and the unfiltered X-Total-Count header.
+func fetchRepos(client *api.Client, path string) ([]*apiRepository, int, error) {
+	resp, err := client.Get(path)
+	if err != nil {
+		return nil, 0, fmt.Errorf("listing repositories: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return nil, 0, fmt.Errorf("listing repositories: %s: %s", resp.Status, strings.TrimSpace(string(body)))
+	}
+
+	var repos []*apiRepository
+	if err := json.NewDecoder(resp.Body).Decode(&repos); err != nil {
+		return nil, 0, fmt.Errorf("decoding repositories: %w", err)
+	}
+	return repos, cmdutil.TotalCount(&forgejo.Response{Response: resp}), nil
 }

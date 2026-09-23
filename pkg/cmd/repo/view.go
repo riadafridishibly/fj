@@ -7,14 +7,13 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
-	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type viewOptions struct {
 	Factory    *cmdutil.Factory
 	Repo       string
 	Web        bool
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdView(f *cmdutil.Factory) *cobra.Command {
@@ -26,7 +25,8 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 		Example: `  $ fj repo view
   $ fj repo view owner/repo
   $ fj repo view --web
-  $ fj repo view --json`,
+  $ fj repo view --json nameWithOwner,defaultBranchRef
+  $ fj repo view --json owner --jq .owner.login`,
 		Args: cmdutil.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
@@ -37,7 +37,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 	}
 
 	cmdutil.AddWebFlag(cmd, &opts.Web)
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, repoFields, nil, true)
 
 	return cmd
 }
@@ -61,22 +61,21 @@ func viewRun(opts *viewOptions) error {
 		}
 	}
 
-	client, err := opts.Factory.ClientForRepo(repo)
+	r, err := getRepo(opts.Factory, repo)
 	if err != nil {
 		return err
-	}
-
-	r, _, err := client.GetRepo(repo.Owner, repo.Name)
-	if err != nil {
-		return fmt.Errorf("getting repository: %w", err)
 	}
 
 	if opts.Web {
 		return cmdutil.OpenInBrowser(r.HTMLURL)
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, r)
+	if opts.JSONOutput.Enabled() {
+		data, err := repoJSON(opts.Factory, repo.Host, r, &opts.JSONOutput)
+		if err != nil {
+			return err
+		}
+		return opts.JSONOutput.Write(os.Stdout, data)
 	}
 
 	fmt.Fprintf(os.Stdout, "%s\n", r.FullName)

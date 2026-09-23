@@ -9,7 +9,6 @@ import (
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
 	"github.com/riadafridishibly/fj/internal/git"
-	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type forkOptions struct {
@@ -18,7 +17,7 @@ type forkOptions struct {
 	Org        string
 	ForkName   string
 	Clone      bool
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdFork(f *cmdutil.Factory) *cobra.Command {
@@ -30,7 +29,8 @@ func NewCmdFork(f *cmdutil.Factory) *cobra.Command {
 		Example: `  $ fj repo fork owner/repo
   $ fj repo fork owner/repo --org myorg
   $ fj repo fork owner/repo --clone
-  $ fj repo fork`,
+  $ fj repo fork
+  $ fj repo fork owner/repo --json nameWithOwner,parent`,
 		Args: cmdutil.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
@@ -43,7 +43,7 @@ func NewCmdFork(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVarP(&opts.Org, "org", "o", "", "Fork into an organization")
 	cmd.Flags().StringVar(&opts.ForkName, "fork-name", "", "Name for the forked repository")
 	cmd.Flags().BoolVar(&opts.Clone, "clone", false, "Clone the fork after creating it")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, repoFields, nil, false)
 
 	return cmd
 }
@@ -85,8 +85,8 @@ func forkRun(opts *forkOptions) error {
 		return fmt.Errorf("forking repository: %w", err)
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, forked)
+	if opts.JSONOutput.Enabled() {
+		return writeRepo(opts.Factory, repo.Host, forked.FullName, &opts.JSONOutput)
 	}
 
 	fmt.Fprintf(os.Stdout, "%s\n", forked.HTMLURL)

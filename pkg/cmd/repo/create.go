@@ -9,7 +9,6 @@ import (
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
 	"github.com/riadafridishibly/fj/internal/git"
-	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type createOptions struct {
@@ -22,7 +21,7 @@ type createOptions struct {
 	License       string
 	DefaultBranch string
 	Org           string
-	JSONOutput    bool
+	JSONOutput    cmdutil.JSONFlags
 }
 
 func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
@@ -35,7 +34,7 @@ func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
   $ fj repo create my-project --private --description "My project"
   $ fj repo create my-project --org myorg
   $ fj repo create my-project --clone
-  $ fj repo create my-project --json`,
+  $ fj repo create my-project --json nameWithOwner,url`,
 		Args: cmdutil.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
@@ -55,7 +54,7 @@ func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVarP(&opts.License, "license", "l", "", "License to use")
 	cmd.Flags().StringVar(&opts.DefaultBranch, "default-branch", "", "Default branch name")
 	cmd.Flags().StringVarP(&opts.Org, "org", "o", "", "Create in an organization")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, repoFields, nil, false)
 
 	return cmd
 }
@@ -91,8 +90,8 @@ func createRun(opts *createOptions) error {
 		return fmt.Errorf("creating repository: %w", err)
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, repo)
+	if opts.JSONOutput.Enabled() {
+		return writeRepo(opts.Factory, hostname, repo.FullName, &opts.JSONOutput)
 	}
 
 	fmt.Fprintf(os.Stdout, "%s\n", repo.HTMLURL)

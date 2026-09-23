@@ -107,3 +107,23 @@ func TestJSONFieldsHelp(t *testing.T) {
 		t.Errorf("fj-only fieldsHelp = %q, want %q", got, want)
 	}
 }
+
+// TestJSONFlagsLong: without the shorthands, -q and -t do not parse, as on
+// gh auth status.
+func TestJSONFlagsLong(t *testing.T) {
+	for _, args := range [][]string{
+		{"--json", "hosts", "--jq", ".hosts"},
+		{"--json", "hosts", "--template", "{{.hosts}}"},
+		{"--json", "hosts", "-q", ".hosts"},
+		{"--json", "hosts", "-t", "{{.hosts}}"},
+	} {
+		var j JSONFlags
+		cmd := &cobra.Command{Use: "status", SilenceErrors: true, SilenceUsage: true, RunE: func(*cobra.Command, []string) error { return nil }}
+		AddJSONFlagsLong(cmd, &j, []string{"hosts"})
+		cmd.SetArgs(args)
+		err := cmd.Execute()
+		if short := strings.HasPrefix(args[2], "-") && !strings.HasPrefix(args[2], "--"); short != (err != nil) {
+			t.Errorf("%v: err = %v", args, err)
+		}
+	}
+}

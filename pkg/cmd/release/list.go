@@ -2,6 +2,7 @@ package release
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
@@ -16,7 +17,7 @@ type listOptions struct {
 	Limit             int
 	ExcludeDrafts     bool
 	ExcludePreRelease bool
-	JSONOutput        bool
+	JSONOutput        cmdutil.JSONFlags
 }
 
 func NewCmdList(f *cmdutil.Factory) *cobra.Command {
@@ -29,7 +30,8 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 		Example: `  $ fj release list
   $ fj release list --limit 50
   $ fj release list --exclude-drafts --exclude-pre-releases
-  $ fj release list --json`,
+  $ fj release list --json tagName,isLatest
+  $ fj release list --json tagName,isDraft --jq '.[] | select(.isDraft) | .tagName'`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return listRun(opts)
 		},
@@ -38,7 +40,7 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().IntVarP(&opts.Limit, "limit", "L", 30, "Maximum number of releases to list")
 	cmd.Flags().BoolVar(&opts.ExcludeDrafts, "exclude-drafts", false, "Exclude draft releases")
 	cmd.Flags().BoolVar(&opts.ExcludePreRelease, "exclude-pre-releases", false, "Exclude pre-releases")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, listFields, listFJFields, true)
 
 	return cmd
 }
@@ -89,8 +91,22 @@ func listRun(opts *listOptions) error {
 		all = all[:opts.Limit]
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, all)
+	if opts.JSONOutput.Enabled() {
+		var latest int64
+		if opts.JSONOutput.Has("isLatest") {
+			rel, resp, err := client.GetLatestRelease(repo.Owner, repo.Name)
+			if err == nil {
+				latest = rel.ID
+			} else if resp == nil || resp.StatusCode != http.StatusNotFound {
+				return fmt.Errorf("getting latest release: %w", err)
+			}
+		}
+		data := make([]map[string]any, len(all))
+		for i, r := range all {
+			data[i] = releaseJSON(r)
+			data[i]["isLatest"] = r.ID == latest
+		}
+		return opts.JSONOutput.Write(os.Stdout, data)
 	}
 
 	if len(all) == 0 {

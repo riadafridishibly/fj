@@ -6,6 +6,11 @@ import (
 	"github.com/riadafridishibly/fj/internal/cmdutil"
 )
 
+// labelFields are gh's label fields that Forgejo can fill. Left out:
+// createdAt, updatedAt and isDefault, which Forgejo lacks, and url, which is
+// an API URL in Forgejo, not gh's web page.
+var labelFields = []string{"color", "description", "id", "name"}
+
 func NewCmdLabel(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "label <command>",

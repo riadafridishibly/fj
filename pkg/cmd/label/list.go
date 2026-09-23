@@ -14,7 +14,7 @@ import (
 type listOptions struct {
 	Factory    *cmdutil.Factory
 	Limit      int
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdList(f *cmdutil.Factory) *cobra.Command {
@@ -25,14 +25,15 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 		Short:   "List labels in a repository",
 		Aliases: []string{"ls"},
 		Example: `  $ fj label list
-  $ fj label list --json`,
+  $ fj label list --json name,color
+  $ fj label list --json name --jq '.[].name'`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return listRun(opts)
 		},
 	}
 
 	cmd.Flags().IntVarP(&opts.Limit, "limit", "L", 30, "Maximum number of labels to list")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, labelFields, nil, true)
 
 	return cmd
 }
@@ -72,8 +73,8 @@ func listRun(opts *listOptions) error {
 		allLabels = allLabels[:opts.Limit]
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, allLabels)
+	if opts.JSONOutput.Enabled() {
+		return opts.JSONOutput.Write(os.Stdout, cmdutil.JSONLabels(allLabels))
 	}
 
 	if len(allLabels) == 0 {

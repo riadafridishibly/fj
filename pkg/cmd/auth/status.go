@@ -9,13 +9,12 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
-	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type statusOptions struct {
 	Factory    *cmdutil.Factory
 	Hostname   string
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdStatus(f *cmdutil.Factory) *cobra.Command {
@@ -26,14 +25,15 @@ func NewCmdStatus(f *cmdutil.Factory) *cobra.Command {
 		Short: "View authentication status",
 		Example: `  $ fj auth status
   $ fj auth status --hostname forgejo.example.com
-  $ fj auth status --json`,
+  $ fj auth status --json hosts
+  $ fj auth status --json hosts --jq '.hosts | add | .[].login'`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return statusRun(opts)
 		},
 	}
 
 	cmd.Flags().StringVar(&opts.Hostname, "hostname", "", "Check status for a specific host")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlagsLong(cmd, &opts.JSONOutput, []string{"hosts"})
 
 	return cmd
 }
@@ -50,11 +50,10 @@ func statusRun(opts *statusOptions) error {
 	}
 
 	type hostStatus struct {
-		Hostname    string `json:"hostname"`
-		User        string `json:"user"`
-		GitProtocol string `json:"git_protocol"`
-		Active      bool   `json:"active"`
-		Error       string `json:"error,omitempty"`
+		Hostname    string
+		User        string
+		GitProtocol string
+		Error       string
 	}
 
 	var statuses []hostStatus
@@ -68,20 +67,16 @@ func statusRun(opts *statusOptions) error {
 		status := hostStatus{
 			Hostname:    name,
 			User:        host.User,
-			GitProtocol: host.GitProtocol,
-			Active:      true,
+			GitProtocol: cfg.GitProtocol(name),
 		}
 
 		// Verify the token still works
-		baseURL := fmt.Sprintf("https://%s", name)
-		client, err := cmdutil.NewForgejoClient(baseURL, host.Token)
+		client, err := cmdutil.NewForgejoClient(cmdutil.BaseURL(name), host.Token)
 		if err != nil {
-			status.Active = false
 			status.Error = err.Error()
 		} else {
 			user, _, err := client.GetMyUserInfo()
 			if err != nil {
-				status.Active = false
 				status.Error = fmt.Sprintf("authentication failed: %s", err)
 			} else {
 				status.User = user.UserName
@@ -91,15 +86,24 @@ func statusRun(opts *statusOptions) error {
 		statuses = append(statuses, status)
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, statuses)
+	// fj keeps one account per host, so each host's one account is active.
+	if opts.JSONOutput.Enabled() {
+		hosts := map[string]any{}
+		for _, s := range statuses {
+			account := map[string]any{"active": true, "gitProtocol": s.GitProtocol, "host": s.Hostname, "login": s.User, "state": "success"}
+			if s.Error != "" {
+				account["state"], account["error"] = "error", s.Error
+			}
+			hosts[s.Hostname] = []map[string]any{account}
+		}
+		return opts.JSONOutput.Write(os.Stdout, map[string]any{"hosts": hosts})
 	}
 
 	for _, s := range statuses {
 		fmt.Fprintf(os.Stdout, "%s\n", s.Hostname)
 		fmt.Fprintf(os.Stdout, "  ✓ Logged in as %s\n", s.User)
 		fmt.Fprintf(os.Stdout, "  ✓ Git protocol: %s\n", s.GitProtocol)
-		if !s.Active {
+		if s.Error != "" {
 			fmt.Fprintf(os.Stdout, "  ✗ Token invalid: %s\n", s.Error)
 		}
 		fmt.Fprintln(os.Stdout)

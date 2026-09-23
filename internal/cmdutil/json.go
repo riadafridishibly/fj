@@ -33,11 +33,29 @@ type JSONFlags struct {
 // fjFields are fj's additions, listed apart in help. It takes over
 // cmd.PreRunE to validate the flags.
 func AddJSONFlags(cmd *cobra.Command, j *JSONFlags, fields, fjFields []string, withTemplate bool) {
-	cmd.Flags().StringSliceVar(&j.Fields, "json", nil, "Output JSON with the specified `fields` (gh field names)")
-	cmd.Flags().StringVarP(&j.jq, "jq", "q", "", "Filter JSON output using a jq `expression`")
+	cmd.Flags().StringVarP(&j.jq, "jq", "q", "", jqUsage)
 	if withTemplate {
-		cmd.Flags().StringVarP(&j.template, "template", "t", "", `Format JSON output using a Go template; see "fj help formatting"`)
+		cmd.Flags().StringVarP(&j.template, "template", "t", "", templateUsage)
 	}
+	addJSONFlag(cmd, j, fields, fjFields)
+}
+
+// AddJSONFlagsLong is AddJSONFlags with --jq and --template but without the
+// -q and -t shorthands, as on gh auth status, where -t is --show-token.
+func AddJSONFlagsLong(cmd *cobra.Command, j *JSONFlags, fields []string) {
+	cmd.Flags().StringVar(&j.jq, "jq", "", jqUsage)
+	cmd.Flags().StringVar(&j.template, "template", "", templateUsage)
+	addJSONFlag(cmd, j, fields, nil)
+}
+
+const (
+	jqUsage       = "Filter JSON output using a jq `expression`"
+	templateUsage = `Format JSON output using a Go template; see "fj help formatting"`
+)
+
+// addJSONFlag adds --json and the validation and help that go with it.
+func addJSONFlag(cmd *cobra.Command, j *JSONFlags, fields, fjFields []string) {
+	cmd.Flags().StringSliceVar(&j.Fields, "json", nil, "Output JSON with the specified `fields` (gh field names)")
 
 	all := slices.Sorted(slices.Values(append(slices.Clone(fields), fjFields...)))
 	cmd.SetFlagErrorFunc(func(c *cobra.Command, err error) error {

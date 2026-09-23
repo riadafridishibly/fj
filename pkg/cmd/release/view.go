@@ -15,7 +15,7 @@ type viewOptions struct {
 	Factory    *cmdutil.Factory
 	Tag        string
 	Web        bool
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdView(f *cmdutil.Factory) *cobra.Command {
@@ -28,7 +28,8 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 		Example: `  $ fj release view
   $ fj release view v1.2.0
   $ fj release view v1.2.0 --web
-  $ fj release view v1.2.0 --json`,
+  $ fj release view v1.2.0 --json tagName,assets
+  $ fj release view --json assets --jq '.assets[].url'`,
 		Args: cmdutil.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
@@ -39,7 +40,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 	}
 
 	cmdutil.AddWebFlag(cmd, &opts.Web)
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, releaseFields, nil, true)
 
 	return cmd
 }
@@ -69,8 +70,8 @@ func viewRun(opts *viewOptions) error {
 		return cmdutil.OpenInBrowser(rel.HTMLURL)
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, rel)
+	if opts.JSONOutput.Enabled() {
+		return opts.JSONOutput.Write(os.Stdout, releaseJSON(rel))
 	}
 
 	title := rel.Title
