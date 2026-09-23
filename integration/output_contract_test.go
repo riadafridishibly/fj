@@ -634,8 +634,10 @@ func TestLabelListJSON(t *testing.T) {
 }
 
 // TestAuthStatusJSON checks gh's auth status shape: accounts keyed by host.
+// FJ_INSECURE reaches only the host named by --hostname or FJ_HOST, so the
+// test names the container's.
 func TestAuthStatusJSON(t *testing.T) {
-	out := mustRunFJ(t, "auth", "status", "--json", "hosts")
+	out := mustRunFJ(t, "auth", "status", "--hostname", forgejoHost, "--json", "hosts")
 	var got struct {
 		Hosts map[string][]map[string]any `json:"hosts"`
 	}
@@ -647,7 +649,7 @@ func TestAuthStatusJSON(t *testing.T) {
 		t.Errorf("hosts = %s", out)
 	}
 
-	out = mustRunFJ(t, "auth", "status", "--json", "hosts", "--jq", ".hosts | add | .[].login")
+	out = mustRunFJ(t, "auth", "status", "--hostname", forgejoHost, "--json", "hosts", "--jq", ".hosts | add | .[].login")
 	if strings.TrimSpace(out) != adminUser {
 		t.Errorf("--jq = %q, want %s", out, adminUser)
 	}

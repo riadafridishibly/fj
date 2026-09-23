@@ -31,6 +31,9 @@ func TestRepoJSONMapping(t *testing.T) {
 			Permissions: &forgejo.Permission{Pull: true}, DefaultMergeStyle: forgejo.MergeStyleFastForwardOnly,
 		}}, "PUBLIC", "READ", "FAST_FORWARD_ONLY", nil, "", ""},
 		{"unarchived keeps no archivedAt", apiRepository{ArchivedAt: time.Unix(0, 0)}, "PUBLIC", "", "", nil, "", ""},
+		{"archived at epoch 0", apiRepository{ArchivedAt: time.Unix(0, 0), Repository: forgejo.Repository{
+			Archived: true, DefaultMergeStyle: "rebase-update-only",
+		}}, "PUBLIC", "", "REBASE_UPDATE_ONLY", nil, "", ""},
 		{"archived mirror", apiRepository{ArchivedAt: archived, Language: "Go", Repository: forgejo.Repository{
 			Archived: true, Mirror: true, OriginalURL: "https://forgejo.example.com/o/r", DefaultMergeStyle: forgejo.MergeStyleSquash,
 		}}, "PUBLIC", "", "SQUASH", "2026-01-02T03:04:05Z", "https://forgejo.example.com/o/r", "Go"},
@@ -38,7 +41,7 @@ func TestRepoJSONMapping(t *testing.T) {
 			"PUBLIC", "", "", nil, "", ""},
 	}
 	for _, tt := range tests {
-		m, err := repoJSON(nil, "", &tt.repo, &cmdutil.JSONFlags{})
+		m, err := repoJSON(nil, nil, &tt.repo, &cmdutil.JSONFlags{})
 		if err != nil {
 			t.Fatal(err)
 		}

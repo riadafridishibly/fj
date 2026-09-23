@@ -153,7 +153,7 @@ fj pr review comment delete 10 4081 --yes                     # Delete (needs --
 
 ### JSON Output
 
-`fj issue list`, `view`, `create` and `edit`, the `fj pr` commands that print a pull request, review or inline comment, `fj repo list`, `view`, `create` and `fork`, `fj release list`, `view`, `create` and `edit`, `fj label list`, `create` and `edit`, and `fj auth status` take gh's formatting flags: `--json <fields>`, `-q/--jq` and (commands that only read) `-t/--template`. Field names and shapes follow gh's, so a gh script reads the output unchanged. Each command's `--help` lists its fields, and `fj help formatting` covers the flags:
+`fj issue list`, `view`, `create` and `edit`, the `fj pr` commands that print a pull request, review or inline comment, `fj repo list`, `view`, `create` and `fork`, `fj release list`, `view`, `create` and `edit`, `fj label list`, `create` and `edit`, and `fj auth status` take gh's formatting flags: `--json <fields>`, `-q/--jq` and (commands that only read) `-t/--template`. `fj auth status`, like gh's, takes `--jq` and `--template` without the `-q` and `-t` shorthands. Field names and shapes follow gh's, so a gh script reads the output unchanged. Each command's `--help` lists its fields, and `fj help formatting` covers the flags:
 
 ```sh
 fj issue list --json number,title,labels

@@ -12,6 +12,7 @@ import (
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 
+	"github.com/riadafridishibly/fj/internal/api"
 	"github.com/riadafridishibly/fj/internal/cmdutil"
 )
 
@@ -27,6 +28,10 @@ var repoFields = []string{
 	"squashMergeAllowed", "stargazerCount", "updatedAt", "url", "viewerCanAdminister",
 	"viewerDefaultMergeMethod", "viewerPermission", "visibility", "watchers",
 }
+
+// costlyFields cost a request per repository each, so they are fetched only
+// when asked for.
+var costlyFields = []string{"assignableUsers", "labels", "languages", "latestRelease", "milestones"}
 
 // apiRepository is forgejo.Repository plus the fields the SDK does not
 // decode.
@@ -51,12 +56,27 @@ func getRepo(f *cmdutil.Factory, repo cmdutil.Repo) (*apiRepository, error) {
 	return r, nil
 }
 
-// repoJSON returns r keyed by gh field name. assignableUsers, labels,
-// languages, latestRelease and milestones cost a request each, so they are
-// fetched only when asked for.
-func repoJSON(f *cmdutil.Factory, host string, r *apiRepository, j *cmdutil.JSONFlags) (map[string]any, error) {
+// repoClients returns the clients repoJSON needs for the costly fields, or
+// nils when j asks for none. A new SDK client fetches /version, so a command
+// makes them once, not once per repository.
+func repoClients(f *cmdutil.Factory, host string, j *cmdutil.JSONFlags) (*forgejo.Client, *api.Client, error) {
+	if !slices.ContainsFunc(costlyFields, j.Has) {
+		return nil, nil, nil
+	}
+	client, err := f.Client(host)
+	if err != nil {
+		return nil, nil, err
+	}
+	apiClient, err := f.APIClientForHost(host)
+	return client, apiClient, err
+}
+
+// repoJSON returns r keyed by gh field name. client and apiClient fetch the
+// costly fields, and may be nil when j asks for none.
+func repoJSON(client *forgejo.Client, apiClient *api.Client, r *apiRepository, j *cmdutil.JSONFlags) (map[string]any, error) {
+	// Forgejo sends epoch 0 for a repository archived before it recorded when.
 	var archivedAt any
-	if r.Archived {
+	if r.Archived && r.ArchivedAt.Unix() > 0 {
 		archivedAt = cmdutil.JSONTime(&r.ArchivedAt)
 	}
 	var mirrorURL string
@@ -121,20 +141,11 @@ func repoJSON(f *cmdutil.Factory, host string, r *apiRepository, j *cmdutil.JSON
 		"watchers":                 map[string]any{"totalCount": r.Watchers},
 	}
 
-	if !j.Has("assignableUsers") && !j.Has("labels") && !j.Has("languages") &&
-		!j.Has("latestRelease") && !j.Has("milestones") {
+	if !slices.ContainsFunc(costlyFields, j.Has) {
 		return m, nil
 	}
 	owner, name, _ := strings.Cut(r.FullName, "/")
-	repo := cmdutil.Repo{Host: host, Owner: owner, Name: name}
-	client, err := f.ClientForRepo(repo)
-	if err != nil {
-		return nil, err
-	}
-	apiClient, err := f.APIClient(repo)
-	if err != nil {
-		return nil, err
-	}
+	repo := cmdutil.Repo{Owner: owner, Name: name}
 	if j.Has("assignableUsers") {
 		users, _, err := client.GetAssignees(owner, name)
 		if err != nil {
@@ -225,9 +236,15 @@ func languagesJSON(langs map[string]int64) []map[string]any {
 	return out
 }
 
-// writeRepo prints the repository after a write, fetched again since the
-// SDK's response lacks the fields apiRepository adds.
-func writeRepo(f *cmdutil.Factory, host, fullName string, j *cmdutil.JSONFlags) error {
+// writeRepo prints the repository after a create or fork, fetched again
+// since the SDK's response lacks the fields apiRepository adds. The
+// repository exists by then, so an error names it: a retry would fail.
+func writeRepo(f *cmdutil.Factory, host, fullName string, j *cmdutil.JSONFlags) (err error) {
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("created %s, but printing it failed: %w", fullName, err)
+		}
+	}()
 	repo, err := cmdutil.RepoFromFullName(fullName)
 	if err != nil {
 		return err
@@ -237,7 +254,11 @@ func writeRepo(f *cmdutil.Factory, host, fullName string, j *cmdutil.JSONFlags) 
 	if err != nil {
 		return err
 	}
-	data, err := repoJSON(f, repo.Host, r, j)
+	client, apiClient, err := repoClients(f, host, j)
+	if err != nil {
+		return err
+	}
+	data, err := repoJSON(client, apiClient, r, j)
 	if err != nil {
 		return err
 	}

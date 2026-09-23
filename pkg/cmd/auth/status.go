@@ -58,6 +58,10 @@ func statusRun(opts *statusOptions) error {
 
 	var statuses []hostStatus
 
+	target := opts.Hostname
+	if target == "" {
+		target = os.Getenv("FJ_HOST")
+	}
 	for _, name := range slices.Sorted(maps.Keys(cfg.Hosts)) {
 		host := cfg.Hosts[name]
 		if opts.Hostname != "" && name != opts.Hostname {
@@ -71,7 +75,7 @@ func statusRun(opts *statusOptions) error {
 		}
 
 		// Verify the token still works
-		client, err := cmdutil.NewForgejoClient(cmdutil.BaseURL(name), host.Token)
+		client, err := cmdutil.NewForgejoClient(statusURL(name, target), host.Token)
 		if err != nil {
 			status.Error = err.Error()
 		} else {
@@ -110,4 +114,14 @@ func statusRun(opts *statusOptions) error {
 	}
 
 	return nil
+}
+
+// statusURL is the URL that checks name's token. FJ_INSECURE applies only to
+// target, the host named by --hostname or FJ_HOST: set for a dev instance, it
+// must not send every other host's token over plain http.
+func statusURL(name, target string) string {
+	if name == target {
+		return cmdutil.BaseURL(name)
+	}
+	return "https://" + name
 }

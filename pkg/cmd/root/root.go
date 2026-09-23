@@ -87,9 +87,10 @@ Repositories, releases and labels differ from gh too. A repository's id is
 numeric, and a release's id and databaseId are the same number. issues and
 pullRequests count open ones only, as gh's do; watchers counts the users
 watching the repository. viewerPermission is ADMIN, WRITE or READ, since
-Forgejo has no MAINTAIN or TRIAGE. viewerDefaultMergeMethod is the
-repository's default merge style: MERGE, REBASE or SQUASH, or for the styles
-only Forgejo has, REBASE_MERGE, FAST_FORWARD_ONLY or MANUALLY_MERGED.
+Forgejo has no MAINTAIN or TRIAGE, and empty when Forgejo sends no
+permissions. viewerDefaultMergeMethod is the repository's default merge
+style: MERGE, REBASE or SQUASH, or for the styles only Forgejo has,
+REBASE_MERGE, FAST_FORWARD_ONLY, MANUALLY_MERGED or REBASE_UPDATE_ONLY.
 release list reads isLatest from Forgejo's latest release, which skips
 drafts and pre-releases. fj auth status lists one account per host.
 
@@ -110,6 +111,7 @@ is printed on one line.
 
 -q/--jq filters the JSON with a jq expression. Strings print raw and other
 values as compact JSON, one result per line. jq need not be installed.
+fj auth status, like gh's, has --jq and --template but not -q or -t.
 
 -t/--template formats the JSON with a Go template (text/template). Both --jq
 and --template need --json; given both, --jq wins. The template can use

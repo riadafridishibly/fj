@@ -121,10 +121,10 @@ func listRun(opts *listOptions) error {
 	if opts.JSONOutput.Enabled() {
 		data := make([]map[string]any, len(allRepos))
 		for i, r := range allRepos {
-			// ponytail: assignableUsers, labels, languages, latestRelease and
-			// milestones cost one request per repository each, up to --limit
-			// requests per field.
-			if data[i], err = repoJSON(opts.Factory, hostname, r, &opts.JSONOutput); err != nil {
+			// ponytail: each costly field costs one request per repository,
+			// so up to --limit per field, and labels and milestones one more
+			// for each full page of 50. Forgejo has no batch endpoint for them.
+			if data[i], err = repoJSON(client, apiClient, r, &opts.JSONOutput); err != nil {
 				return err
 			}
 		}

@@ -68,3 +68,17 @@ func TestStatusJSON(t *testing.T) {
 		t.Errorf("account = %v", a)
 	}
 }
+
+// TestStatusURL: FJ_INSECURE switches only the targeted host to http.
+func TestStatusURL(t *testing.T) {
+	t.Setenv("FJ_INSECURE", "1")
+	for _, tt := range []struct{ name, target, want string }{
+		{"dev.example.com", "dev.example.com", "http://dev.example.com"},
+		{"forgejo.example.com", "dev.example.com", "https://forgejo.example.com"},
+		{"forgejo.example.com", "", "https://forgejo.example.com"},
+	} {
+		if got := statusURL(tt.name, tt.target); got != tt.want {
+			t.Errorf("statusURL(%q, %q) = %q, want %q", tt.name, tt.target, got, tt.want)
+		}
+	}
+}

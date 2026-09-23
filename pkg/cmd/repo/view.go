@@ -71,7 +71,11 @@ func viewRun(opts *viewOptions) error {
 	}
 
 	if opts.JSONOutput.Enabled() {
-		data, err := repoJSON(opts.Factory, repo.Host, r, &opts.JSONOutput)
+		client, apiClient, err := repoClients(opts.Factory, repo.Host, &opts.JSONOutput)
+		if err != nil {
+			return err
+		}
+		data, err := repoJSON(client, apiClient, r, &opts.JSONOutput)
 		if err != nil {
 			return err
 		}
