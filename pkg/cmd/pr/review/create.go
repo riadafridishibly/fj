@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
-	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type createOptions struct {
@@ -32,7 +31,7 @@ type createOptions struct {
 
 	CommentsFile string
 
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
@@ -67,7 +66,8 @@ the old file. Set the unused side to 0 (or omit it).`,
   $ fj pr review create 42 --request-changes --body-file review.md
   $ fj pr review create 42 --comment --comment-path main.go --comment-line 42 --comment-body "rename this"
   $ fj pr review create 42 --approve --comments-file inline.json
-  $ fj pr review create 42 --comment --commit abc123 --body "initial pass"`,
+  $ fj pr review create 42 --comment --commit abc123 --body "initial pass"
+  $ fj pr review create 42 --approve --json id,url`,
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
@@ -92,7 +92,7 @@ the old file. Set the unused side to 0 (or omit it).`,
 	cmd.MarkFlagsMutuallyExclusive("comment-path", "comments-file")
 	cmd.MarkFlagsMutuallyExclusive("comment-line", "comment-old-line")
 
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, reviewFields, reviewFJFields, false)
 
 	return cmd
 }
@@ -145,8 +145,8 @@ func createRun(opts *createOptions) error {
 		return fmt.Errorf("creating review: %w", err)
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, review)
+	if opts.JSONOutput.Enabled() {
+		return opts.JSONOutput.Write(os.Stdout, JSON(review))
 	}
 
 	fmt.Fprintf(os.Stdout, "%s\n", review.HTMLURL)

@@ -9,7 +9,6 @@ import (
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
 	"github.com/riadafridishibly/fj/internal/git"
-	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type createOptions struct {
@@ -23,7 +22,7 @@ type createOptions struct {
 	Labels     []string
 	Milestone  string
 	Draft      bool
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
@@ -37,7 +36,8 @@ func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
   $ fj pr create --title "Fix" --base main --head feature-branch
   $ fj pr create --title "Fix" --label bug --assignee riad
   $ fj pr create --title "WIP" --draft
-  $ fj pr create --title "Fix" --body-file description.md`,
+  $ fj pr create --title "Fix" --body-file description.md
+  $ fj pr create --title "Fix" --json number,url`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if opts.Title == "" {
 				return cmdutil.FlagErrorf("--title is required")
@@ -62,7 +62,7 @@ func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringSliceVarP(&opts.Labels, "label", "l", nil, "Add labels by name")
 	cmd.Flags().StringVarP(&opts.Milestone, "milestone", "m", "", "Add to a milestone by name")
 	cmd.Flags().BoolVarP(&opts.Draft, "draft", "d", false, "Mark as draft/work-in-progress")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, prFields, nil, false)
 
 	return cmd
 }
@@ -131,8 +131,8 @@ func createRun(opts *createOptions) error {
 		return fmt.Errorf("creating pull request: %w", err)
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, pr)
+	if opts.JSONOutput.Enabled() {
+		return writePR(opts.Factory, repo, pr.Index, &opts.JSONOutput)
 	}
 
 	fmt.Fprintf(os.Stdout, "%s\n", pr.HTMLURL)

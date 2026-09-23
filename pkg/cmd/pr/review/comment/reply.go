@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
-	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type replyOptions struct {
@@ -19,7 +18,7 @@ type replyOptions struct {
 	ReviewID   int64
 	Body       string
 	BodyFile   string
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdReply(f *cmdutil.Factory) *cobra.Command {
@@ -43,8 +42,8 @@ know which review holds the comment, pass --review-id to skip the scan.`,
   # Read the reply body from a file (use "-" for stdin)
   $ fj pr review comment reply 70 4081 --body-file reply.md
 
-  # Machine-readable output (includes the new comment id and review_id)
-  $ fj pr review comment reply 70 4081 --body "Done" --json`,
+  # Machine-readable output: the new comment's id and reviewId
+  $ fj pr review comment reply 70 4081 --body "Done" --json id,reviewId`,
 		Args: cmdutil.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
@@ -57,7 +56,7 @@ know which review holds the comment, pass --review-id to skip the scan.`,
 	cmd.Flags().StringVarP(&opts.BodyFile, "body-file", "F", "", "Read body from file (use \"-\" for stdin)")
 	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
 	cmd.Flags().Int64Var(&opts.ReviewID, "review-id", 0, "Known review id (skips the scan)")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, nil, commentFields, false)
 	return cmd
 }
 
@@ -116,8 +115,8 @@ func replyRun(opts *replyOptions) error {
 		return fmt.Errorf("replying to comment #%d: %w", commentID, err)
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, flatComment{PullReviewComment: created, ReviewID: reviewID})
+	if opts.JSONOutput.Enabled() {
+		return opts.JSONOutput.Write(os.Stdout, JSON(created))
 	}
 
 	fmt.Fprintf(os.Stderr, "✓ Replied to comment #%d (new comment #%d)\n", commentID, created.ID)

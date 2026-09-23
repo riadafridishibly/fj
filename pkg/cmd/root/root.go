@@ -73,6 +73,15 @@ text when given --json. Field names and shapes follow gh (GitHub CLI), so a
 script written for gh reads fj's output the same way. Fields GitHub has but
 Forgejo lacks are left out; fields only fj has are listed apart as fj-only.
 One difference: ids are Forgejo's numeric IDs, not GitHub's string node IDs.
+For a command gh lacks, such as fj pr review comment, the names follow gh's
+style.
+
+Pull requests differ from gh in two places. mergeable is CONFLICTING for any
+open, non-draft pull request Forgejo reports as not mergeable, which it also
+does while it is still checking; a draft reads as UNKNOWN, as merged and
+closed pull requests do. reviewDecision, taken from each reviewer's latest
+approval or change request, is APPROVED, CHANGES_REQUESTED or empty, never
+REVIEW_REQUIRED: Forgejo does not say whether a review is required.
 
 --json takes a comma-separated list of fields. Without one, fj lists the
 valid fields and exits 1. On a terminal the JSON is indented; otherwise it
@@ -100,6 +109,7 @@ these functions besides the standard ones:
 Examples:
   $ fj issue list --json number,title,labels
   $ fj issue list --json author --jq '.[].author.login'
+  $ fj pr view 42 --json state,mergeable,reviewDecision
   $ fj issue list --json number,title,updatedAt --template \
       '{{range .}}{{tablerow .number .title (timeago .updatedAt)}}{{end}}'`,
 	})

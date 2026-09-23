@@ -18,7 +18,7 @@ type viewOptions struct {
 	Number     string
 	CommentID  string
 	ReviewID   int64
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdView(f *cmdutil.Factory) *cobra.Command {
@@ -43,7 +43,7 @@ If you already know which review the comment belongs to (e.g. from
   $ fj pr review comment view 70 4081 --review-id 12345
 
   # Machine-readable output
-  $ fj pr review comment view 70 4081 --json`,
+  $ fj pr review comment view 70 4081 --json reviewId,path,line,body`,
 		Args: cmdutil.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
@@ -53,7 +53,7 @@ If you already know which review the comment belongs to (e.g. from
 	}
 
 	cmd.Flags().Int64Var(&opts.ReviewID, "review-id", 0, "Known review id (skips the scan)")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, nil, commentFields, true)
 	return cmd
 }
 
@@ -86,12 +86,8 @@ func viewRun(opts *viewOptions) error {
 		return fmt.Errorf("no inline review comment with id %d on pr #%d", commentID, index)
 	}
 
-	if opts.JSONOutput {
-		payload := map[string]any{
-			"comment":   found,
-			"review_id": reviewID,
-		}
-		return output.PrintJSON(os.Stdout, payload)
+	if opts.JSONOutput.Enabled() {
+		return opts.JSONOutput.Write(os.Stdout, JSON(found))
 	}
 
 	author := "unknown"

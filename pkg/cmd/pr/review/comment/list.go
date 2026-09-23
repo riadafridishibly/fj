@@ -16,15 +16,7 @@ type listOptions struct {
 	Factory    *cmdutil.Factory
 	Number     string
 	ReviewID   int64
-	JSONOutput bool
-}
-
-// flatComment is the JSON shape emitted by `list --json`. It attaches
-// review_id to each comment so callers can address it back to the
-// /pulls/{index}/reviews/{review_id}/comments/{id} endpoint.
-type flatComment struct {
-	*forgejo.PullReviewComment
-	ReviewID int64 `json:"review_id"`
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdList(f *cmdutil.Factory) *cobra.Command {
@@ -36,8 +28,8 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 		Short:   "List all inline review comments on a pull request",
 		Long: `List inline review comments across every review on a pull request.
 
-JSON output attaches a review_id field to each comment so it can be
-addressed back to the Forgejo API.
+JSON output carries each comment's reviewId, which the Forgejo API needs
+to address the comment.
 
 Pass --review-id to limit the output to a single review (you can get
 review ids from 'fj pr review list <pr>').`,
@@ -48,7 +40,7 @@ review ids from 'fj pr review list <pr>').`,
   $ fj pr review comment list 70 --review-id 12345
 
   # Machine-readable output
-  $ fj pr review comment list 70 --json`,
+  $ fj pr review comment list 70 --json id,reviewId,path,line,body`,
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
@@ -57,7 +49,7 @@ review ids from 'fj pr review list <pr>').`,
 	}
 
 	cmd.Flags().Int64Var(&opts.ReviewID, "review-id", 0, "Limit to a single review id")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, nil, commentFields, true)
 	return cmd
 }
 
@@ -77,16 +69,14 @@ func listRun(opts *listOptions) error {
 		return err
 	}
 
-	var flat []flatComment
+	var flat []*forgejo.PullReviewComment
 
 	if opts.ReviewID != 0 {
 		comments, err := listReviewComments(client, repo.Owner, repo.Name, index, opts.ReviewID)
 		if err != nil {
 			return err
 		}
-		for _, c := range comments {
-			flat = append(flat, flatComment{PullReviewComment: c, ReviewID: opts.ReviewID})
-		}
+		flat = comments
 	} else {
 		reviews, err := listAllReviews(client, repo.Owner, repo.Name, index)
 		if err != nil {
@@ -100,14 +90,16 @@ func listRun(opts *listOptions) error {
 			if err != nil {
 				return err
 			}
-			for _, c := range comments {
-				flat = append(flat, flatComment{PullReviewComment: c, ReviewID: r.ID})
-			}
+			flat = append(flat, comments...)
 		}
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, flat)
+	if opts.JSONOutput.Enabled() {
+		data := make([]map[string]any, len(flat))
+		for i, c := range flat {
+			data[i] = JSON(c)
+		}
+		return opts.JSONOutput.Write(os.Stdout, data)
 	}
 
 	if len(flat) == 0 {

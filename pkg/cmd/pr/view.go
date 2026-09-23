@@ -21,7 +21,7 @@ type viewOptions struct {
 	TimelineInclude []string
 	TimelineExclude []string
 	Web             bool
-	JSONOutput      bool
+	JSONOutput      cmdutil.JSONFlags
 }
 
 func NewCmdView(f *cmdutil.Factory) *cobra.Command {
@@ -36,7 +36,8 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
   $ fj pr view 42 --timeline-exclude commits
   $ fj pr view 42 --timeline-include refs --timeline-exclude commits
   $ fj pr view 42 --web
-  $ fj pr view 42 --json`,
+  $ fj pr view 42 --json title,state,headRefName,mergeable
+  $ fj pr view 42 --json files --jq '.files[].path'`,
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
@@ -48,7 +49,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.ShowTimeline, "show-timeline", true, "Show pull request events, such as commit references and label changes")
 	cmdutil.AddTimelineFilterFlags(cmd, &opts.TimelineInclude, &opts.TimelineExclude, cmdutil.SubjectPull)
 	cmdutil.AddWebFlag(cmd, &opts.Web)
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, prFields, []string{"timeline"}, true)
 
 	return cmd
 }
@@ -74,34 +75,28 @@ func viewRun(opts *viewOptions) error {
 		return err
 	}
 
-	pr, _, err := client.GetPullRequest(repo.Owner, repo.Name, index)
+	pr, err := getPR(opts.Factory, repo, index)
 	if err != nil {
-		return fmt.Errorf("getting pull request: %w", err)
+		return err
 	}
 
 	if opts.Web {
 		return cmdutil.OpenInBrowser(pr.HTMLURL)
 	}
 
-	if opts.JSONOutput {
-		result := map[string]any{
-			"pull_request": pr,
+	if opts.JSONOutput.Enabled() {
+		data, err := prJSON(opts.Factory, repo, pr, &opts.JSONOutput)
+		if err != nil {
+			return err
 		}
-		if opts.Comments {
-			comments, _, err := client.ListIssueComments(repo.Owner, repo.Name, index, forgejo.ListIssueCommentOptions{})
-			if err != nil {
-				return fmt.Errorf("listing comments: %w", err)
-			}
-			result["comments"] = comments
-		}
-		if opts.ShowTimeline {
+		if opts.ShowTimeline && opts.JSONOutput.Has("timeline") {
 			events, err := opts.Factory.Timeline(repo, index)
 			if err != nil {
 				return err
 			}
-			result["timeline"] = timeline.Apply(events)
+			data["timeline"] = timeline.Apply(events)
 		}
-		return output.PrintJSON(os.Stdout, result)
+		return opts.JSONOutput.Write(os.Stdout, data)
 	}
 
 	// Text output
