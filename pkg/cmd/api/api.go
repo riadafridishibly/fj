@@ -59,8 +59,9 @@ https://<host>/swagger.v1.json.
 
 Placeholder values {owner}, {repo} and {branch} in the endpoint are replaced
 with values from the repository in the current directory, or the one given
-with -R. When the endpoint has placeholders, the request goes to that
-repository's host; otherwise it goes to --hostname or the default host.
+with -R. When {owner} or {repo} is used, in the endpoint or a -F value, the
+request goes to that repository's host, and --hostname or a full URL naming
+another host is an error. Otherwise it goes to --hostname or the default host.
 
 The default HTTP method is GET, or POST when parameters or --input are given.
 Override it with --method.
@@ -138,6 +139,19 @@ func apiRun(opts *apiOptions) error {
 	}
 	if opts.Slurp && opts.JQ != "" {
 		return cmdutil.FlagErrorf("`--slurp` is not supported with `--jq`")
+	}
+	// A second read of standard input gets an empty value, not an error.
+	stdin := 0
+	if opts.Input == "-" {
+		stdin++
+	}
+	for _, s := range opts.MagicFields {
+		if _, v, _ := strings.Cut(s, "="); v == "@-" {
+			stdin++
+		}
+	}
+	if stdin > 1 {
+		return cmdutil.FlagErrorf("standard input can be read only once, by `--input -` or one `-F key=@-`")
 	}
 
 	var jq *gojq.Code
@@ -242,6 +256,9 @@ func send(opts *apiOptions, client *apiclient.Client, method, target string, bod
 			writeHeaders(opts.Out, resp)
 		}
 		if resp.StatusCode > 299 {
+			// Pages fetched before the error are printed, as --jq already
+			// did when each arrived.
+			writePages(opts, pages, pageType)
 			if !opts.Silent {
 				opts.Out.Write(data)
 			}
@@ -269,7 +286,12 @@ func send(opts *apiOptions, client *apiclient.Client, method, target string, bod
 			writeBody(opts.Out, data, resp.Header.Get("Content-Type"))
 		}
 	}
+	writePages(opts, pages, pageType)
+	return nil
+}
 
+// writePages prints the pages buffered under --paginate.
+func writePages(opts *apiOptions, pages [][]byte, pageType string) {
 	switch {
 	case len(pages) == 0:
 	case opts.Slurp:
@@ -277,13 +299,12 @@ func send(opts *apiOptions, client *apiclient.Client, method, target string, bod
 	default:
 		if merged, ok := mergeArrays(pages); ok {
 			writeBody(opts.Out, merged, pageType)
-			return nil
+			return
 		}
 		for _, p := range pages {
 			writeBody(opts.Out, p, pageType)
 		}
 	}
-	return nil
 }
 
 // placeholders holds the values for {owner}, {repo} and {branch}. Each is
@@ -322,50 +343,50 @@ func (p placeholders) fill(s string) string {
 	return strings.NewReplacer("{owner}", p.owner, "{repo}", p.repo, "{branch}", p.branch).Replace(s)
 }
 
-// fillPath replaces placeholders in an endpoint. Values are escaped as path
-// segments: a branch named feature/x must not add a segment, and an owner
-// carrying "?" or "#" must not cut the path short.
+// fillPath replaces placeholders in an endpoint, escaping each value for
+// where it lands: a branch named feature/x must not add a path segment, an
+// owner carrying "?" or "#" must not cut the path short, and a branch such
+// as a&b=c+1 in the query string must stay one value.
 func (p placeholders) fillPath(s string) string {
-	return strings.NewReplacer(
-		"{owner}", url.PathEscape(p.owner),
-		"{repo}", url.PathEscape(p.repo),
-		"{branch}", url.PathEscape(p.branch),
-	).Replace(s)
+	replace := func(s string, escape func(string) string) string {
+		return strings.NewReplacer(
+			"{owner}", escape(p.owner),
+			"{repo}", escape(p.repo),
+			"{branch}", escape(p.branch),
+		).Replace(s)
+	}
+	path, query, ok := strings.Cut(s, "?")
+	s = replace(path, url.PathEscape)
+	if ok {
+		s += "?" + replace(query, url.QueryEscape)
+	}
+	return s
 }
 
-// requestHost picks the host the request goes to. A full URL names its own
-// host. Otherwise --hostname wins, then the host of the repository the
-// placeholders came from, so {owner}/{repo} from one server are never sent
-// to another, and last the shared resolver.
+// requestHost picks the host the request goes to: the host of a full URL,
+// then --hostname, then the host of the repository the placeholders came
+// from, and last the shared resolver. When placeholders were filled, any
+// other host is an error, so {owner}/{repo} from one server are never sent
+// to another. A host fj has no token for is refused later, by TokenForHost.
 func requestHost(opts *apiOptions, target string, ph placeholders) (string, error) {
-	if apiclient.IsAbsoluteURL(target) {
+	host := ph.host
+	switch {
+	case apiclient.IsAbsoluteURL(target):
 		u, err := url.Parse(target)
 		if err != nil {
 			return "", err
 		}
-		// Without a config file, FJ_TOKEN goes to whatever host a command
-		// resolves, so a URL alone must not pick a host fj does not know:
-		// an agent handed a hostile link would otherwise send the token
-		// along with the request. A known host is a configured one or
-		// FJ_HOST.
-		if !strings.EqualFold(u.Host, os.Getenv("FJ_HOST")) {
-			cfg, err := opts.Factory.Config()
-			if err != nil {
-				return "", err
-			}
-			if _, err := cfg.HostByName(u.Host); err != nil {
-				return "", err
-			}
-		}
-		return u.Host, nil
+		host = u.Host
+	case opts.Factory.HostOverride != "":
+		host = opts.Factory.HostOverride
+	case host == "":
+		return opts.Factory.Host()
 	}
-	if opts.Factory.HostOverride != "" {
-		return opts.Factory.HostOverride, nil
+	if ph.host != "" && !strings.EqualFold(host, ph.host) {
+		return "", fmt.Errorf("{owner}/{repo} is %s/%s on %s, but the request goes to %s; use -R OWNER/REPO with --hostname %s",
+			ph.owner, ph.repo, ph.host, host, host)
 	}
-	if ph.host != "" {
-		return ph.host, nil
-	}
-	return opts.Factory.Host()
+	return host, nil
 }
 
 // field is one -f or -F parameter. value is a string, int, bool, nil, or
@@ -542,8 +563,8 @@ func setPath(m map[string]any, segs []string, v any) error {
 	return nil
 }
 
-// hasPath reports whether setting segs in m would overwrite a value. An
-// array append never does.
+// hasPath reports whether setting segs in m would overwrite a value or nest
+// under one that is not an object. An array append never does.
 func hasPath(m map[string]any, segs []string) bool {
 	v, ok := m[segs[0]]
 	if !ok {
@@ -556,7 +577,7 @@ func hasPath(m map[string]any, segs []string) bool {
 		return false
 	}
 	child, ok := v.(map[string]any)
-	return ok && hasPath(child, segs[1:])
+	return !ok || hasPath(child, segs[1:])
 }
 
 var linkNext = regexp.MustCompile(`<([^>]+)>;\s*rel="next"`)

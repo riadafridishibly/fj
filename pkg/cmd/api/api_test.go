@@ -36,6 +36,8 @@ func TestBuildBody(t *testing.T) {
 		"props[][allowed][]=production",
 		"props[][name]=tier",
 		"meta[owner]={owner}",
+		"tags[][k]=1",
+		"tags[][k][sub]=2",
 	}
 	magic := []string{
 		"count=42",
@@ -69,6 +71,7 @@ func TestBuildBody(t *testing.T) {
 			{"name": "tier"}
 		],
 		"meta": {"owner": "{owner}", "repo": "fj"},
+		"tags": [{"k": "1"}, {"k": {"sub": "2"}}],
 		"count": 42,
 		"draft": true,
 		"milestone": null,
@@ -98,6 +101,41 @@ func TestParseFieldsErrors(t *testing.T) {
 	if _, err := buildBody(fields); err == nil {
 		t.Error("a=1 then a[b]=2: want a conflict error")
 	}
+
+	// A second read of standard input would get an empty value.
+	_, err := runAPIWith(t, factory(), "echo", "--input", "-", "-F", "c=@-")
+	if err == nil || !strings.Contains(err.Error(), "standard input can be read only once") {
+		t.Errorf("--input - with -F c=@-: error = %v", err)
+	}
+}
+
+// TestFillPath checks that a value stays one path segment in the path and
+// one parameter in the query string.
+func TestFillPath(t *testing.T) {
+	ph := placeholders{owner: "me", repo: "fj", branch: "a&b=c+1/x"}
+	got := ph.fillPath("repos/{owner}/{repo}/contents/{branch}?ref={branch}")
+	if want := "repos/me/fj/contents/a&b=c+1%2Fx?ref=a%26b%3Dc%2B1%2Fx"; got != want {
+		t.Errorf("fillPath() = %q, want %q", got, want)
+	}
+}
+
+// TestPlaceholdersPinHost checks that {owner}/{repo} from a repository on
+// one host are not sent to another, whether --hostname or a full URL names it.
+func TestPlaceholdersPinHost(t *testing.T) {
+	ph := placeholders{owner: "o", repo: "r", host: "b.example.com"}
+	opts := &apiOptions{Factory: factory("a.example.com", "b.example.com")}
+	for _, target := range []string{"repos/o/r", "https://B.example.com/api/v1/repos/o/r"} {
+		if host, err := requestHost(opts, target, ph); err != nil || !strings.EqualFold(host, "b.example.com") {
+			t.Errorf("%s: requestHost() = %q, %v", target, host, err)
+		}
+	}
+	if _, err := requestHost(opts, "https://a.example.com/api/v1/repos/o/r", ph); err == nil {
+		t.Error("full URL on another host: want an error")
+	}
+	opts.Factory.HostOverride = "a.example.com"
+	if _, err := requestHost(opts, "repos/o/r", ph); err == nil {
+		t.Error("--hostname naming another host: want an error")
+	}
 }
 
 // TestNextPage covers the two ways a naive Link parser goes wrong: a comma
@@ -114,9 +152,9 @@ func TestNextPage(t *testing.T) {
 	}
 }
 
-// fakeForgejo serves three pages of labels, a 404, and an echo endpoint
-// that returns the request it saw. Its Link headers name a different host,
-// as a Forgejo behind a proxy does.
+// fakeForgejo serves three pages of labels, a listing whose second page
+// fails, a 404, and an echo endpoint that returns the request it saw. Its
+// Link headers name a different host, as a Forgejo behind a proxy does.
 func fakeForgejo(t *testing.T) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -135,6 +173,14 @@ func fakeForgejo(t *testing.T) *httptest.Server {
 				w.Header().Set("Link", fmt.Sprintf(`<http://forgejo.example.com/api/v1/repos/me/fj/labels?limit=1&page=%s>; rel="next"`, next))
 			}
 			fmt.Fprintf(w, `[{"id":%s000000000000000001,"name":"<l%s>"}]`+"\n", page, page)
+		case "/api/v1/repos/me/fj/flaky":
+			if r.URL.Query().Get("page") == "2" {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprintln(w, `{"message":"boom"}`)
+				return
+			}
+			w.Header().Set("Link", `<http://forgejo.example.com/api/v1/repos/me/fj/flaky?page=2>; rel="next"`)
+			fmt.Fprintln(w, `[{"id":1}]`)
 		case "/api/v1/echo":
 			body, _ := io.ReadAll(r.Body)
 			json.NewEncoder(w).Encode(map[string]string{
@@ -178,6 +224,7 @@ func runAPIWith(t *testing.T, f *cmdutil.Factory, args ...string) (string, error
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(io.Discard)
+	cmd.SilenceUsage = true // as root sets it
 	cmd.SetArgs(args)
 	err := cmd.Execute()
 	return out.String(), err
@@ -263,6 +310,12 @@ func TestHTTPError(t *testing.T) {
 	}
 	if !strings.HasPrefix(out, `{"message":`) {
 		t.Errorf("output = %q, want the raw body", out)
+	}
+
+	// Pages fetched before a failing one are printed, as --jq does.
+	out, err = runAPI(t, srv, "--paginate", "repos/{owner}/{repo}/flaky")
+	if want := "[{\"id\":1}]\n{\"message\":\"boom\"}\n"; err == nil || out != want {
+		t.Errorf("failing second page: output = %q, error = %v; want %q", out, err, want)
 	}
 }
 
