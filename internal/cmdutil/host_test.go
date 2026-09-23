@@ -35,7 +35,7 @@ func checkout(t *testing.T, remotes ...string) {
 func TestHost(t *testing.T) {
 	t.Setenv("FJ_HOST", "")
 
-	t.Run("several hosts and nothing to choose is an error", func(t *testing.T) {
+	t.Run("several hosts without FJ_HOST or a checkout is an error", func(t *testing.T) {
 		t.Chdir(t.TempDir())
 		_, err := factoryWithHosts("b.example.com", "a.example.com").Host()
 		want := "multiple hosts configured (a.example.com, b.example.com); set FJ_HOST to choose one"

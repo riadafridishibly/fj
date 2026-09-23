@@ -66,7 +66,7 @@ You can also set `FJ_TOKEN` to override the token for any command.
 
 `fj` auto-detects the repository from your git remotes. Use `-R OWNER/REPO` to override.
 
-When a command needs a host but its arguments name none, fj uses, in order: `--hostname`, `FJ_HOST`, the host of the current checkout's git remote, and the only configured host. With several hosts configured and none of these set, the command fails rather than guess.
+When a command needs a host but its arguments name none, fj uses, in order: `--hostname` on commands that have it, `FJ_HOST`, the host of the current checkout's git remote, and the only configured host. With several hosts configured and none of these set, the command fails rather than guess.
 
 ### Repositories
 
@@ -170,7 +170,7 @@ fj repo view --web
 | Variable | Description |
 |---|---|
 | `FJ_TOKEN` | API token (overrides config file) |
-| `FJ_HOST` | Host to use when a command names none and several hosts are configured |
+| `FJ_HOST` | Host to use when a command names none. It takes priority over the checkout's host and the configured hosts |
 | `FJ_CONFIG_DIR` | Config directory (default: `~/.config/fj`) |
 | `FJ_INSECURE` | Use HTTP instead of HTTPS (for local/dev instances) |
 

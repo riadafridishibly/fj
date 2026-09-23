@@ -62,7 +62,7 @@ func deleteRun(opts *deleteOptions) error {
 		return fmt.Errorf("fetching repository %s: %w", repo.FullName(), err)
 	}
 
-	fmt.Fprintf(os.Stderr, "Repository %s (%d★)", info.FullName, info.Stars)
+	fmt.Fprintf(os.Stderr, "Repository %s/%s (%d★)", repo.Host, info.FullName, info.Stars)
 	if info.Private {
 		fmt.Fprint(os.Stderr, " [private]")
 	}

@@ -63,11 +63,10 @@ func (f *Factory) BaseRepo() (Repo, error) {
 	return RepoFromGitRemotes(cfg)
 }
 
-// Host picks the Forgejo host for a command whose arguments name none. In
-// order: --hostname, FJ_HOST, the host of the current checkout's
-// repository, and the only configured host. Several hosts and nothing to
-// choose between them is an error: a guess would send a delete or a token
-// to the wrong server.
+// Host returns the Forgejo host for a command whose arguments name none.
+// It checks, in order: --hostname, FJ_HOST, the host of the current
+// checkout's git remote, and the only configured host. With several hosts
+// and none of these set, it returns an error instead of picking one.
 func (f *Factory) Host() (string, error) {
 	if f.HostOverride != "" {
 		return f.HostOverride, nil
@@ -79,10 +78,12 @@ func (f *Factory) Host() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// Outside a checkout, or with no remote on a known host, the checkout
-	// has nothing to say and the configured hosts decide.
-	if repo, err := RepoFromGitRemotes(cfg); err == nil {
-		return repo.Host, nil
+	// With one host or none, the checkout cannot change the result, so git
+	// is not run.
+	if len(cfg.Hosts) > 1 {
+		if repo, err := RepoFromGitRemotes(cfg); err == nil {
+			return repo.Host, nil
+		}
 	}
 	return cfg.OnlyHost("set FJ_HOST to choose one")
 }

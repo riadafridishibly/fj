@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"cmp"
 	"fmt"
 	"os"
 
@@ -39,10 +40,9 @@ func logoutRun(opts *logoutOptions) error {
 		return err
 	}
 
-	// Removing credentials is not inferred from FJ_HOST or the checkout, as
-	// other commands infer their host: without --hostname, only a single
-	// configured host is unambiguous enough to log out of.
-	hostname := opts.Hostname
+	// The host is never taken from the checkout. Without --hostname or
+	// FJ_HOST, logout only proceeds when a single host is configured.
+	hostname := cmp.Or(opts.Hostname, os.Getenv("FJ_HOST"))
 	if hostname == "" {
 		if hostname, err = cfg.OnlyHost("pass --hostname to choose one"); err != nil {
 			return err

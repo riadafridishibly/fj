@@ -199,7 +199,7 @@ func TestRemotesSortedByName(t *testing.T) {
 		gitT(t, "remote", "add", name, "https://forgejo.example.com/o/"+name+".git")
 	}
 
-	// Map order differs between runs, so one lucky run proves nothing.
+	// Go map order varies between calls. Repeat so an unsorted result shows up.
 	for range 20 {
 		remotes, err := Remotes()
 		if err != nil {
