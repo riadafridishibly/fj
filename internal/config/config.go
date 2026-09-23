@@ -124,7 +124,7 @@ func (c *Config) Save() error {
 func (c *Config) OnlyHost(hint string) (string, error) {
 	switch len(c.Hosts) {
 	case 0:
-		return "", fmt.Errorf("not logged in to any host. Run 'fj auth login' to authenticate")
+		return "", fmt.Errorf("not logged in to any host. Run 'fj auth login' to authenticate, or set FJ_HOST and FJ_TOKEN")
 	case 1:
 		for name := range c.Hosts {
 			return name, nil
@@ -142,9 +142,26 @@ func (c *Config) HostByName(name string) (*HostConfig, error) {
 	return h, nil
 }
 
+// TokenForHost returns the token for hostname. FJ_TOKEN takes precedence,
+// but only for the one host it can belong to: FJ_HOST when set, otherwise
+// the single configured host, or any host when none are configured (a CI
+// job with no config file). A token meant for one server must never be
+// sent to another, so with several hosts configured and no FJ_HOST to say
+// which one FJ_TOKEN is for, the lookup fails rather than guess.
 func (c *Config) TokenForHost(hostname string) (string, error) {
 	if t := os.Getenv("FJ_TOKEN"); t != "" {
-		return t, nil
+		envHost := os.Getenv("FJ_HOST")
+		_, configured := c.Hosts[hostname]
+		switch {
+		case envHost != "":
+			if strings.EqualFold(hostname, envHost) {
+				return t, nil
+			}
+		case len(c.Hosts) == 0, len(c.Hosts) == 1 && configured:
+			return t, nil
+		case len(c.Hosts) > 1:
+			return "", fmt.Errorf("FJ_TOKEN is set but several hosts are configured; set FJ_HOST to the host it belongs to")
+		}
 	}
 	h, err := c.HostByName(hostname)
 	if err != nil {

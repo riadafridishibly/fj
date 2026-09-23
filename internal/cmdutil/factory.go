@@ -94,21 +94,13 @@ func (f *Factory) Client(hostname string) (*forgejo.Client, error) {
 		return nil, err
 	}
 
+	// The token decides whether fj may talk to this host. Requiring a
+	// config entry as well would shut out FJ_HOST with FJ_TOKEN, the
+	// pairing CI jobs use without a config file.
 	token, err := cfg.TokenForHost(hostname)
 	if err != nil {
 		return nil, err
 	}
-
-	host, err := cfg.HostByName(hostname)
-	if err != nil {
-		return nil, err
-	}
-
-	protocol := "https"
-	if host.GitProtocol != "" {
-		protocol = host.GitProtocol
-	}
-	_ = protocol // used for git clone URL construction, not API
 
 	scheme := "https"
 	if os.Getenv("FJ_INSECURE") != "" {
