@@ -106,8 +106,8 @@ unfiltered and exits 1.`,
       -f 'files[][operation]=create' -f 'files[][path]=a.txt' -F 'files[][content]=@a.b64' \
       -f 'files[][operation]=create' -f 'files[][path]=b.txt' -F 'files[][content]=@b.b64'
 
-  # Fetch the server's API reference
-  $ fj api https://forgejo.example.com/swagger.v1.json`,
+  # Find endpoints in the server's API reference
+  $ fj api https://forgejo.example.com/swagger.v1.json --jq '.paths | keys[] | select(test("labels"))'`,
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Endpoint = args[0]
