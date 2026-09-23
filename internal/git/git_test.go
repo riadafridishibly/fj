@@ -214,3 +214,21 @@ func TestRemotesSortedByName(t *testing.T) {
 		}
 	}
 }
+
+func TestParseRemoteURLHost(t *testing.T) {
+	tests := []struct{ url, host string }{
+		{"https://forgejo.example.com/o/r.git", "forgejo.example.com"},
+		{"http://localhost:3000/o/r.git", "localhost:3000"},
+		{"ssh://git@forgejo.example.com:2222/o/r.git", "forgejo.example.com"},
+		{"git@forgejo.example.com:o/r.git", "forgejo.example.com"},
+	}
+	for _, tt := range tests {
+		info, err := ParseRemoteURL(tt.url)
+		if err != nil {
+			t.Fatalf("ParseRemoteURL(%q) error = %v", tt.url, err)
+		}
+		if info.Host != tt.host || info.Owner != "o" || info.Name != "r" {
+			t.Errorf("ParseRemoteURL(%q) = %+v, want host %q, o/r", tt.url, *info, tt.host)
+		}
+	}
+}

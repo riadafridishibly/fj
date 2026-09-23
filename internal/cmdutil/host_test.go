@@ -78,6 +78,13 @@ func TestHost(t *testing.T) {
 		}
 	})
 
+	t.Run("the checkout's host with a port", func(t *testing.T) {
+		checkout(t, "origin", "http://localhost:3000/o/r.git")
+		if got, err := factoryWithHosts("localhost:3000", "b.example.com").Host(); err != nil || got != "localhost:3000" {
+			t.Errorf("Host() = %q, %v", got, err)
+		}
+	})
+
 	// Without an origin, the remote used to come from map order. Two
 	// remotes on different hosts must give the same answer on every run.
 	t.Run("the same host on every run without an origin", func(t *testing.T) {

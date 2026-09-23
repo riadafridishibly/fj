@@ -176,7 +176,13 @@ func ParseRemoteURL(rawURL string) (*RepoInfo, error) {
 	if len(ownerRepo) != 2 {
 		return nil, fmt.Errorf("cannot parse repo path: %s", path)
 	}
-	return &RepoInfo{Host: u.Hostname(), Owner: ownerRepo[0], Name: ownerRepo[1]}, nil
+	// A web URL's port is part of the host name fj is configured with
+	// (localhost:3000). An ssh:// port is the SSH port, so it is dropped.
+	host := u.Hostname()
+	if u.Scheme == "http" || u.Scheme == "https" {
+		host = u.Host
+	}
+	return &RepoInfo{Host: host, Owner: ownerRepo[0], Name: ownerRepo[1]}, nil
 }
 
 func Clone(cloneURL, directory string) error {

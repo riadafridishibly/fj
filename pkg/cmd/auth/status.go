@@ -2,7 +2,9 @@ package auth
 
 import (
 	"fmt"
+	"maps"
 	"os"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -57,7 +59,8 @@ func statusRun(opts *statusOptions) error {
 
 	var statuses []hostStatus
 
-	for name, host := range cfg.Hosts {
+	for _, name := range slices.Sorted(maps.Keys(cfg.Hosts)) {
+		host := cfg.Hosts[name]
 		if opts.Hostname != "" && name != opts.Hostname {
 			continue
 		}
