@@ -63,3 +63,33 @@ func TestDownloadFileToken(t *testing.T) {
 		}
 	})
 }
+
+// TestAPIClientRedirect: the API client drops the token on a redirect off
+// the host, as DownloadFile does.
+func TestAPIClientRedirect(t *testing.T) {
+	gotAuth := "<no request>"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+	}))
+	defer srv.Close()
+	// Same hostname, another port: Go would keep the header on its own.
+	redir := httptest.NewServer(http.RedirectHandler(srv.URL+"/x", http.StatusFound))
+	defer redir.Close()
+	t.Setenv("FJ_INSECURE", "1")
+	t.Setenv("FJ_TOKEN", "")
+	t.Setenv("FJ_HOST", "")
+
+	host := strings.TrimPrefix(redir.URL, "http://")
+	client, err := factoryWithHosts(host).APIClientForHost(host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := client.Get("x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if gotAuth != "" {
+		t.Errorf("Authorization after the redirect = %q, want none", gotAuth)
+	}
+}

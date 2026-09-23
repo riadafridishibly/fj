@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 )
@@ -61,11 +62,29 @@ func (c *Client) DeletePullReviewComment(owner, repo string, index, reviewID, co
 // the response. Caller owns closing resp.Body. Escape hatch for endpoints
 // without a typed wrapper.
 func (c *Client) Get(path string) (*http.Response, error) {
-	req, err := c.newRequest(http.MethodGet, path, nil)
+	return c.Raw(http.MethodGet, path, nil, "", nil)
+}
+
+// Raw sends an authenticated request and returns the response whatever its
+// status, for callers that print the server's own answer (fj api). target
+// is resolved as newBodyRequest describes. Entries in header replace the
+// defaults, so a caller can override Accept or Content-Type. Caller owns
+// closing resp.Body.
+func (c *Client) Raw(method, target string, body io.Reader, contentType string, header http.Header) (*http.Response, error) {
+	req, err := c.newBodyRequest(method, target, body, contentType)
 	if err != nil {
 		return nil, err
 	}
+	for k, v := range header {
+		req.Header[k] = v
+	}
 	return c.http.Do(req)
+}
+
+// IsAbsoluteURL reports whether target is a full http(s) URL rather than a
+// path under /api/v1.
+func IsAbsoluteURL(target string) bool {
+	return strings.HasPrefix(target, "https://") || strings.HasPrefix(target, "http://")
 }
 
 // repoPath builds a path under /repos/<owner>/<repo>, escaping both
@@ -93,13 +112,29 @@ func (c *Client) newRequest(method, path string, body any) (*http.Request, error
 	return c.newBodyRequest(method, path, reader, contentType)
 }
 
-// newBodyRequest builds an authenticated request against /api/v1<path> whose
-// body is sent verbatim. newRequest wraps it for JSON payloads; callers whose
-// payload is not JSON — a multipart upload, whose Content-Type carries a
-// generated boundary — build the body themselves and use this directly.
-// An empty contentType sets no header, as a bodiless request wants.
-func (c *Client) newBodyRequest(method, path string, body io.Reader, contentType string) (*http.Request, error) {
-	req, err := http.NewRequest(method, c.baseURL+"/api/v1"+path, body)
+// newBodyRequest builds an authenticated request whose body is sent
+// verbatim. newRequest wraps it for JSON payloads; callers whose payload is
+// not JSON — a multipart upload, whose Content-Type carries a generated
+// boundary — build the body themselves and use this directly. An empty
+// contentType sets no header, as a bodiless request wants.
+//
+// target is a path under /api/v1, with or without its leading slash, or an
+// absolute URL. An absolute URL must name this client's own scheme and host:
+// the token goes with every request, so a URL pointing anywhere else is
+// refused rather than sent.
+func (c *Client) newBodyRequest(method, target string, body io.Reader, contentType string) (*http.Request, error) {
+	u := c.baseURL + "/api/v1/" + strings.TrimPrefix(target, "/")
+	if IsAbsoluteURL(target) {
+		parsed, err := url.Parse(target)
+		if err != nil {
+			return nil, err
+		}
+		if origin := parsed.Scheme + "://" + parsed.Host; !strings.EqualFold(origin, c.baseURL) {
+			return nil, fmt.Errorf("refusing to send the token for %s to %s", c.baseURL, origin)
+		}
+		u = target
+	}
+	req, err := http.NewRequest(method, u, body)
 	if err != nil {
 		return nil, err
 	}

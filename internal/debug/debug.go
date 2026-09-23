@@ -32,6 +32,10 @@ func parseLevel(s string) int {
 	return n
 }
 
+// Raise lifts the level to at least l without lowering a higher DEBUG
+// setting. fj api --verbose uses it to log requests and responses.
+func Raise(l int) { level = max(level, l) }
+
 // Enabled reports whether logs at level l would be emitted.
 func Enabled(l int) bool { return level >= l }
 

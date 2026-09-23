@@ -12,37 +12,43 @@ import (
 	"github.com/riadafridishibly/fj/internal/debug"
 )
 
-// DownloadFile saves the file at rawURL to dest. The token goes only to
-// host, over https unless FJ_INSECURE is set, on the first request and on
-// every redirect: a release asset can link to an outside server, and host
-// can redirect to another port or subdomain, such as object storage.
-func DownloadFile(rawURL, host, token, dest string) error {
-	onHost := func(u *url.URL) bool {
-		secure := u.Scheme == "https" || u.Scheme == "http" && os.Getenv("FJ_INSECURE") != ""
-		return secure && strings.EqualFold(u.Host, host)
-	}
+// onHost reports whether a request to u may carry host's token: u is on
+// host, over https unless FJ_INSECURE is set.
+func onHost(u *url.URL, host string) bool {
+	secure := u.Scheme == "https" || u.Scheme == "http" && os.Getenv("FJ_INSECURE") != ""
+	return secure && strings.EqualFold(u.Host, host)
+}
+
+// hostOnlyClient returns an HTTP client that drops Authorization on a
+// redirect off host. Go keeps it on a redirect to the same hostname on any
+// port or scheme, and to its subdomains, such as object storage.
+func hostOnlyClient(host string) *http.Client {
 	client := debug.WrapClient(nil)
-	// Go keeps Authorization on a redirect to the same hostname on any port
-	// or scheme, and to its subdomains.
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 10 {
 			return errors.New("stopped after 10 redirects")
 		}
-		if !onHost(req.URL) {
+		if !onHost(req.URL, host) {
 			req.Header.Del("Authorization")
 		}
 		return nil
 	}
+	return client
+}
 
+// DownloadFile saves the file at rawURL to dest. The token goes only to
+// host, on the first request and on every redirect: a release asset can
+// link to an outside server.
+func DownloadFile(rawURL, host, token, dest string) error {
 	req, err := http.NewRequest("GET", rawURL, nil)
 	if err != nil {
 		return err
 	}
-	if onHost(req.URL) {
+	if onHost(req.URL, host) {
 		req.Header.Set("Authorization", "token "+token)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := hostOnlyClient(host).Do(req)
 	if err != nil {
 		return err
 	}

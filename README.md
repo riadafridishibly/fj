@@ -159,6 +159,17 @@ fj issue view 42 --json
 fj pr list --json | jq '.[].title'
 ```
 
+### API
+
+`fj api` calls any endpoint of the Forgejo API, including the ones no other command covers. It works like `gh api`. A server's full API reference is at `https://<host>/swagger.v1.json`.
+
+```sh
+fj api repos/{owner}/{repo}/releases                          # {owner}/{repo} from the current repo
+fj api repos/{owner}/{repo}/issues/42/comments -f body='Hi'   # Fields switch the method to POST
+fj api --paginate 'repos/{owner}/{repo}/issues?limit=50' --jq '.[].title'
+fj api -X PATCH repos/{owner}/{repo}/labels/7 -F exclusive=true
+```
+
 ### Open in Browser
 
 View commands support `--web` to open in your browser:
