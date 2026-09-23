@@ -10,7 +10,8 @@ import (
 )
 
 // TestDownloadFileToken: the token goes to the repository's host and not to
-// an outside server a release asset links to.
+// an outside server, over plain http without FJ_INSECURE, or through a
+// redirect that leaves the host.
 func TestDownloadFileToken(t *testing.T) {
 	var gotAuth string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -18,17 +19,24 @@ func TestDownloadFileToken(t *testing.T) {
 		w.Write([]byte("data"))
 	}))
 	defer srv.Close()
-	srvHost := strings.TrimPrefix(srv.URL, "http://")
+	// Same hostname, another port: Go would keep the header on its own.
+	redir := httptest.NewServer(http.RedirectHandler(srv.URL+"/asset", http.StatusFound))
+	defer redir.Close()
+	host := func(s *httptest.Server) string { return strings.TrimPrefix(s.URL, "http://") }
 	dest := filepath.Join(t.TempDir(), "asset")
 
 	for _, tc := range []struct {
-		name, host, want string
+		name, url, host, insecure, want string
 	}{
-		{"repository host", srvHost, "token secret"},
-		{"outside server", "forgejo.example.com", ""},
+		{"repository host", srv.URL + "/asset", host(srv), "1", "token secret"},
+		{"outside server", srv.URL + "/asset", "forgejo.example.com", "1", ""},
+		{"plain http without FJ_INSECURE", srv.URL + "/asset", host(srv), "", ""},
+		{"redirect off the host", redir.URL + "/asset", host(redir), "1", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := DownloadFile(srv.URL+"/asset", tc.host, "secret", dest); err != nil {
+			t.Setenv("FJ_INSECURE", tc.insecure)
+			gotAuth = "<no request>"
+			if err := DownloadFile(tc.url, tc.host, "secret", dest); err != nil {
 				t.Fatal(err)
 			}
 			if gotAuth != tc.want {
@@ -39,4 +47,19 @@ func TestDownloadFileToken(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("a cut-off body leaves no file", func(t *testing.T) {
+		short := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Length", "100")
+			w.Write([]byte("data"))
+		}))
+		defer short.Close()
+		dest := filepath.Join(t.TempDir(), "partial")
+		if err := DownloadFile(short.URL, host(short), "secret", dest); err == nil {
+			t.Fatal("want an error for a cut-off body")
+		}
+		if _, err := os.Stat(dest); !os.IsNotExist(err) {
+			t.Errorf("partial file left at %s: %v", dest, err)
+		}
+	})
 }

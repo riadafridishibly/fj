@@ -88,11 +88,14 @@ func downloadRun(opts *downloadOptions) error {
 		if !matchesAny(a.Name, opts.Patterns) {
 			continue
 		}
-		dest := filepath.Join(opts.Dir, a.Name)
+		// Asset names come from whoever uploaded them, and Forgejo accepts
+		// names such as ../../.bashrc. Only the last element is used.
+		name := filepath.Base(a.Name)
+		dest := filepath.Join(opts.Dir, name)
 		if err := cmdutil.DownloadFile(a.DownloadURL, repo.Host, token, dest); err != nil {
-			return fmt.Errorf("downloading %s: %w", a.Name, err)
+			return fmt.Errorf("downloading %s: %w", name, err)
 		}
-		fmt.Fprintf(os.Stderr, "✓ Downloaded %s\n", a.Name)
+		fmt.Fprintf(os.Stderr, "✓ Downloaded %s\n", name)
 		count++
 	}
 

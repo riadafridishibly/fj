@@ -3,7 +3,12 @@
 package integration
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -426,6 +431,61 @@ func TestReleaseDownload(t *testing.T) {
 	}
 	if string(got) != string(payload) {
 		t.Errorf("downloaded content mismatch: got %q, want %q", got, payload)
+	}
+}
+
+// TestReleaseDownloadExternalAsset: an asset can link to an outside server
+// and carry any name. The download stays inside --dir, and the outside
+// server does not receive the token.
+func TestReleaseDownloadExternalAsset(t *testing.T) {
+	repo := adminUser + "/test-repo"
+	tag := "v0.7.1-external"
+
+	gotAuth := "<no request>"
+	outside := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.Write([]byte("outside content"))
+	}))
+	defer outside.Close()
+
+	mustRunFJ(t, "release", "create", tag, "-R", repo, "--notes", "external asset")
+	rel, _, err := testClient.GetReleaseByTag(adminUser, "test-repo", tag)
+	if err != nil {
+		t.Fatalf("SDK GetReleaseByTag failed: %v", err)
+	}
+
+	// The SDK cannot create an external asset, so the form is posted by hand.
+	var body bytes.Buffer
+	form := multipart.NewWriter(&body)
+	form.WriteField("external_url", outside.URL+"/asset")
+	form.Close()
+	req, _ := http.NewRequest("POST", fmt.Sprintf("%s/api/v1/repos/%s/releases/%d/assets?name=../escaped.txt",
+		forgejoURL, repo, rel.ID), &body)
+	req.Header.Set("Content-Type", form.FormDataContentType())
+	req.SetBasicAuth(adminUser, adminPass)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("creating external asset: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("creating external asset: http %d", resp.StatusCode)
+	}
+
+	parent := t.TempDir()
+	destDir := filepath.Join(parent, "downloads")
+	if _, stderr, err := runFJ("release", "download", tag, "-R", repo, "--dir", destDir); err != nil {
+		t.Fatalf("release download failed: %v\nstderr: %s", err, stderr)
+	}
+
+	if got, err := os.ReadFile(filepath.Join(destDir, "escaped.txt")); err != nil || string(got) != "outside content" {
+		t.Errorf("escaped.txt in --dir = %q, %v", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(parent, "escaped.txt")); err == nil {
+		t.Error("the asset was written outside --dir")
+	}
+	if gotAuth != "" {
+		t.Errorf("outside server got Authorization %q, want none", gotAuth)
 	}
 }
 
