@@ -62,11 +62,6 @@ func cloneRun(opts *cloneOptions) error {
 	if err != nil {
 		return err
 	}
-	host, err := cfg.HostByName(hostname)
-	if err != nil {
-		return err
-	}
-
 	client, err := opts.Factory.Client(hostname)
 	if err != nil {
 		return err
@@ -78,7 +73,7 @@ func cloneRun(opts *cloneOptions) error {
 	}
 
 	cloneURL := r.CloneURL
-	if host.GitProtocol == "ssh" {
+	if cfg.GitProtocol(hostname) == "ssh" {
 		cloneURL = r.SSHURL
 	}
 

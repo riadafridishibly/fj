@@ -60,7 +60,11 @@ fj auth status
 
 Configuration is stored in `~/.config/fj/config.yaml` (or `$FJ_CONFIG_DIR`).
 
-You can also set `FJ_TOKEN` to override the token for any command.
+You can also set `FJ_TOKEN` to use a token without logging in. It applies to one host only: the one named by `FJ_HOST`, or the only configured host. With several hosts configured, `FJ_TOKEN` also needs `FJ_HOST`. In CI, where there is usually no config file, set both:
+
+```sh
+FJ_HOST=forgejo.example.com FJ_TOKEN=... fj issue list -R owner/repo
+```
 
 ## Usage
 
@@ -169,7 +173,7 @@ fj repo view --web
 
 | Variable | Description |
 |---|---|
-| `FJ_TOKEN` | API token (overrides config file) |
+| `FJ_TOKEN` | API token, used instead of the stored one for a single host: `FJ_HOST` if set, otherwise the only configured host |
 | `FJ_HOST` | Host to use when a command names none. It takes priority over the checkout's host and the configured hosts |
 | `FJ_CONFIG_DIR` | Config directory (default: `~/.config/fj`) |
 | `FJ_INSECURE` | Use HTTP instead of HTTPS (for local/dev instances) |

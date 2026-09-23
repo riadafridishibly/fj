@@ -2,8 +2,6 @@ package release
 
 import (
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -90,8 +88,15 @@ func downloadRun(opts *downloadOptions) error {
 		if !matchesAny(a.Name, opts.Patterns) {
 			continue
 		}
+		// Asset names come from whoever uploaded them, and Forgejo accepts
+		// names such as ../../.bashrc or linux/fj. A name with directories
+		// could land outside --dir, and stripping them could make two
+		// assets overwrite one file, so only plain file names are used.
+		if a.Name != filepath.Base(a.Name) || a.Name == "." || a.Name == ".." {
+			return fmt.Errorf("asset name %q is not a plain file name", a.Name)
+		}
 		dest := filepath.Join(opts.Dir, a.Name)
-		if err := downloadFile(a.DownloadURL, token, dest); err != nil {
+		if err := cmdutil.DownloadFile(a.DownloadURL, repo.Host, token, dest); err != nil {
 			return fmt.Errorf("downloading %s: %w", a.Name, err)
 		}
 		fmt.Fprintf(os.Stderr, "✓ Downloaded %s\n", a.Name)
@@ -117,31 +122,4 @@ func matchesAny(name string, patterns []string) bool {
 		}
 	}
 	return false
-}
-
-func downloadFile(url, token, dest string) error {
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "token "+token)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return fmt.Errorf("http %d", resp.StatusCode)
-	}
-
-	f, err := os.Create(dest)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	_, err = io.Copy(f, resp.Body)
-	return err
 }

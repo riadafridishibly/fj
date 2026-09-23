@@ -3,7 +3,13 @@
 package integration
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -426,6 +432,81 @@ func TestReleaseDownload(t *testing.T) {
 	}
 	if string(got) != string(payload) {
 		t.Errorf("downloaded content mismatch: got %q, want %q", got, payload)
+	}
+}
+
+// releaseWithExternalAsset creates a release whose one asset, named name,
+// links to target. The SDK cannot create an external asset, so the form is
+// posted by hand.
+func releaseWithExternalAsset(t *testing.T, tag, name, target string) {
+	t.Helper()
+	repo := adminUser + "/test-repo"
+	mustRunFJ(t, "release", "create", tag, "-R", repo, "--notes", "external asset")
+	rel, _, err := testClient.GetReleaseByTag(adminUser, "test-repo", tag)
+	if err != nil {
+		t.Fatalf("SDK GetReleaseByTag failed: %v", err)
+	}
+
+	var body bytes.Buffer
+	form := multipart.NewWriter(&body)
+	form.WriteField("external_url", target)
+	form.Close()
+	req, _ := http.NewRequest("POST", fmt.Sprintf("%s/api/v1/repos/%s/releases/%d/assets?name=%s",
+		forgejoURL, repo, rel.ID, url.QueryEscape(name)), &body)
+	req.Header.Set("Content-Type", form.FormDataContentType())
+	req.SetBasicAuth(adminUser, adminPass)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("creating external asset: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("creating external asset: http %d", resp.StatusCode)
+	}
+}
+
+// TestReleaseDownloadExternalAsset: an asset can link to an outside server,
+// which must not receive the token.
+func TestReleaseDownloadExternalAsset(t *testing.T) {
+	gotAuth := "<no request>"
+	outside := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.Write([]byte("outside content"))
+	}))
+	defer outside.Close()
+	tag := "v0.7.1-external"
+	releaseWithExternalAsset(t, tag, "external.txt", outside.URL+"/asset")
+
+	destDir := filepath.Join(t.TempDir(), "downloads")
+	if _, stderr, err := runFJ("release", "download", tag, "-R", adminUser+"/test-repo", "--dir", destDir); err != nil {
+		t.Fatalf("release download failed: %v\nstderr: %s", err, stderr)
+	}
+	if got, err := os.ReadFile(filepath.Join(destDir, "external.txt")); err != nil || string(got) != "outside content" {
+		t.Errorf("external.txt = %q, %v", got, err)
+	}
+	if gotAuth != "" {
+		t.Errorf("outside server got Authorization %q, want none", gotAuth)
+	}
+}
+
+// TestReleaseDownloadAssetPath: Forgejo accepts an asset name with
+// directories in it. fj refuses it rather than write outside --dir.
+func TestReleaseDownloadAssetPath(t *testing.T) {
+	outside := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("outside content"))
+	}))
+	defer outside.Close()
+	tag := "v0.7.2-asset-path"
+	releaseWithExternalAsset(t, tag, "../escaped.txt", outside.URL+"/asset")
+
+	parent := t.TempDir()
+	destDir := filepath.Join(parent, "downloads")
+	_, stderr, err := runFJ("release", "download", tag, "-R", adminUser+"/test-repo", "--dir", destDir)
+	if err == nil || !strings.Contains(stderr, "not a plain file name") {
+		t.Errorf("release download error = %v, stderr: %s; want the plain file name error", err, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(parent, "escaped.txt")); err == nil {
+		t.Error("the asset was written outside --dir")
 	}
 }
 

@@ -29,8 +29,7 @@ func NewCmdLogin(f *cmdutil.Factory) *cobra.Command {
 		Short: "Authenticate with a Forgejo host",
 		Long: `Authenticate with a Forgejo host.
 
-The token can be provided via --token flag, piped via stdin with --with-token,
-or set via the FJ_TOKEN environment variable.`,
+The token can be provided via --token flag or piped via stdin with --with-token.`,
 		Example: `  # Interactive login
   $ fj auth login --hostname forgejo.example.com
 

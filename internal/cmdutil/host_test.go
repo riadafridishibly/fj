@@ -1,6 +1,8 @@
 package cmdutil
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os/exec"
 	"strings"
 	"testing"
@@ -98,4 +100,32 @@ func TestHost(t *testing.T) {
 			}
 		}
 	})
+}
+
+// TestClientWithoutConfig covers the CI pairing: FJ_HOST and FJ_TOKEN with
+// no config file must be enough to build a client.
+func TestClientWithoutConfig(t *testing.T) {
+	// The SDK asks the server for its version when the client is built.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "token env" {
+			t.Errorf("Authorization = %q, want FJ_TOKEN", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"version":"14.0.0"}`))
+	}))
+	defer srv.Close()
+	ciHost := strings.TrimPrefix(srv.URL, "http://")
+
+	t.Setenv("FJ_INSECURE", "1")
+	t.Setenv("FJ_HOST", ciHost)
+	t.Setenv("FJ_TOKEN", "env")
+
+	f := factoryWithHosts()
+	host, err := f.Host()
+	if err != nil || host != ciHost {
+		t.Fatalf("Host() = %q, %v", host, err)
+	}
+	if _, err := f.Client(host); err != nil {
+		t.Fatalf("Client(%q) error = %v", host, err)
+	}
 }

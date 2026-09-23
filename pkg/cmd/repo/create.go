@@ -102,12 +102,8 @@ func createRun(opts *createOptions) error {
 		if err != nil {
 			return err
 		}
-		host, err := cfg.HostByName(hostname)
-		if err != nil {
-			return err
-		}
 		cloneURL := repo.CloneURL
-		if host.GitProtocol == "ssh" {
+		if cfg.GitProtocol(hostname) == "ssh" {
 			cloneURL = repo.SSHURL
 		}
 		if err := git.Clone(cloneURL, ""); err != nil {
