@@ -33,8 +33,7 @@ type apiOptions struct {
 	Endpoint     string
 	Method       string
 	MethodPassed bool
-	RawFields    []string
-	MagicFields  []string
+	Fields       []fieldArg // -f and -F, in command-line order
 	Headers      []string
 	Input        string
 	Include      bool
@@ -81,7 +80,8 @@ parameters go to the query string.
 
 With --paginate, fj follows the Link header until the last page. Array pages
 are merged into one array; other pages print one after another. --slurp wraps
-every page in an outer array instead. Forgejo caps the page size at the
+every page in an outer array instead. With --include, each page prints after
+its own headers and arrays are not merged. Forgejo caps the page size at the
 server's MAX_RESPONSE_ITEMS setting, 50 by default.
 
 When the server answers with an error status, fj prints the response body
@@ -118,8 +118,8 @@ unfiltered and exits 1.`,
 	}
 
 	cmd.Flags().StringVarP(&opts.Method, "method", "X", "GET", "The HTTP method for the request")
-	cmd.Flags().StringArrayVarP(&opts.RawFields, "raw-field", "f", nil, "Add a string parameter in `key=value` format")
-	cmd.Flags().StringArrayVarP(&opts.MagicFields, "field", "F", nil, "Add a typed parameter in `key=value` format (use \"@<path>\" or \"@-\" to read value from file or stdin)")
+	cmd.Flags().VarP(fieldFlag{&opts.Fields, false}, "raw-field", "f", "Add a string parameter in `key=value` format")
+	cmd.Flags().VarP(fieldFlag{&opts.Fields, true}, "field", "F", "Add a typed parameter in `key=value` format (use \"@<path>\" or \"@-\" to read value from file or stdin)")
 	cmd.Flags().StringArrayVarP(&opts.Headers, "header", "H", nil, "Add a HTTP request header in `key:value` format")
 	cmd.Flags().StringVar(&opts.Input, "input", "", "The `file` to use as body for the HTTP request (use \"-\" to read from standard input)")
 	cmd.Flags().BoolVarP(&opts.Include, "include", "i", false, "Include HTTP response status line and headers in the output")
@@ -134,19 +134,25 @@ unfiltered and exits 1.`,
 }
 
 func apiRun(opts *apiOptions) error {
+	if opts.Endpoint == "" {
+		return cmdutil.FlagErrorf("the endpoint must not be empty")
+	}
 	if opts.Slurp && !opts.Paginate {
 		return cmdutil.FlagErrorf("`--paginate` required when passing `--slurp`")
 	}
 	if opts.Slurp && opts.JQ != "" {
 		return cmdutil.FlagErrorf("`--slurp` is not supported with `--jq`")
 	}
+	if opts.Slurp && opts.Include {
+		return cmdutil.FlagErrorf("`--slurp` is not supported with `--include`")
+	}
 	// A second read of standard input gets an empty value, not an error.
 	stdin := 0
 	if opts.Input == "-" {
 		stdin++
 	}
-	for _, s := range opts.MagicFields {
-		if _, v, _ := strings.Cut(s, "="); v == "@-" {
+	for _, a := range opts.Fields {
+		if _, v, _ := strings.Cut(a.s, "="); a.typed && v == "@-" {
 			stdin++
 		}
 	}
@@ -180,7 +186,7 @@ func apiRun(opts *apiOptions) error {
 		return err
 	}
 
-	fields, err := parseFields(opts.RawFields, opts.MagicFields, ph.fill)
+	fields, err := parseFields(opts.Fields, ph.fill)
 	if err != nil {
 		return err
 	}
@@ -230,8 +236,10 @@ func apiRun(opts *apiOptions) error {
 }
 
 // send runs the request, following Link headers under --paginate, and
-// writes the output. Pages are buffered so array pages can be merged into
-// one array before printing.
+// writes the output. Under --paginate without --jq or --include, pages are
+// buffered so array pages can be merged into one array before printing. On
+// an error, the pages fetched before it are printed first, as --jq and
+// --include already did when each arrived.
 // ponytail: memory grows with the total result size; stream the merge if a
 // listing ever outgrows RAM.
 func send(opts *apiOptions, client *apiclient.Client, method, target string, body []byte, contentType string, headers http.Header, jq *gojq.Code) error {
@@ -244,11 +252,13 @@ func send(opts *apiOptions, client *apiclient.Client, method, target string, bod
 		}
 		resp, err := client.Raw(method, target, reader, contentType, headers)
 		if err != nil {
+			writePages(opts, pages, pageType)
 			return err
 		}
 		data, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if err != nil {
+			writePages(opts, pages, pageType)
 			return err
 		}
 
@@ -256,8 +266,6 @@ func send(opts *apiOptions, client *apiclient.Client, method, target string, bod
 			writeHeaders(opts.Out, resp)
 		}
 		if resp.StatusCode > 299 {
-			// Pages fetched before the error are printed, as --jq already
-			// did when each arrived.
 			writePages(opts, pages, pageType)
 			if !opts.Silent {
 				opts.Out.Write(data)
@@ -279,7 +287,7 @@ func send(opts *apiOptions, client *apiclient.Client, method, target string, bod
 					return err
 				}
 			}
-		case opts.Paginate:
+		case opts.Paginate && !opts.Include:
 			pages = append(pages, data)
 			pageType = resp.Header.Get("Content-Type")
 		default:
@@ -316,7 +324,13 @@ type placeholders struct {
 }
 
 func (p *placeholders) resolve(opts *apiOptions) error {
-	inputs := append([]string{opts.Endpoint}, opts.MagicFields...)
+	// Only the endpoint and the -F values that fill replaces are looked at.
+	inputs := []string{opts.Endpoint}
+	for _, a := range opts.Fields {
+		if _, v, _ := strings.Cut(a.s, "="); a.typed && !strings.HasPrefix(v, "@") {
+			inputs = append(inputs, v)
+		}
+	}
 	uses := func(name string) bool {
 		return slices.ContainsFunc(inputs, func(s string) bool { return strings.Contains(s, name) })
 	}
@@ -398,12 +412,35 @@ type field struct {
 
 type emptyArray struct{}
 
+// fieldArg is one -f or -F value as typed; typed marks -F.
+type fieldArg struct {
+	s     string
+	typed bool
+}
+
+// fieldFlag is the flag value behind -f and -F. Both append to one list, so
+// fields keep their command-line order across the two flags and consecutive
+// key[][name] fields group into array elements by that order. gh parses all
+// -f fields before all -F fields.
+type fieldFlag struct {
+	args  *[]fieldArg
+	typed bool
+}
+
+func (f fieldFlag) Set(s string) error {
+	*f.args = append(*f.args, fieldArg{s, f.typed})
+	return nil
+}
+
+func (f fieldFlag) String() string { return "" }
+func (f fieldFlag) Type() string   { return "stringArray" }
+
 // parseFields parses -f values as strings and -F values with gh's type
-// conversion. Raw fields come first, as in gh, since cobra does not keep the
-// order across the two flags.
-func parseFields(raw, magic []string, fill func(string) string) ([]field, error) {
+// conversion.
+func parseFields(args []fieldArg, fill func(string) string) ([]field, error) {
 	var fields []field
-	for i, s := range append(slices.Clone(raw), magic...) {
+	for _, a := range args {
+		s := a.s
 		key, value, ok := strings.Cut(s, "=")
 		if !ok {
 			if strings.HasSuffix(key, "[]") {
@@ -412,7 +449,7 @@ func parseFields(raw, magic []string, fill func(string) string) ([]field, error)
 			}
 			return nil, cmdutil.FlagErrorf("field %q requires a value separated by an '=' sign", s)
 		}
-		if i < len(raw) {
+		if !a.typed {
 			fields = append(fields, field{key, value})
 			continue
 		}

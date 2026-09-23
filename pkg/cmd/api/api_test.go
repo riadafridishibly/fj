@@ -50,7 +50,14 @@ func TestBuildBody(t *testing.T) {
 		return strings.NewReplacer("{owner}", "me", "{repo}", "fj").Replace(s)
 	}
 
-	fields, err := parseFields(raw, magic, fill)
+	var args []fieldArg
+	for _, f := range raw {
+		args = append(args, fieldArg{f, false})
+	}
+	for _, f := range magic {
+		args = append(args, fieldArg{f, true})
+	}
+	fields, err := parseFields(args, fill)
 	if err != nil {
 		t.Fatalf("parseFields() error = %v", err)
 	}
@@ -88,7 +95,7 @@ func TestParseFieldsErrors(t *testing.T) {
 		{"[x]=1", `invalid key`},
 		{"a[b=1", `invalid key`},
 	} {
-		fields, err := parseFields([]string{tc.field}, nil, nil)
+		fields, err := parseFields([]fieldArg{{tc.field, false}}, nil)
 		if err == nil {
 			_, err = buildBody(fields)
 		}
@@ -97,7 +104,7 @@ func TestParseFieldsErrors(t *testing.T) {
 		}
 	}
 
-	fields, _ := parseFields([]string{"a=1", "a[b]=2"}, nil, nil)
+	fields, _ := parseFields([]fieldArg{{"a=1", false}, {"a[b]=2", false}}, nil)
 	if _, err := buildBody(fields); err == nil {
 		t.Error("a=1 then a[b]=2: want a conflict error")
 	}
@@ -106,6 +113,11 @@ func TestParseFieldsErrors(t *testing.T) {
 	_, err := runAPIWith(t, factory(), "echo", "--input", "-", "-F", "c=@-")
 	if err == nil || !strings.Contains(err.Error(), "standard input can be read only once") {
 		t.Errorf("--input - with -F c=@-: error = %v", err)
+	}
+
+	// An unset variable in a script must not look like an empty result.
+	if _, err := runAPIWith(t, factory(), ""); err == nil || !strings.Contains(err.Error(), "endpoint must not be empty") {
+		t.Errorf("empty endpoint: error = %v", err)
 	}
 }
 
@@ -153,7 +165,7 @@ func TestNextPage(t *testing.T) {
 }
 
 // fakeForgejo serves three pages of labels, a listing whose second page
-// fails, a 404, and an echo endpoint that returns the request it saw. Its
+// fails, one whose next link points off the host, a 404, and an echo endpoint that returns the request it saw. Its
 // Link headers name a different host, as a Forgejo behind a proxy does.
 func fakeForgejo(t *testing.T) *httptest.Server {
 	t.Helper()
@@ -180,6 +192,9 @@ func fakeForgejo(t *testing.T) *httptest.Server {
 				return
 			}
 			w.Header().Set("Link", `<http://forgejo.example.com/api/v1/repos/me/fj/flaky?page=2>; rel="next"`)
+			fmt.Fprintln(w, `[{"id":1}]`)
+		case "/api/v1/repos/me/fj/offsite":
+			w.Header().Set("Link", `<http://elsewhere.example.com/page2>; rel="next"`)
 			fmt.Fprintln(w, `[{"id":1}]`)
 		case "/api/v1/echo":
 			body, _ := io.ReadAll(r.Body)
@@ -253,6 +268,18 @@ func TestPaginateMergesArrays(t *testing.T) {
 		t.Errorf("--jq output = %q, want %q", out, want)
 	}
 
+	// With --include, each page follows its own headers, unmerged.
+	out, err = runAPI(t, srv, "-i", "--paginate", "repos/{owner}/{repo}/labels?limit=1")
+	parts := strings.Split(out, "HTTP/1.1 200 OK\n")[1:]
+	if err != nil || len(parts) != 3 {
+		t.Fatalf("--include: %d header blocks, error %v\n%s", len(parts), err, out)
+	}
+	for i, p := range parts {
+		if want := fmt.Sprintf(`"name":"<l%d>"}]`+"\n", i+1); !strings.HasSuffix(p, want) {
+			t.Errorf("--include: page %d = %q, want it to end with %q", i+1, p, want)
+		}
+	}
+
 	out, err = runAPI(t, srv, "--paginate", "--slurp", "repos/{owner}/{repo}/labels")
 	if err != nil {
 		t.Fatalf("--slurp error = %v", err)
@@ -290,6 +317,13 @@ func TestFieldsPlacement(t *testing.T) {
 		t.Errorf("fields with -X GET: %v", got)
 	}
 
+	// -f and -F keep their command-line order, so mixed fields group into
+	// the right array elements.
+	got = echo("-f", "files[][path]=a.txt", "-F", "files[][size]=1", "-f", "files[][path]=b.txt", "-F", "files[][size]=2")
+	if want := `{"files":[{"path":"a.txt","size":1},{"path":"b.txt","size":2}]}`; got["body"] != want {
+		t.Errorf("mixed -f and -F: body = %s, want %s", got["body"], want)
+	}
+
 	input := filepath.Join(t.TempDir(), "body.json")
 	os.WriteFile(input, []byte(`{"raw":true}`), 0o644)
 	got = echo("--input", input, "-f", "dry=1", "-H", "Content-Type: text/plain")
@@ -316,6 +350,10 @@ func TestHTTPError(t *testing.T) {
 	out, err = runAPI(t, srv, "--paginate", "repos/{owner}/{repo}/flaky")
 	if want := "[{\"id\":1}]\n{\"message\":\"boom\"}\n"; err == nil || out != want {
 		t.Errorf("failing second page: output = %q, error = %v; want %q", out, err, want)
+	}
+	out, err = runAPI(t, srv, "--paginate", "repos/{owner}/{repo}/offsite")
+	if want := "[{\"id\":1}]\n"; err == nil || out != want {
+		t.Errorf("next page refused: output = %q, error = %v; want %q", out, err, want)
 	}
 }
 
