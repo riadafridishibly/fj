@@ -83,12 +83,35 @@ closed pull requests do. reviewDecision, taken from each reviewer's latest
 approval or change request, is APPROVED, CHANGES_REQUESTED or empty, never
 REVIEW_REQUIRED: Forgejo does not say whether a review is required.
 
+Repositories, releases and labels differ from gh too. A repository's id is
+numeric, and a release's id and databaseId are the same number. issues and
+pullRequests count open ones only, as gh's do; watchers counts the users
+watching the repository. viewerPermission is ADMIN, WRITE or READ, since
+Forgejo has no MAINTAIN or TRIAGE, and empty when Forgejo sends no
+permissions. viewerDefaultMergeMethod is the repository's default merge
+style: MERGE, REBASE or SQUASH, or for the styles only Forgejo has,
+REBASE_MERGE, FAST_FORWARD_ONLY, MANUALLY_MERGED or REBASE_UPDATE_ONLY.
+release list reads isLatest from Forgejo's latest release, which skips
+drafts and pre-releases. fj auth status lists one account per host.
+
+Left out, as Forgejo has no source for them: on repositories, codeOfConduct,
+contactLinks, fundingLinks, hasDiscussionsEnabled, isBlankIssuesEnabled,
+isInOrganization, isSecurityPolicyEnabled, isUserConfigurationRepository,
+issueTemplates, licenseInfo, mentionableUsers, openGraphImageUrl, projects,
+projectsV2, pullRequestTemplates, pushedAt, securityPolicyUrl,
+templateRepository, usesCustomOpenGraphImage, viewerDefaultCommitEmail,
+viewerHasStarred, viewerPossibleCommitEmails and viewerSubscription; on
+releases, isImmutable and uploadUrl; on labels, createdAt, updatedAt,
+isDefault and url, which in Forgejo is an API URL; on fj auth status, scopes
+and tokenSource.
+
 --json takes a comma-separated list of fields. Without one, fj lists the
 valid fields and exits 1. On a terminal the JSON is indented; otherwise it
 is printed on one line.
 
 -q/--jq filters the JSON with a jq expression. Strings print raw and other
 values as compact JSON, one result per line. jq need not be installed.
+fj auth status, like gh's, has --jq and --template but not -q or -t.
 
 -t/--template formats the JSON with a Go template (text/template). Both --jq
 and --template need --json; given both, --jq wins. The template can use
@@ -110,6 +133,7 @@ Examples:
   $ fj issue list --json number,title,labels
   $ fj issue list --json author --jq '.[].author.login'
   $ fj pr view 42 --json state,mergeable,reviewDecision
+  $ fj repo view --json nameWithOwner,visibility,viewerPermission
   $ fj issue list --json number,title,updatedAt --template \
       '{{range .}}{{tablerow .number .title (timeago .updatedAt)}}{{end}}'`,
 	})

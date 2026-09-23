@@ -102,12 +102,15 @@ func (f *Factory) Client(hostname string) (*forgejo.Client, error) {
 		return nil, err
 	}
 
-	scheme := "https"
+	return NewForgejoClient(BaseURL(hostname), token)
+}
+
+// BaseURL is host's URL, over https unless FJ_INSECURE is set.
+func BaseURL(host string) string {
 	if os.Getenv("FJ_INSECURE") != "" {
-		scheme = "http"
+		return "http://" + host
 	}
-	baseURL := fmt.Sprintf("%s://%s", scheme, hostname)
-	return NewForgejoClient(baseURL, token)
+	return "https://" + host
 }
 
 // NewForgejoClient builds a forgejo.Client with fj's standard options
@@ -141,12 +144,7 @@ func (f *Factory) APIClientForHost(host string) (*api.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	scheme := "https"
-	if os.Getenv("FJ_INSECURE") != "" {
-		scheme = "http"
-	}
-	baseURL := fmt.Sprintf("%s://%s", scheme, host)
-	return api.NewClient(baseURL, token, hostOnlyClient(host)), nil
+	return api.NewClient(BaseURL(host), token, hostOnlyClient(host)), nil
 }
 
 // APIGet performs an authenticated GET against /api/v1<path> on the repo's

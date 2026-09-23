@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
-	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type createOptions struct {
@@ -16,7 +15,7 @@ type createOptions struct {
 	Name        string
 	Color       string
 	Description string
-	JSONOutput  bool
+	JSONOutput  cmdutil.JSONFlags
 }
 
 func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
@@ -27,7 +26,8 @@ func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
 		Short: "Create a label",
 		Example: `  $ fj label create --name bug --color "#ee0701"
   $ fj label create --name enhancement --color "#a2eeef" --description "New feature"
-  $ fj label create --name "help wanted"`,
+  $ fj label create --name "help wanted"
+  $ fj label create --name bug --json id,color`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if opts.Name == "" {
 				return cmdutil.FlagErrorf("--name is required")
@@ -42,7 +42,7 @@ func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVarP(&opts.Name, "name", "n", "", "Label name")
 	cmd.Flags().StringVarP(&opts.Color, "color", "c", "", "Label color (hex, e.g. \"#ee0701\"). Random if omitted")
 	cmd.Flags().StringVarP(&opts.Description, "description", "d", "", "Label description")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, labelFields, nil, false)
 
 	return cmd
 }
@@ -67,8 +67,8 @@ func createRun(opts *createOptions) error {
 		return fmt.Errorf("creating label: %w", err)
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, label)
+	if opts.JSONOutput.Enabled() {
+		return opts.JSONOutput.Write(os.Stdout, cmdutil.JSONLabels([]*forgejo.Label{label})[0])
 	}
 
 	fmt.Fprintf(os.Stderr, "✓ Created label %q\n", label.Name)

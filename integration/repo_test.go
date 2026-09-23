@@ -20,7 +20,7 @@ func TestRepoList(t *testing.T) {
 }
 
 func TestRepoListJSON(t *testing.T) {
-	stdout := mustRunFJ(t, "repo", "list", "--json")
+	stdout := mustRunFJ(t, "repo", "list", "--json", "name")
 
 	var repos []map[string]any
 	if err := json.Unmarshal([]byte(stdout), &repos); err != nil {
@@ -59,7 +59,7 @@ func TestRepoView(t *testing.T) {
 }
 
 func TestRepoViewJSON(t *testing.T) {
-	stdout := mustRunFJ(t, "repo", "view", adminUser+"/test-repo", "--json")
+	stdout := mustRunFJ(t, "repo", "view", adminUser+"/test-repo", "--json", "name")
 
 	var repo map[string]any
 	if err := json.Unmarshal([]byte(stdout), &repo); err != nil {
@@ -77,7 +77,7 @@ func TestRepoCreate(t *testing.T) {
 	}
 
 	// Verify it exists
-	viewOut := mustRunFJ(t, "repo", "view", adminUser+"/created-by-test", "--json")
+	viewOut := mustRunFJ(t, "repo", "view", adminUser+"/created-by-test", "--json", "name,description")
 	var repo map[string]any
 	if err := json.Unmarshal([]byte(viewOut), &repo); err != nil {
 		t.Fatalf("invalid JSON: %v", err)

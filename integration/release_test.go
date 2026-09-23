@@ -161,7 +161,7 @@ func TestReleaseListJSON(t *testing.T) {
 		t.Fatalf("setup create failed: %v\n%s", err, stderr)
 	}
 
-	stdout := mustRunFJ(t, "release", "list", "-R", repo, "--json")
+	stdout := mustRunFJ(t, "release", "list", "-R", repo, "--json", "tagName")
 
 	var releases []map[string]any
 	if err := json.Unmarshal([]byte(stdout), &releases); err != nil {
@@ -173,7 +173,7 @@ func TestReleaseListJSON(t *testing.T) {
 
 	var found bool
 	for _, r := range releases {
-		if r["tag_name"] == tag {
+		if r["tagName"] == tag {
 			found = true
 			break
 		}
@@ -198,14 +198,14 @@ func TestReleaseListExcludeDrafts(t *testing.T) {
 		t.Fatalf("published create failed: %v\n%s", err, stderr)
 	}
 
-	stdout := mustRunFJ(t, "release", "list", "-R", repo, "--exclude-drafts", "--json")
+	stdout := mustRunFJ(t, "release", "list", "-R", repo, "--exclude-drafts", "--json", "tagName")
 
 	var releases []map[string]any
 	if err := json.Unmarshal([]byte(stdout), &releases); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
 	for _, r := range releases {
-		if r["tag_name"] == draftTag {
+		if r["tagName"] == draftTag {
 			t.Errorf("draft release %q should not appear with --exclude-drafts", draftTag)
 		}
 	}
@@ -262,14 +262,14 @@ func TestReleaseViewJSON(t *testing.T) {
 		t.Fatalf("setup create failed: %v\n%s", err, stderr)
 	}
 
-	stdout := mustRunFJ(t, "release", "view", tag, "-R", repo, "--json")
+	stdout := mustRunFJ(t, "release", "view", tag, "-R", repo, "--json", "tagName,name")
 
 	var rel map[string]any
 	if err := json.Unmarshal([]byte(stdout), &rel); err != nil {
 		t.Fatalf("invalid JSON: %v\nraw: %s", err, stdout)
 	}
-	if rel["tag_name"] != tag {
-		t.Errorf("expected tag_name %q, got %v", tag, rel["tag_name"])
+	if rel["tagName"] != tag {
+		t.Errorf("expected tagName %q, got %v", tag, rel["tagName"])
 	}
 	if rel["name"] != "JSON View Test" {
 		t.Errorf("expected name 'JSON View Test', got %v", rel["name"])

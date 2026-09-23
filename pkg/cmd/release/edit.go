@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
-	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type editOptions struct {
@@ -21,7 +20,7 @@ type editOptions struct {
 	Target     string
 	Draft      *bool
 	Prerelease *bool
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdEdit(f *cmdutil.Factory) *cobra.Command {
@@ -34,7 +33,8 @@ func NewCmdEdit(f *cmdutil.Factory) *cobra.Command {
 		Example: `  $ fj release edit v1.2.0 --title "v1.2.0 - Hotfix"
   $ fj release edit v1.2.0 --notes-file CHANGELOG.md
   $ fj release edit v1.2.0 --draft=false
-  $ fj release edit v1.2.0 --prerelease=true`,
+  $ fj release edit v1.2.0 --prerelease=true
+  $ fj release edit v1.2.0 --draft=false --json isDraft,publishedAt`,
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Tag = args[0]
@@ -62,7 +62,7 @@ func NewCmdEdit(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVar(&opts.Target, "target", "", "Change target branch or commit-ish")
 	cmd.Flags().BoolVarP(&draftFlag, "draft", "d", false, "Set draft state")
 	cmd.Flags().BoolVarP(&prereleaseFlag, "prerelease", "p", false, "Set pre-release state")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, releaseFields, nil, false)
 
 	return cmd
 }
@@ -105,8 +105,8 @@ func editRun(opts *editOptions) error {
 		return fmt.Errorf("editing release: %w", err)
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, updated)
+	if opts.JSONOutput.Enabled() {
+		return opts.JSONOutput.Write(os.Stdout, releaseJSON(updated))
 	}
 
 	fmt.Fprintf(os.Stderr, "✓ Edited release %s\n", updated.TagName)

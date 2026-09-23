@@ -138,7 +138,7 @@ func prJSON(f *cmdutil.Factory, repo cmdutil.Repo, pr *apiPullRequest, j *cmduti
 		}
 	}
 	if j.Has("files") {
-		files, err := listAll[forgejo.ChangedFile](client, repo.APIPath("/pulls/%d/files", pr.Index))
+		files, err := cmdutil.ListAll[forgejo.ChangedFile](client, repo.APIPath("/pulls/%d/files", pr.Index))
 		if err != nil {
 			return nil, fmt.Errorf("listing files: %w", err)
 		}
@@ -158,7 +158,7 @@ func prJSON(f *cmdutil.Factory, repo cmdutil.Repo, pr *apiPullRequest, j *cmduti
 		m["files"] = out
 	}
 	if wantReviews {
-		reviews, err := listAll[*forgejo.PullReview](client, repo.APIPath("/pulls/%d/reviews", pr.Index))
+		reviews, err := cmdutil.ListAll[*forgejo.PullReview](client, repo.APIPath("/pulls/%d/reviews", pr.Index))
 		if err != nil {
 			return nil, fmt.Errorf("listing reviews: %w", err)
 		}
@@ -274,7 +274,7 @@ type apiCommit struct {
 // prCommits lists the pull request's commits in gh's shape. files and
 // verification are turned off; gh's shape needs neither.
 func prCommits(client *api.Client, repo cmdutil.Repo, index int64) ([]map[string]any, error) {
-	commits, err := listAll[apiCommit](client, repo.APIPath("/pulls/%d/commits?files=false&verification=false", index))
+	commits, err := cmdutil.ListAll[apiCommit](client, repo.APIPath("/pulls/%d/commits?files=false&verification=false", index))
 	if err != nil {
 		return nil, fmt.Errorf("listing commits: %w", err)
 	}
@@ -299,26 +299,6 @@ func prCommits(client *api.Client, repo cmdutil.Repo, index int64) ([]map[string
 func splitMessage(msg string) (headline, body string) {
 	headline, body, _ = strings.Cut(msg, "\n")
 	return strings.TrimSpace(headline), strings.TrimSpace(body)
-}
-
-// listAll pages through a list endpoint until a short page.
-func listAll[T any](client *api.Client, path string) ([]T, error) {
-	const limit = 50
-	sep := "?"
-	if strings.Contains(path, "?") {
-		sep = "&"
-	}
-	var all []T
-	for page := 1; ; page++ {
-		var items []T
-		if err := client.GetJSON(fmt.Sprintf("%s%spage=%d&limit=%d", path, sep, page, limit), &items); err != nil {
-			return nil, err
-		}
-		all = append(all, items...)
-		if len(items) < limit {
-			return all, nil
-		}
-	}
 }
 
 // writePR prints the pull request after a write. The write's response is

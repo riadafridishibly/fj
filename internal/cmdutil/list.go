@@ -1,11 +1,34 @@
 package cmdutil
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/riadafridishibly/fj/internal/api"
 )
+
+// ListAll pages through a list endpoint until a short page.
+func ListAll[T any](client *api.Client, path string) ([]T, error) {
+	const limit = 50
+	sep := "?"
+	if strings.Contains(path, "?") {
+		sep = "&"
+	}
+	var all []T
+	for page := 1; ; page++ {
+		var items []T
+		if err := client.GetJSON(fmt.Sprintf("%s%spage=%d&limit=%d", path, sep, page, limit), &items); err != nil {
+			return nil, err
+		}
+		all = append(all, items...)
+		if len(items) < limit {
+			return all, nil
+		}
+	}
+}
 
 // sortAliases maps the friendly --sort values fj accepts to the sort keys the
 // Forgejo API understands. An empty API value means "server default" (newest

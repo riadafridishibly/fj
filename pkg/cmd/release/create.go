@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
-	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type createOptions struct {
@@ -22,7 +21,7 @@ type createOptions struct {
 	Draft      bool
 	Prerelease bool
 	Assets     []string
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
@@ -37,7 +36,8 @@ func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
   $ fj release create v1.2.0 --draft
   $ fj release create v1.2.0 --prerelease --target main
   $ fj release create v1.2.0 dist/fj_linux_amd64.tar.gz dist/fj_darwin_amd64.tar.gz
-  $ fj release create v1.2.0 --notes-file - < CHANGELOG.md`,
+  $ fj release create v1.2.0 --notes-file - < CHANGELOG.md
+  $ fj release create v1.2.0 dist/fj.tar.gz --json url,assets`,
 		Args: cmdutil.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Tag = args[0]
@@ -59,7 +59,7 @@ func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVar(&opts.Target, "target", "", "Target branch or commit-ish (defaults to default branch)")
 	cmd.Flags().BoolVarP(&opts.Draft, "draft", "d", false, "Save as draft (unpublished)")
 	cmd.Flags().BoolVarP(&opts.Prerelease, "prerelease", "p", false, "Mark as pre-release")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, releaseFields, nil, false)
 
 	return cmd
 }
@@ -101,13 +101,13 @@ func createRun(opts *createOptions) error {
 		fmt.Fprintf(os.Stderr, "✓ Uploaded %s\n", filepath.Base(path))
 	}
 
-	if opts.JSONOutput {
+	if opts.JSONOutput.Enabled() {
 		// Re-fetch to include uploaded attachments
 		rel, _, err = client.GetRelease(repo.Owner, repo.Name, rel.ID)
 		if err != nil {
 			return fmt.Errorf("getting release: %w", err)
 		}
-		return output.PrintJSON(os.Stdout, rel)
+		return opts.JSONOutput.Write(os.Stdout, releaseJSON(rel))
 	}
 
 	fmt.Fprintf(os.Stdout, "%s\n", rel.HTMLURL)
