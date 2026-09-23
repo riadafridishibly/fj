@@ -57,7 +57,11 @@ func listRun(opts *listOptions) error {
 		return err
 	}
 
-	host, hostname, err := cfg.DefaultHost()
+	hostname, err := opts.Factory.Host()
+	if err != nil {
+		return err
+	}
+	host, err := cfg.HostByName(hostname)
 	if err != nil {
 		return err
 	}

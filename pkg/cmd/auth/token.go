@@ -47,11 +47,9 @@ func tokenRun(opts *tokenOptions) error {
 	if opts.Hostname != "" {
 		host = opts.Hostname
 	} else {
-		_, h, err := cfg.DefaultHost()
-		if err != nil {
+		if host, err = opts.Factory.Host(); err != nil {
 			return err
 		}
-		host = h
 	}
 
 	token, err := cfg.TokenForHost(host)

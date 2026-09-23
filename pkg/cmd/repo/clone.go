@@ -39,27 +39,27 @@ func NewCmdClone(f *cmdutil.Factory) *cobra.Command {
 }
 
 func cloneRun(opts *cloneOptions) error {
-	cfg, err := opts.Factory.Config()
-	if err != nil {
-		return err
-	}
-
-	_, hostname, err := cfg.DefaultHost()
-	if err != nil {
-		return err
-	}
-
-	host, err := cfg.HostByName(hostname)
-	if err != nil {
-		return err
-	}
-
-	// If it's already a full URL, clone directly
+	// A full URL names its own server, so it is cloned before any host is
+	// resolved: with several hosts configured, resolving one would fail
+	// for a clone that needs none.
 	if strings.HasPrefix(opts.Repo, "http://") || strings.HasPrefix(opts.Repo, "https://") || strings.HasPrefix(opts.Repo, "git@") {
 		if err := git.Clone(opts.Repo, opts.Directory); err != nil {
 			return fmt.Errorf("cloning: %w", err)
 		}
 		return nil
+	}
+
+	cfg, err := opts.Factory.Config()
+	if err != nil {
+		return err
+	}
+	hostname, err := opts.Factory.Host()
+	if err != nil {
+		return err
+	}
+	host, err := cfg.HostByName(hostname)
+	if err != nil {
+		return err
 	}
 
 	repo, err := cmdutil.RepoFromFullName(opts.Repo)

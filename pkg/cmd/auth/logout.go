@@ -39,13 +39,14 @@ func logoutRun(opts *logoutOptions) error {
 		return err
 	}
 
+	// Removing credentials is not inferred from FJ_HOST or the checkout, as
+	// other commands infer their host: without --hostname, only a single
+	// configured host is unambiguous enough to log out of.
 	hostname := opts.Hostname
 	if hostname == "" {
-		_, h, err := cfg.DefaultHost()
-		if err != nil {
+		if hostname, err = cfg.OnlyHost("pass --hostname to choose one"); err != nil {
 			return err
 		}
-		hostname = h
 	}
 
 	if _, ok := cfg.Hosts[hostname]; !ok {

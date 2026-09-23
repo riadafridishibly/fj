@@ -3,8 +3,10 @@ package git
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"net/url"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -137,9 +139,12 @@ func Remotes() ([]Remote, error) {
 		}
 	}
 
+	// Sorted by name: map order is random, and callers that prefer one
+	// remote over another must see the same candidates in the same order
+	// on every run.
 	var remotes []Remote
-	for _, r := range remoteMap {
-		remotes = append(remotes, *r)
+	for _, name := range slices.Sorted(maps.Keys(remoteMap)) {
+		remotes = append(remotes, *remoteMap[name])
 	}
 	return remotes, nil
 }

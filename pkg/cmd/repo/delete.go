@@ -47,15 +47,9 @@ func deleteRun(opts *deleteOptions) error {
 		return err
 	}
 
-	cfg, err := opts.Factory.Config()
-	if err != nil {
+	if repo.Host, err = opts.Factory.Host(); err != nil {
 		return err
 	}
-	_, host, err := cfg.DefaultHost()
-	if err != nil {
-		return err
-	}
-	repo.Host = host
 
 	client, err := opts.Factory.ClientForRepo(repo)
 	if err != nil {

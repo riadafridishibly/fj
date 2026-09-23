@@ -191,3 +191,26 @@ func TestRevExists(t *testing.T) {
 		t.Error("empty rev should not exist")
 	}
 }
+
+func TestRemotesSortedByName(t *testing.T) {
+	t.Chdir(t.TempDir())
+	gitT(t, "init", "-q")
+	for _, name := range []string{"zeta", "alpha", "mid"} {
+		gitT(t, "remote", "add", name, "https://forgejo.example.com/o/"+name+".git")
+	}
+
+	// Map order differs between runs, so one lucky run proves nothing.
+	for range 20 {
+		remotes, err := Remotes()
+		if err != nil {
+			t.Fatalf("Remotes() error = %v", err)
+		}
+		var names []string
+		for _, r := range remotes {
+			names = append(names, r.Name)
+		}
+		if want := []string{"alpha", "mid", "zeta"}; !slices.Equal(names, want) {
+			t.Fatalf("names = %v, want %v", names, want)
+		}
+	}
+}
