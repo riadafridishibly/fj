@@ -22,7 +22,7 @@ import (
 
 type statusOptions struct {
 	Factory    *cmdutil.Factory
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 	Full       bool
 }
 
@@ -36,9 +36,10 @@ func NewCmdStatus(f *cmdutil.Factory) *cobra.Command {
 
 By default the "closed" PR count is the total from the server and includes merged PRs.
 Pass --full to paginate every closed PR and produce a merged-vs-closed breakdown; this
-can take tens of seconds on repositories with many closed PRs.`,
+can take tens of seconds on repositories with many closed PRs. Without --full, the
+mergedPullRequests JSON field is null.`,
 		Example: `  $ fj status
-  $ fj status --json
+  $ fj status --json nameWithOwner,openIssues,openPullRequests
   $ fj status --full`,
 		Aliases: []string{"st"},
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -46,79 +47,143 @@ can take tens of seconds on repositories with many closed PRs.`,
 		},
 	}
 
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, nil, statusFields, true)
 	cmd.Flags().BoolVar(&opts.Full, "full", false, "Compute the merged-vs-closed PR breakdown (slow on large repos)")
 
 	return cmd
 }
 
 type repoStatus struct {
-	Repository    string `json:"repository"`
-	DefaultBranch string `json:"default_branch"`
-	Stars         int    `json:"stars"`
-	Forks         int    `json:"forks"`
-	Watchers      int    `json:"watchers"`
+	Repository    string
+	DefaultBranch string
+	Stars         int
+	Forks         int
+	Watchers      int
 
-	OpenIssues   int `json:"open_issues"`
-	ClosedIssues int `json:"closed_issues"`
+	OpenIssues   int
+	ClosedIssues int
 
-	OpenPRs int `json:"open_prs"`
+	OpenPRs int
 	// ClosedPRs is the total count of PRs in the "closed" state as reported by
 	// the server (includes merged PRs). When --full is used, ClosedPRs is
 	// re-computed as closed-only (merged excluded).
-	ClosedPRs int `json:"closed_prs"`
+	ClosedPRs int
 	// MergedPRs is only populated when --full is used. nil otherwise.
-	MergedPRs *int `json:"merged_prs,omitempty"`
+	MergedPRs *int
 
-	LatestRelease *releaseStatus `json:"latest_release,omitempty"`
+	LatestRelease *releaseStatus
 
-	Branch *branchStatus `json:"branch,omitempty"`
+	Branch *branchStatus
 }
 
 type releaseStatus struct {
-	Tag          string    `json:"tag"`
-	Title        string    `json:"title"`
-	IsDraft      bool      `json:"draft"`
-	IsPrerelease bool      `json:"prerelease"`
-	PublishedAt  time.Time `json:"published_at"`
-	HTMLURL      string    `json:"html_url"`
+	Tag          string
+	Title        string
+	IsDraft      bool
+	IsPrerelease bool
+	PublishedAt  time.Time
+	HTMLURL      string
 }
 
 type branchStatus struct {
-	Name         string    `json:"name"`
-	ExistsRemote bool      `json:"exists_on_remote"`
-	PR           *prStatus `json:"pull_request,omitempty"`
+	Name         string
+	ExistsRemote bool
+	PR           *prStatus
 }
 
 type prStatus struct {
-	Number       int64  `json:"number"`
-	Title        string `json:"title"`
-	State        string `json:"state"`
-	Mergeable    bool   `json:"mergeable"`
-	Draft        bool   `json:"draft"`
-	Additions    int    `json:"additions"`
-	Deletions    int    `json:"deletions"`
-	ChangedFiles int    `json:"changed_files"`
-	HTMLURL      string `json:"html_url"`
-	HeadSHA      string `json:"head_sha"`
-	LocalSHA     string `json:"local_sha"`
-	Synced       bool   `json:"synced"`
+	Number       int64
+	Title        string
+	State        string
+	Mergeable    bool
+	Draft        bool
+	Additions    int
+	Deletions    int
+	ChangedFiles int
+	HTMLURL      string
+	HeadSHA      string
+	LocalSHA     string
+	Synced       bool
 	// Conflicts is a local git merge-tree check; nil when it couldn't run.
-	Conflicts *conflictInfo `json:"conflicts,omitempty"`
+	Conflicts *conflictInfo
 }
 
 type conflictInfo struct {
-	Status string `json:"status"` // "clean", "conflicts", or "unavailable"
-	Reason string `json:"reason,omitempty"`
+	Status string // "clean", "conflicts", or "unavailable"
+	Reason string
 	// Base and Head are the git revs actually handed to merge-tree (a SHA, a
 	// remote ref, or a local ref — whichever resolved first). BaseRef and HeadRef
 	// are the PR's branch names from the API, so the output can name the branches
 	// the PR merges between rather than only showing opaque revs.
-	Base    string   `json:"base,omitempty"`
-	Head    string   `json:"head,omitempty"`
-	BaseRef string   `json:"base_ref,omitempty"`
-	HeadRef string   `json:"head_ref,omitempty"`
-	Files   []string `json:"files,omitempty"`
+	Base    string
+	Head    string
+	BaseRef string
+	HeadRef string
+	Files   []string
+}
+
+// statusFields name fj status's JSON fields. gh has no such command; the
+// fields gh repo view also has keep its names and shapes.
+var statusFields = []string{
+	"branch", "closedIssues", "closedPullRequests", "defaultBranchRef", "forkCount",
+	"latestRelease", "mergedPullRequests", "nameWithOwner", "openIssues", "openPullRequests",
+	"stargazerCount", "watchers",
+}
+
+// statusJSON returns s keyed by field name. mergedPullRequests, latestRelease
+// and branch are null when there is nothing to report, as is a branch's
+// pullRequest and a pull request's conflicts.
+func statusJSON(s *repoStatus) map[string]any {
+	m := map[string]any{
+		"nameWithOwner":      s.Repository,
+		"defaultBranchRef":   map[string]any{"name": s.DefaultBranch},
+		"stargazerCount":     s.Stars,
+		"forkCount":          s.Forks,
+		"watchers":           map[string]any{"totalCount": s.Watchers},
+		"openIssues":         s.OpenIssues,
+		"closedIssues":       s.ClosedIssues,
+		"openPullRequests":   s.OpenPRs,
+		"closedPullRequests": s.ClosedPRs,
+		"mergedPullRequests": s.MergedPRs,
+		"latestRelease":      nil,
+		"branch":             nil,
+	}
+	if r := s.LatestRelease; r != nil {
+		m["latestRelease"] = map[string]any{
+			"tagName": r.Tag, "name": r.Title, "isDraft": r.IsDraft, "isPrerelease": r.IsPrerelease,
+			"publishedAt": cmdutil.JSONTime(&r.PublishedAt), "url": r.HTMLURL,
+		}
+	}
+	if b := s.Branch; b != nil {
+		var pr map[string]any
+		if p := b.PR; p != nil {
+			// gh's mergeable enum, mapped as in fj pr view.
+			mergeable := "UNKNOWN"
+			switch {
+			case p.State != "open":
+			case p.Mergeable:
+				mergeable = "MERGEABLE"
+			case !p.Draft:
+				mergeable = "CONFLICTING"
+			}
+			var conflicts map[string]any
+			if c := p.Conflicts; c != nil {
+				conflicts = map[string]any{
+					"status": c.Status, "reason": c.Reason, "base": c.Base, "head": c.Head,
+					"baseRefName": c.BaseRef, "headRefName": c.HeadRef, "files": append([]string{}, c.Files...),
+				}
+			}
+			pr = map[string]any{
+				"number": p.Number, "title": p.Title, "state": strings.ToUpper(p.State),
+				"mergeable": mergeable, "isDraft": p.Draft, "additions": p.Additions,
+				"deletions": p.Deletions, "changedFiles": p.ChangedFiles, "url": p.HTMLURL,
+				"headRefOid": p.HeadSHA, "localSha": p.LocalSHA, "synced": p.Synced,
+				"conflicts": conflicts,
+			}
+		}
+		m["branch"] = map[string]any{"name": b.Name, "existsOnRemote": b.ExistsRemote, "pullRequest": pr}
+	}
+	return m
 }
 
 func statusRun(opts *statusOptions) error {
@@ -221,26 +286,27 @@ func statusRun(opts *statusOptions) error {
 		status.ClosedPRs = cmdutil.TotalCount(respClosedPRs)
 	}
 
+	// With --json, skip the parts no requested field needs.
+	want := func(field string) bool { return !opts.JSONOutput.Enabled() || opts.JSONOutput.Has(field) }
+
 	// Latest release (non-fatal if repo has none)
-	debug.Logf(1, "phase: latest release")
-	latest, _, relErr := client.GetLatestRelease(repo.Owner, repo.Name)
-	if relErr == nil && latest != nil {
-		title := latest.Title
-		if title == "" {
-			title = latest.TagName
-		}
-		status.LatestRelease = &releaseStatus{
-			Tag:          latest.TagName,
-			Title:        title,
-			IsDraft:      latest.IsDraft,
-			IsPrerelease: latest.IsPrerelease,
-			PublishedAt:  latest.PublishedAt,
-			HTMLURL:      latest.HTMLURL,
+	if want("latestRelease") {
+		debug.Logf(1, "phase: latest release")
+		latest, _, relErr := client.GetLatestRelease(repo.Owner, repo.Name)
+		if relErr == nil && latest != nil {
+			status.LatestRelease = &releaseStatus{
+				Tag:          latest.TagName,
+				Title:        latest.Title,
+				IsDraft:      latest.IsDraft,
+				IsPrerelease: latest.IsPrerelease,
+				PublishedAt:  latest.PublishedAt,
+				HTMLURL:      latest.HTMLURL,
+			}
 		}
 	}
 
 	// Current branch info
-	if branch != "" {
+	if branch != "" && want("branch") {
 		debug.Logf(1, "phase: current branch (%s)", branch)
 		bs := &branchStatus{Name: branch}
 
@@ -321,8 +387,8 @@ func statusRun(opts *statusOptions) error {
 		status.Branch = bs
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, status)
+	if opts.JSONOutput.Enabled() {
+		return opts.JSONOutput.Write(os.Stdout, statusJSON(status))
 	}
 
 	printStatus(status)
@@ -527,7 +593,7 @@ func printStatus(s *repoStatus) {
 		fmt.Fprintf(
 			w, "  %s %s %s\n",
 			output.Colorize(output.Cyan, r.Tag),
-			output.Truncate(r.Title, 50),
+			output.Truncate(cmp.Or(r.Title, r.Tag), 50),
 			output.Colorize(typColor, "("+typ+")"),
 		)
 		fmt.Fprintf(w, "  Published %s\n", output.RelativeTimeStr(r.PublishedAt))

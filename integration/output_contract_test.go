@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -672,5 +673,76 @@ func TestJSONFlagsAsGh(t *testing.T) {
 		if err == nil || stdout != "" || !strings.Contains(stderr, tt.want) {
 			t.Errorf("%v: err = %v, stdout = %q, stderr = %q; want %q", tt.args, err, stdout, stderr, tt.want)
 		}
+	}
+}
+
+// TestFJOnlyJSONShapes checks the gh-style fields of commands gh lacks: issue
+// and pull request comments, milestones and fj status.
+func TestFJOnlyJSONShapes(t *testing.T) {
+	repo := adminUser + "/test-repo"
+
+	out := mustRunFJ(t, "pr", "comment", "create", "4", "-R", repo, "--body", "shape comment", "--json", "id,url")
+	var created struct {
+		ID  int64  `json:"id"`
+		URL string `json:"url"`
+	}
+	if err := json.Unmarshal([]byte(out), &created); err != nil || created.ID == 0 || created.URL == "" {
+		t.Fatalf("pr comment create = %s (%v), want an id and url", out, err)
+	}
+	id := strconv.FormatInt(created.ID, 10)
+
+	out = mustRunFJ(t, "issue", "comment", "view", id, "-R", repo, "--json", "id,author,body,url")
+	var comment map[string]any
+	if err := json.Unmarshal([]byte(out), &comment); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, out)
+	}
+	want := map[string]any{
+		"id": float64(created.ID), "author": map[string]any{"login": adminUser},
+		"body": "shape comment", "url": created.URL,
+	}
+	if !reflect.DeepEqual(comment, want) {
+		t.Errorf("comment view = %v, want %v", comment, want)
+	}
+
+	out = mustRunFJ(t, "pr", "comment", "list", "4", "-R", repo, "--json", "id,includesCreatedEdit",
+		"--jq", ".[] | select(.id == "+id+") | .includesCreatedEdit")
+	if strings.TrimSpace(out) != "false" {
+		t.Errorf("pr comment list includesCreatedEdit = %q, want false", out)
+	}
+
+	stdout, stderr, err := runFJ("issue", "comment", "view", id, "-R", repo, "--json")
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 || stdout != "" ||
+		!strings.Contains(stderr, "Specify one or more comma-separated fields for `--json`:") ||
+		!strings.Contains(stderr, "\n  includesCreatedEdit\n") {
+		t.Errorf("bare --json: err = %v, stdout = %q, stderr = %q; want the field list and exit 1", err, stdout, stderr)
+	}
+
+	out = mustRunFJ(t, "milestone", "create", "-R", repo, "--title", "ms-json-shape", "--due-date", "2031-01-31",
+		"--json", "number,url")
+	var ms struct {
+		Number int64  `json:"number"`
+		URL    string `json:"url"`
+	}
+	if err := json.Unmarshal([]byte(out), &ms); err != nil || !strings.HasSuffix(ms.URL, "/"+repo+"/milestone/"+strconv.FormatInt(ms.Number, 10)) {
+		t.Errorf("milestone create = %s (%v), want a number and its url", out, err)
+	}
+	out = mustRunFJ(t, "milestone", "view", "ms-json-shape", "-R", repo, "--json", "number,title,dueOn,state")
+	var got map[string]any
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, out)
+	}
+	if due, _ := got["dueOn"].(string); len(got) != 4 || got["number"] != float64(ms.Number) ||
+		got["title"] != "ms-json-shape" || got["state"] != "OPEN" || !strings.HasPrefix(due, "2031-01-31T") {
+		t.Errorf("milestone view = %s, want number, title, a 2031-01-31 dueOn and state OPEN", out)
+	}
+
+	out = mustRunFJ(t, "status", "-R", repo, "--json", "nameWithOwner,openIssues")
+	var st map[string]any
+	if err := json.Unmarshal([]byte(out), &st); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, out)
+	}
+	if _, ok := st["openIssues"].(float64); !ok || len(st) != 2 || st["nameWithOwner"] != repo {
+		t.Errorf("status = %s, want nameWithOwner %s and a numeric openIssues", out, repo)
 	}
 }

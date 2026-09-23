@@ -14,11 +14,6 @@ func AddRepoOverrideFlags(cmd *cobra.Command, f *Factory) {
 	cmd.PersistentFlags().StringVarP(&f.RepoOverride, "repo", "R", "", "Select a repository using the OWNER/REPO format")
 }
 
-// AddJSONFlag adds a --json flag for machine-readable output
-func AddJSONFlag(cmd *cobra.Command, jsonOutput *bool) {
-	cmd.Flags().BoolVar(jsonOutput, "json", false, "Output in JSON format")
-}
-
 // AddWebFlag adds a --web flag for opening in browser
 func AddWebFlag(cmd *cobra.Command, web *bool) {
 	cmd.Flags().BoolVarP(web, "web", "w", false, "Open in web browser")

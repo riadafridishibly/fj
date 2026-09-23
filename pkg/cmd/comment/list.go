@@ -16,7 +16,7 @@ type listOptions struct {
 	Factory    *cmdutil.Factory
 	Number     string
 	Limit      int
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdList(f *cmdutil.Factory, k Kind) *cobra.Command {
@@ -28,7 +28,7 @@ func NewCmdList(f *cmdutil.Factory, k Kind) *cobra.Command {
 		Aliases: []string{"ls"},
 		Example: fmt.Sprintf(`  $ %s list 42
   $ %s list 42 --limit 100
-  $ %s list 42 --json`, k.CLI, k.CLI, k.CLI),
+  $ %s list 42 --json id,author,body`, k.CLI, k.CLI, k.CLI),
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
@@ -37,7 +37,7 @@ func NewCmdList(f *cmdutil.Factory, k Kind) *cobra.Command {
 	}
 
 	cmd.Flags().IntVarP(&opts.Limit, "limit", "L", 30, "Maximum number of comments to list")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, commentFields, commentFJFields, true)
 
 	return cmd
 }
@@ -84,8 +84,12 @@ func listRun(opts *listOptions, k Kind) error {
 		all = all[:opts.Limit]
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, all)
+	if opts.JSONOutput.Enabled() {
+		data := make([]map[string]any, len(all))
+		for i, c := range all {
+			data[i] = cmdutil.JSONComment(c)
+		}
+		return opts.JSONOutput.Write(os.Stdout, data)
 	}
 
 	if len(all) == 0 {

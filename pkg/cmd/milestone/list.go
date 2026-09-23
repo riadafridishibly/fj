@@ -17,7 +17,7 @@ type listOptions struct {
 	Limit      int
 	State      string
 	Query      string
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdList(f *cmdutil.Factory) *cobra.Command {
@@ -30,7 +30,8 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 		Example: `  $ fj milestone list
   $ fj milestone list --state closed
   $ fj milestone list --query v1
-  $ fj milestone list --json`,
+  $ fj milestone list --json number,title,dueOn
+  $ fj milestone list --json title --jq '.[].title'`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return listRun(opts)
 		},
@@ -39,7 +40,8 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().IntVarP(&opts.Limit, "limit", "L", 30, "Maximum number of milestones to list")
 	cmd.Flags().StringVarP(&opts.State, "state", "s", "open", "Filter by state: open, closed, all")
 	cmd.Flags().StringVarP(&opts.Query, "query", "q", "", "Filter by milestone name")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	// -q is --query here, so --jq and --template go without shorthands.
+	cmdutil.AddJSONFlagsLong(cmd, &opts.JSONOutput, milestoneFields, milestoneFJFields)
 
 	return cmd
 }
@@ -85,8 +87,12 @@ func listRun(opts *listOptions) error {
 		allMilestones = allMilestones[:opts.Limit]
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, allMilestones)
+	if opts.JSONOutput.Enabled() {
+		data := make([]map[string]any, len(allMilestones))
+		for i, m := range allMilestones {
+			data[i] = milestoneJSON(repo, m)
+		}
+		return opts.JSONOutput.Write(os.Stdout, data)
 	}
 
 	if len(allMilestones) == 0 {

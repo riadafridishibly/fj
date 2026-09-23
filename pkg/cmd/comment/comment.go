@@ -22,6 +22,13 @@ type Kind struct {
 	Arg string
 }
 
+// commentFields are gh's comment fields, from gh issue view --json comments,
+// that Forgejo can fill. gh has no comment commands of its own.
+var (
+	commentFields   = []string{"author", "body", "createdAt", "id", "includesCreatedEdit", "url"}
+	commentFJFields = []string{"updatedAt"}
+)
+
 // NewCmdComment returns the `comment` parent with CRUD subcommands.
 func NewCmdComment(f *cmdutil.Factory, k Kind) *cobra.Command {
 	cmd := &cobra.Command{

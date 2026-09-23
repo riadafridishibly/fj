@@ -14,7 +14,7 @@ type viewOptions struct {
 	Factory    *cmdutil.Factory
 	Name       string
 	Web        bool
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdView(f *cmdutil.Factory) *cobra.Command {
@@ -26,7 +26,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 		Long:  "Display a milestone identified by title or ID.",
 		Example: `  $ fj milestone view v1.0
   $ fj milestone view v1.0 --web
-  $ fj milestone view v1.0 --json`,
+  $ fj milestone view v1.0 --json title,state,dueOn`,
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Name = args[0]
@@ -35,7 +35,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 	}
 
 	cmdutil.AddWebFlag(cmd, &opts.Web)
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, milestoneFields, milestoneFJFields, true)
 
 	return cmd
 }
@@ -62,8 +62,8 @@ func viewRun(opts *viewOptions) error {
 		return cmdutil.OpenInBrowser(url)
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, ms)
+	if opts.JSONOutput.Enabled() {
+		return opts.JSONOutput.Write(os.Stdout, milestoneJSON(repo, ms))
 	}
 
 	fmt.Fprintf(os.Stdout, "%s\n", ms.Title)

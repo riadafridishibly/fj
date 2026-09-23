@@ -1,10 +1,13 @@
 package cmdutil
 
 import (
+	"encoding/json"
 	"io"
 	"strings"
 	"testing"
+	"time"
 
+	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 	"github.com/spf13/cobra"
 )
 
@@ -119,11 +122,46 @@ func TestJSONFlagsLong(t *testing.T) {
 	} {
 		var j JSONFlags
 		cmd := &cobra.Command{Use: "status", SilenceErrors: true, SilenceUsage: true, RunE: func(*cobra.Command, []string) error { return nil }}
-		AddJSONFlagsLong(cmd, &j, []string{"hosts"})
+		AddJSONFlagsLong(cmd, &j, []string{"hosts"}, nil)
 		cmd.SetArgs(args)
 		err := cmd.Execute()
 		if short := strings.HasPrefix(args[2], "-") && !strings.HasPrefix(args[2], "--"); short != (err != nil) {
 			t.Errorf("%v: err = %v", args, err)
+		}
+	}
+}
+
+// TestJSONShapes pins the shared shapes the fj-only commands print.
+func TestJSONShapes(t *testing.T) {
+	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.FixedZone("", 3600))
+	due := time.Date(2031, 1, 31, 0, 0, 0, 0, time.UTC)
+	never := time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
+	zero := time.Time{}
+	tests := []struct {
+		name string
+		got  any
+		want string
+	}{
+		{"comment", JSONComment(&forgejo.Comment{ID: 7, Body: "hi", HTMLURL: "u", Created: created, Updated: created,
+			Poster: &forgejo.User{UserName: "alice"}}),
+			`{"author":{"login":"alice"},"body":"hi","createdAt":"2026-01-02T02:04:05Z","id":7,"includesCreatedEdit":false,"updatedAt":"2026-01-02T02:04:05Z","url":"u"}`},
+		{"edited comment without poster", JSONComment(&forgejo.Comment{Created: created, Updated: created.Add(time.Minute)}),
+			`{"author":{"login":""},"body":"","createdAt":"2026-01-02T02:04:05Z","id":0,"includesCreatedEdit":true,"updatedAt":"2026-01-02T02:05:05Z","url":""}`},
+		{"asset", JSONAsset(&forgejo.Attachment{ID: 3, Name: "a.txt", Size: 10, DownloadCount: 2, Created: created, DownloadURL: "d"}),
+			`{"createdAt":"2026-01-02T02:04:05Z","downloadCount":2,"id":3,"name":"a.txt","size":10,"url":"d"}`},
+		{"milestone", JSONMilestone(&forgejo.Milestone{ID: 1, Title: "v1", Deadline: &due}),
+			`{"description":"","dueOn":"2031-01-31T00:00:00Z","number":1,"title":"v1"}`},
+		{"milestone due 9999", JSONMilestone(&forgejo.Milestone{Deadline: &never})["dueOn"], `null`},
+		{"milestone zero due", JSONMilestone(&forgejo.Milestone{Deadline: &zero})["dueOn"], `null`},
+		{"milestone no due", JSONMilestone(&forgejo.Milestone{})["dueOn"], `null`},
+	}
+	for _, tt := range tests {
+		b, err := json.Marshal(tt.got)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(b) != tt.want {
+			t.Errorf("%s = %s, want %s", tt.name, b, tt.want)
 		}
 	}
 }

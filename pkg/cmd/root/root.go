@@ -111,7 +111,8 @@ is printed on one line.
 
 -q/--jq filters the JSON with a jq expression. Strings print raw and other
 values as compact JSON, one result per line. jq need not be installed.
-fj auth status, like gh's, has --jq and --template but not -q or -t.
+fj auth status, like gh's, has --jq and --template but not -q or -t, and
+so does fj milestone list, where -q is --query.
 
 -t/--template formats the JSON with a Go template (text/template). Both --jq
 and --template need --json; given both, --jq wins. The template can use

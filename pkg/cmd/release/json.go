@@ -25,10 +25,7 @@ var (
 func releaseJSON(r *forgejo.Release) map[string]any {
 	assets := make([]map[string]any, len(r.Attachments))
 	for i, a := range r.Attachments {
-		assets[i] = map[string]any{
-			"id": a.ID, "name": a.Name, "size": a.Size, "downloadCount": a.DownloadCount,
-			"createdAt": cmdutil.JSONTime(&a.Created), "url": a.DownloadURL,
-		}
+		assets[i] = cmdutil.JSONAsset(a)
 	}
 	return map[string]any{
 		"apiUrl":          r.URL,

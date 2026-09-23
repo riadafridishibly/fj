@@ -33,7 +33,7 @@ func NewCmdStatus(f *cmdutil.Factory) *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&opts.Hostname, "hostname", "", "Check status for a specific host")
-	cmdutil.AddJSONFlagsLong(cmd, &opts.JSONOutput, []string{"hosts"})
+	cmdutil.AddJSONFlagsLong(cmd, &opts.JSONOutput, []string{"hosts"}, nil)
 
 	return cmd
 }

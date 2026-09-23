@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
-	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type createOptions struct {
@@ -16,7 +15,7 @@ type createOptions struct {
 	Title       string
 	Description string
 	DueDate     string
-	JSONOutput  bool
+	JSONOutput  cmdutil.JSONFlags
 }
 
 func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
@@ -27,7 +26,8 @@ func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
 		Short: "Create a milestone",
 		Example: `  $ fj milestone create --title v1.0
   $ fj milestone create --title v1.0 --description "First stable release"
-  $ fj milestone create --title v1.0 --due-date 2026-12-31`,
+  $ fj milestone create --title v1.0 --due-date 2026-12-31
+  $ fj milestone create --title v1.0 --json number,url`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if opts.Title == "" {
 				return cmdutil.FlagErrorf("--title is required")
@@ -39,7 +39,7 @@ func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVarP(&opts.Title, "title", "t", "", "Milestone title")
 	cmd.Flags().StringVarP(&opts.Description, "description", "d", "", "Milestone description")
 	cmd.Flags().StringVar(&opts.DueDate, "due-date", "", "Due date (YYYY-MM-DD or RFC3339)")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, milestoneFields, milestoneFJFields, false)
 
 	return cmd
 }
@@ -72,8 +72,8 @@ func createRun(opts *createOptions) error {
 		return fmt.Errorf("creating milestone: %w", err)
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, ms)
+	if opts.JSONOutput.Enabled() {
+		return opts.JSONOutput.Write(os.Stdout, milestoneJSON(repo, ms))
 	}
 
 	fmt.Fprintf(os.Stderr, "✓ Created milestone %q\n", ms.Title)
