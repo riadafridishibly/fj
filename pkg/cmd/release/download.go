@@ -2,8 +2,6 @@ package release
 
 import (
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -91,7 +89,7 @@ func downloadRun(opts *downloadOptions) error {
 			continue
 		}
 		dest := filepath.Join(opts.Dir, a.Name)
-		if err := downloadFile(a.DownloadURL, token, dest); err != nil {
+		if err := cmdutil.DownloadFile(a.DownloadURL, repo.Host, token, dest); err != nil {
 			return fmt.Errorf("downloading %s: %w", a.Name, err)
 		}
 		fmt.Fprintf(os.Stderr, "✓ Downloaded %s\n", a.Name)
@@ -117,31 +115,4 @@ func matchesAny(name string, patterns []string) bool {
 		}
 	}
 	return false
-}
-
-func downloadFile(url, token, dest string) error {
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "token "+token)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return fmt.Errorf("http %d", resp.StatusCode)
-	}
-
-	f, err := os.Create(dest)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	_, err = io.Copy(f, resp.Body)
-	return err
 }

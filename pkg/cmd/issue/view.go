@@ -3,7 +3,6 @@ package issue
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -273,7 +272,7 @@ func downloadIssueAttachments(f *cmdutil.Factory, client *forgejo.Client, repo c
 	paths := make([]string, 0, len(items))
 	for _, it := range items {
 		dest := filepath.Join(dir, it.destName)
-		if err := downloadAttachment(it.url, token, dest); err != nil {
+		if err := cmdutil.DownloadFile(it.url, repo.Host, token, dest); err != nil {
 			return nil, "", fmt.Errorf("downloading %s: %w", it.destName, err)
 		}
 		fmt.Fprintf(os.Stderr, "✓ Downloaded %s\n", it.destName)
@@ -307,31 +306,4 @@ func listAttachments(repo cmdutil.Repo, subpath, token string) ([]*forgejo.Attac
 		return nil, err
 	}
 	return atts, nil
-}
-
-func downloadAttachment(url, token, dest string) error {
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "token "+token)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return fmt.Errorf("http %d", resp.StatusCode)
-	}
-
-	f, err := os.Create(dest)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	_, err = io.Copy(f, resp.Body)
-	return err
 }
