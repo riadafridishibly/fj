@@ -116,7 +116,6 @@ func TestClientWithoutConfig(t *testing.T) {
 	defer srv.Close()
 	ciHost := strings.TrimPrefix(srv.URL, "http://")
 
-	t.Chdir(t.TempDir())
 	t.Setenv("FJ_INSECURE", "1")
 	t.Setenv("FJ_HOST", ciHost)
 	t.Setenv("FJ_TOKEN", "env")

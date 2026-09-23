@@ -96,12 +96,8 @@ func forkRun(opts *forkOptions) error {
 		if err != nil {
 			return err
 		}
-		host, err := cfg.HostByName(repo.Host)
-		if err != nil {
-			return err
-		}
 		cloneURL := forked.CloneURL
-		if host.GitProtocol == "ssh" {
+		if cfg.GitProtocol(repo.Host) == "ssh" {
 			cloneURL = forked.SSHURL
 		}
 		if err := git.Clone(cloneURL, ""); err != nil {

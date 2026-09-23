@@ -61,11 +61,6 @@ func listRun(opts *listOptions) error {
 	if err != nil {
 		return err
 	}
-	host, err := cfg.HostByName(hostname)
-	if err != nil {
-		return err
-	}
-
 	client, err := opts.Factory.Client(hostname)
 	if err != nil {
 		return err
@@ -133,7 +128,12 @@ func listRun(opts *listOptions) error {
 	// Status line
 	owner := opts.Owner
 	if owner == "" {
-		owner = host.User
+		// FJ_HOST with FJ_TOKEN has no config entry to take the user from.
+		if h, ok := cfg.Hosts[hostname]; ok && h.User != "" {
+			owner = h.User
+		} else if u, _, err := client.GetMyUserInfo(); err == nil {
+			owner = u.UserName
+		}
 	}
 	if totalCount > 0 {
 		fmt.Fprintf(os.Stdout, "\nShowing %d of %d repositories in @%s\n\n",

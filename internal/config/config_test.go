@@ -6,8 +6,8 @@ import (
 )
 
 // TestTokenForHostScopesFJToken pins which host FJ_TOKEN may reach: the
-// FJ_HOST host, else the single configured host, else any host when none
-// are configured. Several hosts without FJ_HOST is an error, never a guess.
+// FJ_HOST host, else the single configured host. Without either it is an
+// error, never a guess.
 func TestTokenForHostScopesFJToken(t *testing.T) {
 	hosts := func(names ...string) *Config {
 		c := &Config{Hosts: map[string]*HostConfig{}}
@@ -28,7 +28,7 @@ func TestTokenForHostScopesFJToken(t *testing.T) {
 		{"FJ_HOST: other hosts keep their own", hosts("a.example.com", "b.example.com"), "a.example.com", "b.example.com", "stored-b.example.com"},
 		{"FJ_HOST: unknown other host", hosts("a.example.com"), "ci.example.com", "b.example.com", "error: not logged in to b.example.com"},
 		{"FJ_HOST without config", hosts(), "ci.example.com", "ci.example.com", "env"},
-		{"no config: any host", hosts(), "", "ci.example.com", "env"},
+		{"no config needs FJ_HOST", hosts(), "", "ci.example.com", "error: FJ_HOST is not"},
 		{"one host: that host", hosts("a.example.com"), "", "a.example.com", "env"},
 		{"one host: not another", hosts("a.example.com"), "", "b.example.com", "error: not logged in to b.example.com"},
 		{"several hosts: error", hosts("a.example.com", "b.example.com"), "", "a.example.com", "error: set FJ_HOST"},
