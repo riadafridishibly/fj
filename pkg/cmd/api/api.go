@@ -336,22 +336,26 @@ func (p placeholders) fillPath(s string) string {
 // requestHost picks the host the request goes to. A full URL names its own
 // host. Otherwise --hostname wins, then the host of the repository the
 // placeholders came from, so {owner}/{repo} from one server are never sent
-// to another, and last the default host.
+// to another, and last the shared resolver.
 func requestHost(opts *apiOptions, target string, ph placeholders) (string, error) {
-	cfg, err := opts.Factory.Config()
-	if err != nil {
-		return "", err
-	}
 	if apiclient.IsAbsoluteURL(target) {
 		u, err := url.Parse(target)
 		if err != nil {
 			return "", err
 		}
-		// FJ_TOKEN is sent to any host, so a URL alone must not pick a host
-		// fj was never logged in to: an agent handed a hostile link would
-		// otherwise send the token along with the request.
-		if _, err := cfg.HostByName(u.Host); err != nil {
-			return "", err
+		// Without a config file, FJ_TOKEN goes to whatever host a command
+		// resolves, so a URL alone must not pick a host fj does not know:
+		// an agent handed a hostile link would otherwise send the token
+		// along with the request. A known host is a configured one or
+		// FJ_HOST.
+		if !strings.EqualFold(u.Host, os.Getenv("FJ_HOST")) {
+			cfg, err := opts.Factory.Config()
+			if err != nil {
+				return "", err
+			}
+			if _, err := cfg.HostByName(u.Host); err != nil {
+				return "", err
+			}
 		}
 		return u.Host, nil
 	}
@@ -361,8 +365,7 @@ func requestHost(opts *apiOptions, target string, ph placeholders) (string, erro
 	if ph.host != "" {
 		return ph.host, nil
 	}
-	_, host, err := cfg.DefaultHost()
-	return host, err
+	return opts.Factory.Host()
 }
 
 // field is one -f or -F parameter. value is a string, int, bool, nil, or

@@ -150,19 +150,30 @@ func fakeForgejo(t *testing.T) *httptest.Server {
 	}))
 }
 
+// runAPI runs fj api with srv as the only configured host and -R me/fj.
 func runAPI(t *testing.T, srv *httptest.Server, args ...string) (string, error) {
+	t.Helper()
+	f := factory(strings.TrimPrefix(srv.URL, "http://"))
+	f.RepoOverride = "me/fj"
+	return runAPIWith(t, f, args...)
+}
+
+// factory builds a Factory whose config holds hosts, each with the token
+// the fake server expects.
+func factory(hosts ...string) *cmdutil.Factory {
+	cfg := &config.Config{Hosts: map[string]*config.HostConfig{}}
+	for _, h := range hosts {
+		cfg.Hosts[h] = &config.HostConfig{Hostname: h, Token: "sekrit", User: "me"}
+	}
+	return &cmdutil.Factory{Config: func() (*config.Config, error) { return cfg, nil }}
+}
+
+func runAPIWith(t *testing.T, f *cmdutil.Factory, args ...string) (string, error) {
 	t.Helper()
 	t.Setenv("FJ_INSECURE", "1")
 	t.Setenv("FJ_TOKEN", "")
-	host := strings.TrimPrefix(srv.URL, "http://")
-	f := &cmdutil.Factory{
-		Config: func() (*config.Config, error) {
-			return &config.Config{Hosts: map[string]*config.HostConfig{
-				host: {Hostname: host, Token: "sekrit", User: "me"},
-			}}, nil
-		},
-		RepoOverride: "me/fj",
-	}
+	t.Setenv("FJ_HOST", "")
+	t.Chdir(t.TempDir())
 	cmd := NewCmdAPI(f)
 	var out bytes.Buffer
 	cmd.SetOut(&out)
@@ -265,5 +276,42 @@ func TestAbsoluteURLHost(t *testing.T) {
 	_, err := runAPI(t, srv, "http://forgejo.example.com/api/v1/user")
 	if err == nil || !strings.Contains(err.Error(), "not logged in to forgejo.example.com") {
 		t.Errorf("URL on another host: error = %v", err)
+	}
+}
+
+// TestHostWithoutPlaceholders pins the resolver as the fallback: with two
+// hosts and nothing to choose between them, the request is refused rather
+// than sent to one of them at random.
+func TestHostWithoutPlaceholders(t *testing.T) {
+	srv := fakeForgejo(t)
+	defer srv.Close()
+	host := strings.TrimPrefix(srv.URL, "http://")
+
+	_, err := runAPIWith(t, factory(host, "forgejo.example.com"), "echo")
+	if err == nil || !strings.Contains(err.Error(), "multiple hosts configured") {
+		t.Errorf("two hosts: error = %v, want the resolver's", err)
+	}
+
+	if _, err := runAPIWith(t, factory(host, "forgejo.example.com"), "--hostname", host, "echo"); err != nil {
+		t.Errorf("--hostname: %v", err)
+	}
+}
+
+// TestAbsoluteURLOnFJHost covers CI without a config file: a full URL on
+// the FJ_HOST host is allowed, and FJ_TOKEN goes with it.
+func TestAbsoluteURLOnFJHost(t *testing.T) {
+	srv := fakeForgejo(t)
+	defer srv.Close()
+
+	f := factory()
+	t.Setenv("FJ_HOST", strings.TrimPrefix(srv.URL, "http://"))
+	t.Setenv("FJ_TOKEN", "sekrit")
+	cmd := NewCmdAPI(f)
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	cmd.SetArgs([]string{srv.URL + "/api/v1/echo"})
+	t.Setenv("FJ_INSECURE", "1")
+	if err := cmd.Execute(); err != nil {
+		t.Errorf("full URL on FJ_HOST: %v", err)
 	}
 }
