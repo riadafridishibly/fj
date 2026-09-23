@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
+	apiCmd "github.com/riadafridishibly/fj/pkg/cmd/api"
 	authCmd "github.com/riadafridishibly/fj/pkg/cmd/auth"
 	issueCmd "github.com/riadafridishibly/fj/pkg/cmd/issue"
 	labelCmd "github.com/riadafridishibly/fj/pkg/cmd/label"
@@ -62,6 +63,7 @@ func NewCmdRoot(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(prCmd.NewCmdPR(f))
 	cmd.AddCommand(releaseCmd.NewCmdRelease(f))
 	cmd.AddCommand(statusCmd.NewCmdStatus(f))
+	cmd.AddCommand(apiCmd.NewCmdAPI(f))
 
 	// Version command
 	cmd.AddCommand(&cobra.Command{

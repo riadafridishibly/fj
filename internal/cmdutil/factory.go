@@ -126,11 +126,17 @@ func NewForgejoClient(baseURL, token string) (*forgejo.Client, error) {
 // cover. It authenticates against the repo's host with the same token and
 // debug-aware transport as the SDK client.
 func (f *Factory) APIClient(repo Repo) (*api.Client, error) {
+	return f.APIClientForHost(repo.Host)
+}
+
+// APIClientForHost is APIClient for a caller that has a host but no
+// repository, such as fj api on an endpoint outside /repos.
+func (f *Factory) APIClientForHost(host string) (*api.Client, error) {
 	cfg, err := f.Config()
 	if err != nil {
 		return nil, err
 	}
-	token, err := cfg.TokenForHost(repo.Host)
+	token, err := cfg.TokenForHost(host)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +144,7 @@ func (f *Factory) APIClient(repo Repo) (*api.Client, error) {
 	if os.Getenv("FJ_INSECURE") != "" {
 		scheme = "http"
 	}
-	baseURL := fmt.Sprintf("%s://%s", scheme, repo.Host)
+	baseURL := fmt.Sprintf("%s://%s", scheme, host)
 	return api.NewClient(baseURL, token, debug.WrapClient(nil)), nil
 }
 
