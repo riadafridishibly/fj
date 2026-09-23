@@ -70,7 +70,7 @@ func TestMilestoneListJSON(t *testing.T) {
 	}
 
 	// Closed milestone must not appear in the default (open) list.
-	stdout := mustRunFJ(t, "milestone", "list", "-R", repo, "--json")
+	stdout := mustRunFJ(t, "milestone", "list", "-R", repo, "--json", "title")
 	var open []map[string]any
 	if err := json.Unmarshal([]byte(stdout), &open); err != nil {
 		t.Fatalf("invalid JSON: %v\nraw: %s", err, stdout)
@@ -81,7 +81,7 @@ func TestMilestoneListJSON(t *testing.T) {
 		}
 	}
 
-	stdout = mustRunFJ(t, "milestone", "list", "-R", repo, "--state", "closed", "--json")
+	stdout = mustRunFJ(t, "milestone", "list", "-R", repo, "--state", "closed", "--json", "title")
 	var closed []map[string]any
 	if err := json.Unmarshal([]byte(stdout), &closed); err != nil {
 		t.Fatalf("invalid JSON: %v\nraw: %s", err, stdout)
@@ -127,7 +127,7 @@ func TestMilestoneViewJSON(t *testing.T) {
 		t.Fatalf("setup create failed: %v\n%s", err, stderr)
 	}
 
-	stdout := mustRunFJ(t, "milestone", "view", title, "-R", repo, "--json")
+	stdout := mustRunFJ(t, "milestone", "view", title, "-R", repo, "--json", "title")
 	var ms map[string]any
 	if err := json.Unmarshal([]byte(stdout), &ms); err != nil {
 		t.Fatalf("invalid JSON: %v\nraw: %s", err, stdout)

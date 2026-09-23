@@ -104,8 +104,14 @@ func TestIssueAttach(t *testing.T) {
 	}
 }
 
-// TestIssueAttachJSON checks the --json shape: the full attachment objects,
-// each carrying the download URL.
+// attachmentJSON is the part of fj's --json attachment shape the tests read.
+type attachmentJSON struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+// TestIssueAttachJSON checks the --json shape: the attachment objects, each
+// carrying the download URL.
 func TestIssueAttachJSON(t *testing.T) {
 	repo := adminUser + "/test-repo"
 	index := newAttachTarget(t, "Attachment target for JSON")
@@ -116,9 +122,9 @@ func TestIssueAttachJSON(t *testing.T) {
 	}
 
 	stdout := mustRunFJ(t, "issue", "attach", strconv.FormatInt(index, 10),
-		path, "-R", repo, "--json")
+		path, "-R", repo, "--json", "name,url")
 
-	var attachments []forgejo.Attachment
+	var attachments []attachmentJSON
 	if err := json.Unmarshal([]byte(stdout), &attachments); err != nil {
 		t.Fatalf("parsing --json output: %v\n%s", err, stdout)
 	}
@@ -128,10 +134,10 @@ func TestIssueAttachJSON(t *testing.T) {
 	if attachments[0].Name != "notes.txt" {
 		t.Errorf("name = %q, want %q", attachments[0].Name, "notes.txt")
 	}
-	if attachments[0].DownloadURL == "" {
-		t.Error("browser_download_url is empty")
+	if attachments[0].URL == "" {
+		t.Error("url is empty")
 	}
-	if got := fetchAttachment(t, attachments[0].DownloadURL); string(got) != "some notes\n" {
+	if got := fetchAttachment(t, attachments[0].URL); string(got) != "some notes\n" {
 		t.Errorf("downloaded content = %q, want %q", got, "some notes\n")
 	}
 }
@@ -196,13 +202,13 @@ func TestIssueAttachPartialFailureJSON(t *testing.T) {
 	rejected := writeRejectedFile(t, dir)
 
 	stdout, stderr, err := runFJ("issue", "attach", strconv.FormatInt(index, 10),
-		small, rejected, "-R", repo, "--json")
+		small, rejected, "-R", repo, "--json", "name,url")
 	if err == nil {
 		t.Fatalf("expected a non-zero exit when the second upload is refused\nstdout: %s\nstderr: %s", stdout, stderr)
 	}
 
 	// A partial run must not cost the caller the URLs it already earned.
-	var attachments []forgejo.Attachment
+	var attachments []attachmentJSON
 	if jsonErr := json.Unmarshal([]byte(stdout), &attachments); jsonErr != nil {
 		t.Fatalf("parsing --json output: %v\n%s", jsonErr, stdout)
 	}
@@ -213,8 +219,8 @@ func TestIssueAttachPartialFailureJSON(t *testing.T) {
 	if attachments[0].Name != "small.txt" {
 		t.Errorf("name = %q, want %q", attachments[0].Name, "small.txt")
 	}
-	if attachments[0].DownloadURL == "" {
-		t.Error("browser_download_url is empty")
+	if attachments[0].URL == "" {
+		t.Error("url is empty")
 	}
 
 	if !strings.Contains(stderr, "still attached") {
@@ -225,7 +231,7 @@ func TestIssueAttachPartialFailureJSON(t *testing.T) {
 	}
 
 	// The attachment fj reported is real, not just an object it printed.
-	if got := fetchAttachment(t, attachments[0].DownloadURL); string(got) != "this one lands\n" {
+	if got := fetchAttachment(t, attachments[0].URL); string(got) != "this one lands\n" {
 		t.Errorf("downloaded content = %q, want %q", got, "this one lands\n")
 	}
 }
@@ -240,12 +246,12 @@ func TestIssueAttachTotalFailureJSON(t *testing.T) {
 	rejected := writeRejectedFile(t, t.TempDir())
 
 	stdout, stderr, err := runFJ("issue", "attach", strconv.FormatInt(index, 10),
-		rejected, "-R", repo, "--json")
+		rejected, "-R", repo, "--json", "name,url")
 	if err == nil {
 		t.Fatalf("expected a non-zero exit when the only upload is refused\nstdout: %s\nstderr: %s", stdout, stderr)
 	}
 
-	var attachments []forgejo.Attachment
+	var attachments []attachmentJSON
 	if jsonErr := json.Unmarshal([]byte(stdout), &attachments); jsonErr != nil {
 		t.Fatalf("parsing --json output: %v\n%s", jsonErr, stdout)
 	}

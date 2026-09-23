@@ -11,14 +11,16 @@ import (
 
 	"github.com/riadafridishibly/fj/internal/api"
 	"github.com/riadafridishibly/fj/internal/cmdutil"
-	"github.com/riadafridishibly/fj/internal/output"
 )
+
+// attachFields are gh's release asset fields; gh has no attach command.
+var attachFields = []string{"createdAt", "downloadCount", "id", "name", "size", "url"}
 
 type attachOptions struct {
 	Factory    *cmdutil.Factory
 	Number     string
 	Files      []string
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdAttach(f *cmdutil.Factory) *cobra.Command {
@@ -37,7 +39,7 @@ Every path is checked before the first upload starts, so a typo fails the
 command instead of leaving half the files attached.`,
 		Example: `  $ fj issue attach 42 screenshot.png
   $ fj issue attach 42 before.png after.png
-  $ fj issue attach 42 crash.log --json`,
+  $ fj issue attach 42 crash.log --json name,url`,
 		Args: cmdutil.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
@@ -46,7 +48,7 @@ command instead of leaving half the files attached.`,
 		},
 	}
 
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, nil, attachFields, false)
 
 	return cmd
 }
@@ -75,7 +77,7 @@ func attachRun(opts *attachOptions) error {
 
 	// Report each upload as it lands rather than at the end: an upload that
 	// fails halfway still leaves the user holding the URLs it did get.
-	attachments := make([]*forgejo.Attachment, 0, len(opts.Files))
+	attachments := make([]map[string]any, 0, len(opts.Files))
 	var uploadErr error
 	for _, path := range opts.Files {
 		att, err := attachFile(client, repo, index, path)
@@ -83,8 +85,8 @@ func attachRun(opts *attachOptions) error {
 			uploadErr = fmt.Errorf("uploading %s: %w", path, err)
 			break
 		}
-		attachments = append(attachments, att)
-		if !opts.JSONOutput {
+		attachments = append(attachments, cmdutil.JSONAsset(att))
+		if !opts.JSONOutput.Enabled() {
 			fmt.Fprintf(os.Stderr, "✓ Uploaded %s\n", filepath.Base(path))
 			fmt.Fprintf(os.Stdout, "%s\n", att.DownloadURL)
 		}
@@ -92,8 +94,8 @@ func attachRun(opts *attachOptions) error {
 
 	// Printed even when nothing landed: a consumer parsing stdout gets an
 	// empty array rather than an empty stream it cannot parse at all.
-	if opts.JSONOutput {
-		if err := output.PrintJSON(os.Stdout, attachments); err != nil {
+	if opts.JSONOutput.Enabled() {
+		if err := opts.JSONOutput.Write(os.Stdout, attachments); err != nil {
 			// A failed upload is the more useful error to return, and the
 			// notice below still has to report what stayed attached.
 			if uploadErr == nil {

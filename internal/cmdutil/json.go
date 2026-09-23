@@ -41,11 +41,12 @@ func AddJSONFlags(cmd *cobra.Command, j *JSONFlags, fields, fjFields []string, w
 }
 
 // AddJSONFlagsLong is AddJSONFlags with --jq and --template but without the
-// -q and -t shorthands, as on gh auth status, where -t is --show-token.
-func AddJSONFlagsLong(cmd *cobra.Command, j *JSONFlags, fields []string) {
+// -q and -t shorthands, for commands that use them for something else: -t is
+// --show-token on gh auth status, and -q is --query on fj milestone list.
+func AddJSONFlagsLong(cmd *cobra.Command, j *JSONFlags, fields, fjFields []string) {
 	cmd.Flags().StringVar(&j.jq, "jq", "", jqUsage)
 	cmd.Flags().StringVar(&j.template, "template", "", templateUsage)
-	addJSONFlag(cmd, j, fields, nil)
+	addJSONFlag(cmd, j, fields, fjFields)
 }
 
 const (
@@ -215,7 +216,30 @@ func JSONMilestone(m *forgejo.Milestone) map[string]any {
 	}
 	return map[string]any{
 		"number": m.ID, "title": m.Title, "description": m.Description,
-		"dueOn": JSONTime(m.Deadline),
+		"dueOn": JSONTime(MilestoneDeadline(m)),
+	}
+}
+
+// MilestoneDeadline is m's due date, or nil when it has none. Servers signal
+// "no deadline" as null, the zero time, or a far-future sentinel (year 9999).
+func MilestoneDeadline(m *forgejo.Milestone) *time.Time {
+	if d := m.Deadline; d != nil && !d.IsZero() && d.Year() < 9999 {
+		return d
+	}
+	return nil
+}
+
+// JSONComment is gh's comment shape, plus fj's updatedAt. gh's
+// includesCreatedEdit is true once the comment has been edited.
+func JSONComment(c *forgejo.Comment) map[string]any {
+	var login string
+	if c.Poster != nil {
+		login = c.Poster.UserName
+	}
+	return map[string]any{
+		"id": c.ID, "author": map[string]any{"login": login}, "body": c.Body,
+		"createdAt": JSONTime(&c.Created), "includesCreatedEdit": c.Updated.After(c.Created),
+		"updatedAt": JSONTime(&c.Updated), "url": c.HTMLURL,
 	}
 }
 
@@ -228,14 +252,15 @@ func JSONComments(client *api.Client, repo Repo, index int64) ([]map[string]any,
 	}
 	out := make([]map[string]any, len(comments))
 	for i, c := range comments {
-		var login string
-		if c.Poster != nil {
-			login = c.Poster.UserName
-		}
-		out[i] = map[string]any{
-			"id": c.ID, "author": map[string]any{"login": login}, "body": c.Body,
-			"createdAt": JSONTime(&c.Created), "url": c.HTMLURL,
-		}
+		out[i] = JSONComment(c)
 	}
 	return out, nil
+}
+
+// JSONAsset is gh's release asset shape, which issue attachments share.
+func JSONAsset(a *forgejo.Attachment) map[string]any {
+	return map[string]any{
+		"id": a.ID, "name": a.Name, "size": a.Size, "downloadCount": a.DownloadCount,
+		"createdAt": JSONTime(&a.Created), "url": a.DownloadURL,
+	}
 }

@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
-	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type editOptions struct {
@@ -17,7 +16,7 @@ type editOptions struct {
 	ID         string
 	Body       string
 	BodyFile   string
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdEdit(f *cmdutil.Factory, k Kind) *cobra.Command {
@@ -28,7 +27,8 @@ func NewCmdEdit(f *cmdutil.Factory, k Kind) *cobra.Command {
 		Short: "Edit a comment by its ID",
 		Example: fmt.Sprintf(`  $ %s edit 12345 --body "Updated comment"
   $ %s edit 12345 --body-file updated.md
-  $ echo "new body" | %s edit 12345 --body-file -`, k.CLI, k.CLI, k.CLI),
+  $ echo "new body" | %s edit 12345 --body-file -
+  $ %s edit 12345 --body "Done" --json id,url`, k.CLI, k.CLI, k.CLI, k.CLI),
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.ID = args[0]
@@ -48,7 +48,7 @@ func NewCmdEdit(f *cmdutil.Factory, k Kind) *cobra.Command {
 
 	cmd.Flags().StringVarP(&opts.Body, "body", "b", "", "The new comment body")
 	cmd.Flags().StringVarP(&opts.BodyFile, "body-file", "F", "", "Read body from file (use \"-\" for stdin)")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, commentFields, commentFJFields, false)
 
 	return cmd
 }
@@ -76,8 +76,8 @@ func editRun(opts *editOptions) error {
 		return fmt.Errorf("editing comment: %w", err)
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, comment)
+	if opts.JSONOutput.Enabled() {
+		return opts.JSONOutput.Write(os.Stdout, cmdutil.JSONComment(comment))
 	}
 
 	fmt.Fprintf(os.Stdout, "%s\n", comment.HTMLURL)

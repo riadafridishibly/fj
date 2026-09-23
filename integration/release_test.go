@@ -565,21 +565,21 @@ func TestStatusIncludesLatestRelease(t *testing.T) {
 		t.Fatalf("setup create failed: %v\n%s", err, stderr)
 	}
 
-	stdout := mustRunFJ(t, "status", "-R", repo, "--json")
+	stdout := mustRunFJ(t, "status", "-R", repo, "--json", "latestRelease")
 
 	var result map[string]any
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
 		t.Fatalf("invalid JSON: %v\nraw: %s", err, stdout)
 	}
 
-	latest, ok := result["latest_release"].(map[string]any)
+	latest, ok := result["latestRelease"].(map[string]any)
 	if !ok {
-		t.Fatalf("expected 'latest_release' key in status JSON, got: %v", result)
+		t.Fatalf("expected 'latestRelease' key in status JSON, got: %v", result)
 	}
-	if latest["tag"] != tag {
-		t.Errorf("expected tag %q in latest_release, got %v", tag, latest["tag"])
+	if latest["tagName"] != tag {
+		t.Errorf("expected tagName %q in latestRelease, got %v", tag, latest["tagName"])
 	}
-	if latest["title"] != "Status Release" {
-		t.Errorf("expected title 'Status Release', got %v", latest["title"])
+	if latest["name"] != "Status Release" {
+		t.Errorf("expected name 'Status Release', got %v", latest["name"])
 	}
 }

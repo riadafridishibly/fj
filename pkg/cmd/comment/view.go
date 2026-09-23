@@ -15,7 +15,7 @@ type viewOptions struct {
 	Factory    *cmdutil.Factory
 	ID         string
 	Web        bool
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdView(f *cmdutil.Factory, k Kind) *cobra.Command {
@@ -26,7 +26,7 @@ func NewCmdView(f *cmdutil.Factory, k Kind) *cobra.Command {
 		Short: "View a comment by its ID",
 		Example: fmt.Sprintf(`  $ %s view 12345
   $ %s view 12345 --web
-  $ %s view 12345 --json`, k.CLI, k.CLI, k.CLI),
+  $ %s view 12345 --json author,body`, k.CLI, k.CLI, k.CLI),
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.ID = args[0]
@@ -35,7 +35,7 @@ func NewCmdView(f *cmdutil.Factory, k Kind) *cobra.Command {
 	}
 
 	cmdutil.AddWebFlag(cmd, &opts.Web)
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, commentFields, commentFJFields, true)
 
 	return cmd
 }
@@ -65,8 +65,8 @@ func viewRun(opts *viewOptions) error {
 		return cmdutil.OpenInBrowser(comment.HTMLURL)
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, comment)
+	if opts.JSONOutput.Enabled() {
+		return opts.JSONOutput.Write(os.Stdout, cmdutil.JSONComment(comment))
 	}
 
 	author := "unknown"

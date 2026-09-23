@@ -2,7 +2,7 @@ package milestone
 
 import (
 	"fmt"
-	"os"
+	"strings"
 	"time"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
@@ -43,23 +43,40 @@ func parseDueDate(v string) (time.Time, error) {
 	)
 }
 
-// dueDateStr formats a milestone's deadline for display. Servers signal "no
-// deadline" as null, the zero time, or a far-future sentinel (year 9999).
+// dueDateStr formats a milestone's deadline for display, or "" when it has
+// none.
 func dueDateStr(m *forgejo.Milestone) string {
-	if m.Deadline == nil || m.Deadline.IsZero() || m.Deadline.Year() >= 9999 {
-		return ""
+	if d := cmdutil.MilestoneDeadline(m); d != nil {
+		return d.Format("2006-01-02")
 	}
-	return m.Deadline.Format("2006-01-02")
+	return ""
 }
 
 // webURL returns the milestone's page on the Forgejo web UI. The SDK's
 // Milestone has no HTMLURL field, so build it from the repo host.
 func webURL(repo cmdutil.Repo, id int64) string {
-	scheme := "https"
-	if os.Getenv("FJ_INSECURE") != "" {
-		scheme = "http"
-	}
-	return fmt.Sprintf("%s://%s/%s/%s/milestone/%d", scheme, repo.Host, repo.Owner, repo.Name, id)
+	return fmt.Sprintf("%s/%s/%s/milestone/%d", cmdutil.BaseURL(repo.Host), repo.Owner, repo.Name, id)
+}
+
+// milestoneFields are gh's milestone shape, as in gh issue view --json
+// milestone. gh has no milestone commands; milestoneFJFields are the rest of
+// what Forgejo carries.
+var (
+	milestoneFields   = []string{"description", "dueOn", "number", "title"}
+	milestoneFJFields = []string{"closedAt", "closedIssues", "createdAt", "openIssues", "state", "updatedAt", "url"}
+)
+
+// milestoneJSON returns m keyed by field name.
+func milestoneJSON(repo cmdutil.Repo, m *forgejo.Milestone) map[string]any {
+	out := cmdutil.JSONMilestone(m)
+	out["closedAt"] = cmdutil.JSONTime(m.Closed)
+	out["closedIssues"] = m.ClosedIssues
+	out["createdAt"] = cmdutil.JSONTime(&m.Created)
+	out["openIssues"] = m.OpenIssues
+	out["state"] = strings.ToUpper(string(m.State))
+	out["updatedAt"] = cmdutil.JSONTime(m.Updated)
+	out["url"] = webURL(repo, m.ID)
+	return out
 }
 
 // setState transitions a milestone to the given state. Shared by close and

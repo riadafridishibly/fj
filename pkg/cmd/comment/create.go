@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
-	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type createOptions struct {
@@ -17,7 +16,7 @@ type createOptions struct {
 	Number     string
 	Body       string
 	BodyFile   string
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdCreate(f *cmdutil.Factory, k Kind) *cobra.Command {
@@ -28,7 +27,8 @@ func NewCmdCreate(f *cmdutil.Factory, k Kind) *cobra.Command {
 		Short: "Add a comment to " + articleA(k.Noun) + " " + k.Noun,
 		Example: fmt.Sprintf(`  $ %s create 42 --body "This is a comment"
   $ %s create 42 --body-file comment.md
-  $ echo "comment" | %s create 42 --body-file -`, k.CLI, k.CLI, k.CLI),
+  $ echo "comment" | %s create 42 --body-file -
+  $ %s create 42 --body "Done" --json id,url`, k.CLI, k.CLI, k.CLI, k.CLI),
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
@@ -48,7 +48,7 @@ func NewCmdCreate(f *cmdutil.Factory, k Kind) *cobra.Command {
 
 	cmd.Flags().StringVarP(&opts.Body, "body", "b", "", "The comment body")
 	cmd.Flags().StringVarP(&opts.BodyFile, "body-file", "F", "", "Read body from file (use \"-\" for stdin)")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, commentFields, commentFJFields, false)
 
 	return cmd
 }
@@ -76,8 +76,8 @@ func createRun(opts *createOptions, k Kind) error {
 		return fmt.Errorf("adding comment: %w", err)
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, comment)
+	if opts.JSONOutput.Enabled() {
+		return opts.JSONOutput.Write(os.Stdout, cmdutil.JSONComment(comment))
 	}
 
 	fmt.Fprintf(os.Stdout, "%s\n", comment.HTMLURL)

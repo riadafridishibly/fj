@@ -171,7 +171,7 @@ func issueNumberByTitle(t *testing.T, repo, title string) string {
 // via the JSON comment list for the given issue.
 func commentIDByBody(t *testing.T, issue, repo, body string) int64 {
 	t.Helper()
-	out := mustRunFJ(t, "issue", "comment", "list", issue, "-R", repo, "--json")
+	out := mustRunFJ(t, "issue", "comment", "list", issue, "-R", repo, "--json", "id,body")
 	var comments []struct {
 		ID   int64  `json:"id"`
 		Body string `json:"body"`
