@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
-	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type mergeOptions struct {
@@ -20,7 +19,7 @@ type mergeOptions struct {
 	Message      string
 	DeleteBranch bool
 	Auto         bool
-	JSONOutput   bool
+	JSONOutput   cmdutil.JSONFlags
 }
 
 func NewCmdMerge(f *cmdutil.Factory) *cobra.Command {
@@ -34,7 +33,8 @@ func NewCmdMerge(f *cmdutil.Factory) *cobra.Command {
   $ fj pr merge 42 --rebase
   $ fj pr merge 42 --delete-branch
   $ fj pr merge 42 --merge --title "Merge feature" --message "Detailed description"
-  $ fj pr merge 42 --auto`,
+  $ fj pr merge 42 --auto
+  $ fj pr merge 42 --squash --json state,mergeCommit`,
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
@@ -75,7 +75,7 @@ func NewCmdMerge(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVar(&opts.Message, "message", "", "Message for the merge commit")
 	cmd.Flags().BoolVarP(&opts.DeleteBranch, "delete-branch", "d", false, "Delete the branch after merge")
 	cmd.Flags().BoolVar(&opts.Auto, "auto", false, "Merge when all checks pass")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, prFields, nil, false)
 
 	return cmd
 }
@@ -109,12 +109,8 @@ func mergeRun(opts *mergeOptions) error {
 		return fmt.Errorf("merging pull request: %w", err)
 	}
 
-	if opts.JSONOutput {
-		pr, _, err := client.GetPullRequest(repo.Owner, repo.Name, index)
-		if err != nil {
-			return fmt.Errorf("getting merged pull request: %w", err)
-		}
-		return output.PrintJSON(os.Stdout, pr)
+	if opts.JSONOutput.Enabled() {
+		return writePR(opts.Factory, repo, index, &opts.JSONOutput)
 	}
 
 	if opts.Auto {

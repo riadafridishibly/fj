@@ -1,7 +1,9 @@
 package pr
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -23,7 +25,7 @@ type listOptions struct {
 	Assignee   string
 	Search     string
 	Sort       string
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdList(f *cmdutil.Factory) *cobra.Command {
@@ -39,7 +41,8 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
   $ fj pr list --author riad
   $ fj pr list --head feature-1
   $ fj pr list --sort most-commented
-  $ fj pr list --json`,
+  $ fj pr list --json number,title,headRefName
+  $ fj pr list --json number,isDraft --jq '.[] | select(.isDraft) | .number'`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return listRun(opts)
 		},
@@ -54,7 +57,7 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVarP(&opts.Assignee, "assignee", "a", "", "Filter by assignee")
 	cmd.Flags().StringVarP(&opts.Search, "search", "S", "", "Filter by title/body text")
 	cmd.Flags().StringVar(&opts.Sort, "sort", "", "Sort order: newest, oldest, recently-updated, most-commented, ...")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, prFields, nil, true)
 
 	return cmd
 }
@@ -99,23 +102,23 @@ func listRun(opts *listOptions) error {
 		listOpt.Milestone = msID
 	}
 
-	var allPRs []*forgejo.PullRequest
+	var allPRs []*apiPullRequest
 	var totalCount int
 	page := 1
 	for len(allPRs) < opts.Limit {
 		listOpt.Page = page
-		prs, resp, err := client.ListRepoPullRequests(repo.Owner, repo.Name, listOpt)
+		prs, total, err := fetchPRs(opts.Factory, repo, listOpt)
 		if err != nil {
-			return fmt.Errorf("listing pull requests: %w", err)
+			return err
 		}
 		if page == 1 {
-			totalCount = cmdutil.TotalCount(resp)
+			totalCount = total
 		}
 		if len(prs) == 0 {
 			break
 		}
 		for _, pr := range prs {
-			if !opts.matches(pr) {
+			if !opts.matches(&pr.PullRequest) {
 				continue
 			}
 			allPRs = append(allPRs, pr)
@@ -129,8 +132,17 @@ func listRun(opts *listOptions) error {
 		page++
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, allPRs)
+	if opts.JSONOutput.Enabled() {
+		data := make([]map[string]any, len(allPRs))
+		for i, pr := range allPRs {
+			// ponytail: comments, commits, files and the review fields cost one
+			// request per PR each, up to --limit requests per field. Forgejo has
+			// no batch endpoint for them.
+			if data[i], err = prJSON(opts.Factory, repo, pr, &opts.JSONOutput); err != nil {
+				return err
+			}
+		}
+		return opts.JSONOutput.Write(os.Stdout, data)
 	}
 
 	if len(allPRs) == 0 {
@@ -233,4 +245,26 @@ func hasLabel(pr *forgejo.PullRequest, name string) bool {
 		}
 	}
 	return false
+}
+
+// fetchPRs fetches one page of pull requests via the raw REST endpoint, since
+// the SDK drops draft, the diff stats and the requested reviewers. It returns
+// the page and the unfiltered X-Total-Count header.
+func fetchPRs(f *cmdutil.Factory, repo cmdutil.Repo, opt forgejo.ListPullRequestsOptions) ([]*apiPullRequest, int, error) {
+	resp, err := f.APIGet(repo, repo.APIPath("/pulls?%s", opt.QueryEncode()))
+	if err != nil {
+		return nil, 0, fmt.Errorf("listing pull requests: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return nil, 0, fmt.Errorf("listing pull requests: %s: %s", resp.Status, strings.TrimSpace(string(body)))
+	}
+
+	var prs []*apiPullRequest
+	if err := json.NewDecoder(resp.Body).Decode(&prs); err != nil {
+		return nil, 0, fmt.Errorf("decoding pull requests: %w", err)
+	}
+	return prs, cmdutil.TotalCount(&forgejo.Response{Response: resp}), nil
 }

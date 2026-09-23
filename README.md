@@ -128,6 +128,7 @@ fj pr list --state all                    # List all PRs
 fj pr view 10                             # View PR #10, with its timeline
 fj pr view 10 --show-timeline=false       # View PR #10 without events
 fj pr view 10 --timeline-exclude commits  # Hide commit references
+fj pr view 10 --json state,mergeable      # JSON with gh's field names
 fj pr create --title "Fix" --body "…"     # Create a PR
 fj pr merge 10                            # Merge a PR
 fj pr close 10                            # Close a PR
@@ -152,19 +153,21 @@ fj pr review comment delete 10 4081 --yes                     # Delete (needs --
 
 ### JSON Output
 
-`fj issue list`, `view`, `create` and `edit` take gh's formatting flags: `--json <fields>`, `-q/--jq` and (list and view) `-t/--template`. Field names and shapes follow gh's, so a gh script reads the output unchanged. Each command's `--help` lists its fields, and `fj help formatting` covers the flags:
+`fj issue list`, `view`, `create` and `edit`, and the `fj pr` commands that print a pull request, review or inline comment, take gh's formatting flags: `--json <fields>`, `-q/--jq` and (commands that only read) `-t/--template`. Field names and shapes follow gh's, so a gh script reads the output unchanged. Each command's `--help` lists its fields, and `fj help formatting` covers the flags:
 
 ```sh
 fj issue list --json number,title,labels
 fj issue view 42 --json author,state --jq '.author.login'
 fj issue list --json number,title --template '{{range .}}#{{.number}} {{.title}}{{"\n"}}{{end}}'
+fj pr list --json number,headRefName,isDraft
+fj pr view 10 --json files --jq '.files[].path'
 ```
 
 Other commands still take a bare `--json` and print Forgejo's own JSON:
 
 ```sh
 fj repo list --json
-fj pr list --json | jq '.[].title'
+fj release list --json | jq '.[].tag_name'
 ```
 
 ### API

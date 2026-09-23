@@ -16,7 +16,7 @@ type listOptions struct {
 	Factory    *cmdutil.Factory
 	Number     string
 	Limit      int
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdList(f *cmdutil.Factory) *cobra.Command {
@@ -28,7 +28,7 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 		Aliases: []string{"ls"},
 		Example: `  $ fj pr review list 42
   $ fj pr review list 42 --limit 100
-  $ fj pr review list 42 --json`,
+  $ fj pr review list 42 --json id,state,author`,
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
@@ -37,7 +37,7 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 	}
 
 	cmd.Flags().IntVarP(&opts.Limit, "limit", "L", 30, "Maximum number of reviews to list")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, reviewFields, reviewFJFields, true)
 
 	return cmd
 }
@@ -84,8 +84,12 @@ func listRun(opts *listOptions) error {
 		all = all[:opts.Limit]
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, all)
+	if opts.JSONOutput.Enabled() {
+		data := make([]map[string]any, len(all))
+		for i, r := range all {
+			data[i] = JSON(r)
+		}
+		return opts.JSONOutput.Write(os.Stdout, data)
 	}
 
 	if len(all) == 0 {

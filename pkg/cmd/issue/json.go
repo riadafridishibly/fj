@@ -2,7 +2,6 @@ package issue
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
@@ -23,11 +22,6 @@ type apiIssue struct {
 	PinOrder int64 `json:"pin_order"`
 }
 
-func issuePath(repo cmdutil.Repo, format string, args ...any) string {
-	return fmt.Sprintf("/repos/%s/%s", url.PathEscape(repo.Owner), url.PathEscape(repo.Name)) +
-		fmt.Sprintf(format, args...)
-}
-
 // getIssue fetches an issue with its pin_order.
 func getIssue(f *cmdutil.Factory, repo cmdutil.Repo, index int64) (*apiIssue, error) {
 	client, err := f.APIClient(repo)
@@ -35,7 +29,7 @@ func getIssue(f *cmdutil.Factory, repo cmdutil.Repo, index int64) (*apiIssue, er
 		return nil, err
 	}
 	issue := new(apiIssue)
-	if err := client.GetJSON(issuePath(repo, "/issues/%d", index), issue); err != nil {
+	if err := client.GetJSON(repo.APIPath("/issues/%d", index), issue); err != nil {
 		return nil, fmt.Errorf("getting issue: %w", err)
 	}
 	return issue, nil
@@ -73,21 +67,8 @@ func issueJSON(f *cmdutil.Factory, repo cmdutil.Repo, issue *apiIssue, j *cmduti
 	if err != nil {
 		return nil, err
 	}
-	var comments []*forgejo.Comment
-	if err := client.GetJSON(issuePath(repo, "/issues/%d/comments", issue.Index), &comments); err != nil {
-		return nil, fmt.Errorf("listing comments: %w", err)
+	if m["comments"], err = cmdutil.JSONComments(client, repo, issue.Index); err != nil {
+		return nil, err
 	}
-	out := make([]map[string]any, len(comments))
-	for i, c := range comments {
-		var login string
-		if c.Poster != nil {
-			login = c.Poster.UserName
-		}
-		out[i] = map[string]any{
-			"id": c.ID, "author": map[string]any{"login": login}, "body": c.Body,
-			"createdAt": cmdutil.JSONTime(&c.Created), "url": c.HTMLURL,
-		}
-	}
-	m["comments"] = out
 	return m, nil
 }

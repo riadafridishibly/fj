@@ -10,13 +10,14 @@ import (
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
 	"github.com/riadafridishibly/fj/internal/output"
+	"github.com/riadafridishibly/fj/pkg/cmd/pr/review/comment"
 )
 
 type viewOptions struct {
 	Factory    *cmdutil.Factory
 	Number     string
 	ReviewID   string
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdView(f *cmdutil.Factory) *cobra.Command {
@@ -26,7 +27,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 		Use:   "view <number> <review-id>",
 		Short: "View a pull request review and its inline comments",
 		Example: `  $ fj pr review view 42 12345
-  $ fj pr review view 42 12345 --json`,
+  $ fj pr review view 42 12345 --json state,body,comments`,
 		Args: cmdutil.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
@@ -35,7 +36,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 		},
 	}
 
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, reviewFields, append([]string{"comments"}, reviewFJFields...), true)
 	return cmd
 }
 
@@ -70,11 +71,14 @@ func viewRun(opts *viewOptions) error {
 		return fmt.Errorf("listing review comments: %w", err)
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, map[string]any{
-			"review":   review,
-			"comments": comments,
-		})
+	if opts.JSONOutput.Enabled() {
+		data := JSON(review)
+		inline := make([]map[string]any, len(comments))
+		for i, c := range comments {
+			inline[i] = comment.JSON(c)
+		}
+		data["comments"] = inline
+		return opts.JSONOutput.Write(os.Stdout, data)
 	}
 
 	reviewer := "unknown"

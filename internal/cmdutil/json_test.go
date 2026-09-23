@@ -99,4 +99,11 @@ func TestJSONFieldsHelp(t *testing.T) {
 	if got != want {
 		t.Errorf("fieldsHelp = %q, want %q", got, want)
 	}
+
+	got = fieldsHelp(nil, []string{"path", "reviewId"})
+	want = "\nJSON FIELDS\n  gh (GitHub CLI) has no such command; the names follow gh's style.\n" +
+		"  path, reviewId\n"
+	if got != want {
+		t.Errorf("fj-only fieldsHelp = %q, want %q", got, want)
+	}
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	"github.com/riadafridishibly/fj/internal/api"
 	"github.com/riadafridishibly/fj/internal/output"
 )
 
@@ -27,8 +28,8 @@ type JSONFlags struct {
 }
 
 // AddJSONFlags adds --json and -q/--jq to cmd, plus -t/--template when
-// withTemplate is set. issue create and edit leave the template flag out,
-// since -t is --title there. fields are gh's names for the command's data;
+// withTemplate is set. Write commands leave the template flag out, since -t
+// is --title on create and edit. fields are gh's names for the command's data;
 // fjFields are fj's additions, listed apart in help. It takes over
 // cmd.PreRunE to validate the flags.
 func AddJSONFlags(cmd *cobra.Command, j *JSONFlags, fields, fjFields []string, withTemplate bool) {
@@ -123,10 +124,16 @@ func (j *JSONFlags) pick(m map[string]any) map[string]any {
 	return out
 }
 
-// fieldsHelp is the JSON FIELDS section appended to a command's help.
+// fieldsHelp is the JSON FIELDS section appended to a command's help. A
+// command gh lacks has no gh fields; its fj fields are then listed alone.
 func fieldsHelp(fields, fjFields []string) string {
 	var b strings.Builder
-	b.WriteString("\nJSON FIELDS\n  Names and shapes follow gh (GitHub CLI); fields Forgejo lacks are omitted.\n")
+	if len(fields) == 0 {
+		b.WriteString("\nJSON FIELDS\n  gh (GitHub CLI) has no such command; the names follow gh's style.\n")
+		fields, fjFields = fjFields, nil
+	} else {
+		b.WriteString("\nJSON FIELDS\n  Names and shapes follow gh (GitHub CLI); fields Forgejo lacks are omitted.\n")
+	}
 	line := " "
 	for i, f := range fields {
 		if i < len(fields)-1 {
@@ -192,4 +199,25 @@ func JSONMilestone(m *forgejo.Milestone) map[string]any {
 		"number": m.ID, "title": m.Title, "description": m.Description,
 		"dueOn": JSONTime(m.Deadline),
 	}
+}
+
+// JSONComments lists the comments on issue or pull request index in gh's
+// comment shape.
+func JSONComments(client *api.Client, repo Repo, index int64) ([]map[string]any, error) {
+	var comments []*forgejo.Comment
+	if err := client.GetJSON(repo.APIPath("/issues/%d/comments", index), &comments); err != nil {
+		return nil, fmt.Errorf("listing comments: %w", err)
+	}
+	out := make([]map[string]any, len(comments))
+	for i, c := range comments {
+		var login string
+		if c.Poster != nil {
+			login = c.Poster.UserName
+		}
+		out[i] = map[string]any{
+			"id": c.ID, "author": map[string]any{"login": login}, "body": c.Body,
+			"createdAt": JSONTime(&c.Created), "url": c.HTMLURL,
+		}
+	}
+	return out, nil
 }

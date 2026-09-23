@@ -24,7 +24,7 @@ func TestPRList(t *testing.T) {
 }
 
 func TestPRListJSON(t *testing.T) {
-	stdout := mustRunFJ(t, "pr", "list", "-R", adminUser+"/test-repo", "--json")
+	stdout := mustRunFJ(t, "pr", "list", "-R", adminUser+"/test-repo", "--json", "number")
 
 	var prs []map[string]any
 	if err := json.Unmarshal([]byte(stdout), &prs); err != nil {
@@ -47,15 +47,11 @@ func TestPRView(t *testing.T) {
 }
 
 func TestPRViewJSON(t *testing.T) {
-	stdout := mustRunFJ(t, "pr", "view", "4", "-R", adminUser+"/test-repo", "--json")
+	stdout := mustRunFJ(t, "pr", "view", "4", "-R", adminUser+"/test-repo", "--json", "title")
 
-	var result map[string]any
-	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+	var pr map[string]any
+	if err := json.Unmarshal([]byte(stdout), &pr); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
-	}
-	pr, ok := result["pull_request"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected 'pull_request' key, got: %v", result)
 	}
 	if title, _ := pr["title"].(string); title != "Add feature-1" {
 		t.Errorf("expected title 'Add feature-1', got %q", title)
@@ -77,11 +73,11 @@ func TestPRReviewCommentLifecycle(t *testing.T) {
 		"--comment-line", "1",
 		"--comment-body", "original inline comment")
 
-	listOut := mustRunFJ(t, "pr", "review", "comment", "list", "5", repoFlag, repoName, "--json")
+	listOut := mustRunFJ(t, "pr", "review", "comment", "list", "5", repoFlag, repoName, "--json", "id,body,reviewId,path")
 	var comments []struct {
 		ID       int64  `json:"id"`
 		Body     string `json:"body"`
-		ReviewID int64  `json:"review_id"`
+		ReviewID int64  `json:"reviewId"`
 		Path     string `json:"path"`
 	}
 	if err := json.Unmarshal([]byte(listOut), &comments); err != nil {
@@ -90,7 +86,7 @@ func TestPRReviewCommentLifecycle(t *testing.T) {
 	var original *struct {
 		ID       int64  `json:"id"`
 		Body     string `json:"body"`
-		ReviewID int64  `json:"review_id"`
+		ReviewID int64  `json:"reviewId"`
 		Path     string `json:"path"`
 	}
 	for i := range comments {
@@ -104,11 +100,11 @@ func TestPRReviewCommentLifecycle(t *testing.T) {
 
 	replyOut := mustRunFJ(t, "pr", "review", "comment", "reply", "5",
 		strconv.FormatInt(original.ID, 10), repoFlag, repoName,
-		"--body", "reply to inline comment", "--json")
+		"--body", "reply to inline comment", "--json", "id,body,reviewId,path")
 	var reply struct {
 		ID       int64  `json:"id"`
 		Body     string `json:"body"`
-		ReviewID int64  `json:"review_id"`
+		ReviewID int64  `json:"reviewId"`
 		Path     string `json:"path"`
 	}
 	if err := json.Unmarshal([]byte(replyOut), &reply); err != nil {
@@ -125,7 +121,7 @@ func TestPRReviewCommentLifecycle(t *testing.T) {
 	}
 
 	// The reply must be visible when listing again.
-	listOut = mustRunFJ(t, "pr", "review", "comment", "list", "5", repoFlag, repoName, "--json")
+	listOut = mustRunFJ(t, "pr", "review", "comment", "list", "5", repoFlag, repoName, "--json", "body")
 	if !strings.Contains(listOut, "reply to inline comment") {
 		t.Fatalf("reply not visible in comment list:\n%s", listOut)
 	}
@@ -135,7 +131,7 @@ func TestPRReviewCommentLifecycle(t *testing.T) {
 	mustRunFJ(t, "pr", "review", "comment", "delete", "5",
 		strconv.FormatInt(reply.ID, 10), repoFlag, repoName, "--yes")
 
-	listOut = mustRunFJ(t, "pr", "review", "comment", "list", "5", repoFlag, repoName, "--json")
+	listOut = mustRunFJ(t, "pr", "review", "comment", "list", "5", repoFlag, repoName, "--json", "body")
 	if strings.Contains(listOut, "reply to inline comment") {
 		t.Errorf("deleted reply still present in comment list:\n%s", listOut)
 	}
@@ -153,7 +149,7 @@ func TestPRReviewCommentLifecycle(t *testing.T) {
 // body matches, via the JSON review comment list for the given PR.
 func prReviewCommentIDByBody(t *testing.T, pr, repo, body string) int64 {
 	t.Helper()
-	out := mustRunFJ(t, "pr", "review", "comment", "list", pr, "-R", repo, "--json")
+	out := mustRunFJ(t, "pr", "review", "comment", "list", pr, "-R", repo, "--json", "id,body")
 	var comments []struct {
 		ID   int64  `json:"id"`
 		Body string `json:"body"`
@@ -173,7 +169,7 @@ func prReviewCommentIDByBody(t *testing.T, pr, repo, body string) int64 {
 // ID is still present.
 func prReviewCommentExists(t *testing.T, pr, repo string, id int64) bool {
 	t.Helper()
-	out := mustRunFJ(t, "pr", "review", "comment", "list", pr, "-R", repo, "--json")
+	out := mustRunFJ(t, "pr", "review", "comment", "list", pr, "-R", repo, "--json", "id")
 	var comments []struct {
 		ID int64 `json:"id"`
 	}

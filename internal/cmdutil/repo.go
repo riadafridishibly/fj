@@ -2,6 +2,7 @@ package cmdutil
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/riadafridishibly/fj/internal/config"
@@ -16,6 +17,12 @@ type Repo struct {
 
 func (r Repo) FullName() string {
 	return r.Owner + "/" + r.Name
+}
+
+// APIPath builds an API path under /repos/<owner>/<repo>, escaping both.
+func (r Repo) APIPath(format string, args ...any) string {
+	return fmt.Sprintf("/repos/%s/%s", url.PathEscape(r.Owner), url.PathEscape(r.Name)) +
+		fmt.Sprintf(format, args...)
 }
 
 func RepoFromFullName(name string) (Repo, error) {

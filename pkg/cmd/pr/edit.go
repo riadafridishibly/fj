@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
-	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type editOptions struct {
@@ -24,7 +23,7 @@ type editOptions struct {
 	AddAssignees    []string
 	RemoveAssignees []string
 	Milestone       string
-	JSONOutput      bool
+	JSONOutput      cmdutil.JSONFlags
 }
 
 func NewCmdEdit(f *cmdutil.Factory) *cobra.Command {
@@ -37,7 +36,8 @@ func NewCmdEdit(f *cmdutil.Factory) *cobra.Command {
   $ fj pr edit 42 --body "Updated description"
   $ fj pr edit 42 --add-label bug --remove-label wontfix
   $ fj pr edit 42 --add-assignee riad
-  $ fj pr edit 42 --base develop`,
+  $ fj pr edit 42 --base develop
+  $ fj pr edit 42 --add-label bug --json labels`,
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
@@ -61,7 +61,7 @@ func NewCmdEdit(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringSliceVar(&opts.AddAssignees, "add-assignee", nil, "Add assignees by username")
 	cmd.Flags().StringSliceVar(&opts.RemoveAssignees, "remove-assignee", nil, "Remove assignees by username")
 	cmd.Flags().StringVarP(&opts.Milestone, "milestone", "m", "", "Set milestone by name")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, prFields, nil, false)
 
 	return cmd
 }
@@ -172,8 +172,8 @@ func editRun(opts *editOptions) error {
 		return fmt.Errorf("editing pull request: %w", err)
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, pr)
+	if opts.JSONOutput.Enabled() {
+		return writePR(opts.Factory, repo, index, &opts.JSONOutput)
 	}
 
 	fmt.Fprintf(os.Stderr, "✓ Edited pull request #%d\n", pr.Index)
