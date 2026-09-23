@@ -61,12 +61,7 @@ func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
 }
 
 func createRun(opts *createOptions) error {
-	cfg, err := opts.Factory.Config()
-	if err != nil {
-		return err
-	}
-
-	_, hostname, err := cfg.DefaultHost()
+	hostname, err := opts.Factory.Host()
 	if err != nil {
 		return err
 	}
@@ -103,6 +98,10 @@ func createRun(opts *createOptions) error {
 	fmt.Fprintf(os.Stdout, "%s\n", repo.HTMLURL)
 
 	if opts.Clone {
+		cfg, err := opts.Factory.Config()
+		if err != nil {
+			return err
+		}
 		host, err := cfg.HostByName(hostname)
 		if err != nil {
 			return err

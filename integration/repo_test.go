@@ -108,8 +108,8 @@ func TestRepoDelete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("repo delete --dry-run failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
 	}
-	if !strings.Contains(stderr, name) {
-		t.Errorf("dry-run output should mention the repository\nstderr: %s", stderr)
+	if !strings.Contains(stderr, forgejoHost+"/"+full) {
+		t.Errorf("dry-run output should name the host and the repository\nstderr: %s", stderr)
 	}
 	if !strings.Contains(stderr, "dry-run") {
 		t.Errorf("dry-run output should state nothing was changed\nstderr: %s", stderr)

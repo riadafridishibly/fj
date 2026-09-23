@@ -39,23 +39,10 @@ func NewCmdClone(f *cmdutil.Factory) *cobra.Command {
 }
 
 func cloneRun(opts *cloneOptions) error {
-	cfg, err := opts.Factory.Config()
-	if err != nil {
-		return err
-	}
-
-	_, hostname, err := cfg.DefaultHost()
-	if err != nil {
-		return err
-	}
-
-	host, err := cfg.HostByName(hostname)
-	if err != nil {
-		return err
-	}
-
-	// If it's already a full URL, clone directly
-	if strings.HasPrefix(opts.Repo, "http://") || strings.HasPrefix(opts.Repo, "https://") || strings.HasPrefix(opts.Repo, "git@") {
+	// A URL names its own server, so it is cloned without resolving a host.
+	// OWNER/REPO never contains ":", while every URL form does (https://,
+	// ssh://, user@host:path). gh uses the same test.
+	if strings.Contains(opts.Repo, ":") {
 		if err := git.Clone(opts.Repo, opts.Directory); err != nil {
 			return fmt.Errorf("cloning: %w", err)
 		}
@@ -63,6 +50,19 @@ func cloneRun(opts *cloneOptions) error {
 	}
 
 	repo, err := cmdutil.RepoFromFullName(opts.Repo)
+	if err != nil {
+		return err
+	}
+
+	cfg, err := opts.Factory.Config()
+	if err != nil {
+		return err
+	}
+	hostname, err := opts.Factory.Host()
+	if err != nil {
+		return err
+	}
+	host, err := cfg.HostByName(hostname)
 	if err != nil {
 		return err
 	}

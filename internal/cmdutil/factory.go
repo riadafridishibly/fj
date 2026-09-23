@@ -52,22 +52,40 @@ func (f *Factory) BaseRepo() (Repo, error) {
 		if err != nil {
 			return Repo{}, err
 		}
-		// If no host on the repo, use default or override
 		if repo.Host == "" {
-			if f.HostOverride != "" {
-				repo.Host = f.HostOverride
-			} else {
-				_, host, err := cfg.DefaultHost()
-				if err != nil {
-					return Repo{}, err
-				}
-				repo.Host = host
+			if repo.Host, err = f.Host(); err != nil {
+				return Repo{}, err
 			}
 		}
 		return repo, nil
 	}
 
 	return RepoFromGitRemotes(cfg)
+}
+
+// Host returns the Forgejo host for a command whose arguments name none.
+// It checks, in order: --hostname, FJ_HOST, the host of the current
+// checkout's git remote, and the only configured host. With several hosts
+// and none of these set, it returns an error instead of picking one.
+func (f *Factory) Host() (string, error) {
+	if f.HostOverride != "" {
+		return f.HostOverride, nil
+	}
+	if h := os.Getenv("FJ_HOST"); h != "" {
+		return h, nil
+	}
+	cfg, err := f.Config()
+	if err != nil {
+		return "", err
+	}
+	// With one host or none, the checkout cannot change the result, so git
+	// is not run.
+	if len(cfg.Hosts) > 1 {
+		if repo, err := RepoFromGitRemotes(cfg); err == nil {
+			return repo.Host, nil
+		}
+	}
+	return cfg.OnlyHost("set FJ_HOST to choose one")
 }
 
 func (f *Factory) Client(hostname string) (*forgejo.Client, error) {

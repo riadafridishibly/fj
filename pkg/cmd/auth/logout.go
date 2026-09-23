@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"cmp"
 	"fmt"
 	"os"
 
@@ -39,13 +40,13 @@ func logoutRun(opts *logoutOptions) error {
 		return err
 	}
 
-	hostname := opts.Hostname
+	// The host is never taken from the checkout. Without --hostname or
+	// FJ_HOST, logout only proceeds when a single host is configured.
+	hostname := cmp.Or(opts.Hostname, os.Getenv("FJ_HOST"))
 	if hostname == "" {
-		_, h, err := cfg.DefaultHost()
-		if err != nil {
+		if hostname, err = cfg.OnlyHost("pass --hostname to choose one"); err != nil {
 			return err
 		}
-		hostname = h
 	}
 
 	if _, ok := cfg.Hosts[hostname]; !ok {

@@ -191,3 +191,44 @@ func TestRevExists(t *testing.T) {
 		t.Error("empty rev should not exist")
 	}
 }
+
+func TestRemotesSortedByName(t *testing.T) {
+	t.Chdir(t.TempDir())
+	gitT(t, "init", "-q")
+	for _, name := range []string{"zeta", "alpha", "mid"} {
+		gitT(t, "remote", "add", name, "https://forgejo.example.com/o/"+name+".git")
+	}
+
+	// Go map order varies between calls. Repeat so an unsorted result shows up.
+	for range 20 {
+		remotes, err := Remotes()
+		if err != nil {
+			t.Fatalf("Remotes() error = %v", err)
+		}
+		var names []string
+		for _, r := range remotes {
+			names = append(names, r.Name)
+		}
+		if want := []string{"alpha", "mid", "zeta"}; !slices.Equal(names, want) {
+			t.Fatalf("names = %v, want %v", names, want)
+		}
+	}
+}
+
+func TestParseRemoteURLHost(t *testing.T) {
+	tests := []struct{ url, host string }{
+		{"https://forgejo.example.com/o/r.git", "forgejo.example.com"},
+		{"http://localhost:3000/o/r.git", "localhost:3000"},
+		{"ssh://git@forgejo.example.com:2222/o/r.git", "forgejo.example.com"},
+		{"git@forgejo.example.com:o/r.git", "forgejo.example.com"},
+	}
+	for _, tt := range tests {
+		info, err := ParseRemoteURL(tt.url)
+		if err != nil {
+			t.Fatalf("ParseRemoteURL(%q) error = %v", tt.url, err)
+		}
+		if info.Host != tt.host || info.Owner != "o" || info.Name != "r" {
+			t.Errorf("ParseRemoteURL(%q) = %+v, want host %q, o/r", tt.url, *info, tt.host)
+		}
+	}
+}

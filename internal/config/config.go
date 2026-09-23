@@ -2,8 +2,11 @@ package config
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -115,14 +118,20 @@ func (c *Config) Save() error {
 	return WriteSchema()
 }
 
-func (c *Config) DefaultHost() (*HostConfig, string, error) {
-	if len(c.Hosts) == 0 {
-		return nil, "", fmt.Errorf("not logged in to any host. Run 'fj auth login' to authenticate")
+// OnlyHost returns the configured host when there is exactly one. With
+// several there is no safe answer, so it errors instead of guessing; hint
+// tells the user how to name one.
+func (c *Config) OnlyHost(hint string) (string, error) {
+	switch len(c.Hosts) {
+	case 0:
+		return "", fmt.Errorf("not logged in to any host. Run 'fj auth login' to authenticate")
+	case 1:
+		for name := range c.Hosts {
+			return name, nil
+		}
 	}
-	for name, h := range c.Hosts {
-		return h, name, nil
-	}
-	return nil, "", nil // unreachable
+	hosts := slices.Sorted(maps.Keys(c.Hosts))
+	return "", fmt.Errorf("multiple hosts configured (%s); %s", strings.Join(hosts, ", "), hint)
 }
 
 func (c *Config) HostByName(name string) (*HostConfig, error) {

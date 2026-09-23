@@ -51,15 +51,9 @@ func viewRun(opts *viewOptions) error {
 		if err != nil {
 			return err
 		}
-		cfg, err := opts.Factory.Config()
-		if err != nil {
+		if repo.Host, err = opts.Factory.Host(); err != nil {
 			return err
 		}
-		_, host, err := cfg.DefaultHost()
-		if err != nil {
-			return err
-		}
-		repo.Host = host
 	} else {
 		repo, err = opts.Factory.BaseRepo()
 		if err != nil {
