@@ -39,14 +39,19 @@ func NewCmdClone(f *cmdutil.Factory) *cobra.Command {
 }
 
 func cloneRun(opts *cloneOptions) error {
-	// A full URL names its own server, so it is cloned before any host is
-	// resolved: with several hosts configured, resolving one would fail
-	// for a clone that needs none.
-	if strings.HasPrefix(opts.Repo, "http://") || strings.HasPrefix(opts.Repo, "https://") || strings.HasPrefix(opts.Repo, "git@") {
+	// A URL names its own server, so it is cloned without resolving a host.
+	// OWNER/REPO never contains ":", while every URL form does (https://,
+	// ssh://, user@host:path). gh uses the same test.
+	if strings.Contains(opts.Repo, ":") {
 		if err := git.Clone(opts.Repo, opts.Directory); err != nil {
 			return fmt.Errorf("cloning: %w", err)
 		}
 		return nil
+	}
+
+	repo, err := cmdutil.RepoFromFullName(opts.Repo)
+	if err != nil {
+		return err
 	}
 
 	cfg, err := opts.Factory.Config()
@@ -58,11 +63,6 @@ func cloneRun(opts *cloneOptions) error {
 		return err
 	}
 	host, err := cfg.HostByName(hostname)
-	if err != nil {
-		return err
-	}
-
-	repo, err := cmdutil.RepoFromFullName(opts.Repo)
 	if err != nil {
 		return err
 	}
