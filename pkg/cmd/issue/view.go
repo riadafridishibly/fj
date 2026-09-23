@@ -24,7 +24,7 @@ type viewOptions struct {
 	TimelineInclude []string
 	TimelineExclude []string
 	Web             bool
-	JSONOutput      bool
+	JSONOutput      cmdutil.JSONFlags
 	Download        bool
 	DownloadDir     string
 }
@@ -41,7 +41,8 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
   $ fj issue view 42 --timeline-exclude commits
   $ fj issue view 42 --timeline-include refs --timeline-exclude commits
   $ fj issue view 42 --web
-  $ fj issue view 42 --json
+  $ fj issue view 42 --json title,state,labels
+  $ fj issue view 42 --json timeline --jq '.timeline[].type'
   $ fj issue view 42 --download
   $ fj issue view 42 --download --download-dir ./tmp`,
 		Args: cmdutil.ExactArgs(1),
@@ -57,7 +58,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.Download, "download", false, "Download issue attachments")
 	cmd.Flags().StringVarP(&opts.DownloadDir, "download-dir", "D", "", "Directory to download attachments into (default: ./issue-<number>)")
 	cmdutil.AddWebFlag(cmd, &opts.Web)
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, issueFields, []string{"downloaded", "timeline"}, true)
 
 	return cmd
 }
@@ -83,44 +84,38 @@ func viewRun(opts *viewOptions) error {
 		return err
 	}
 
-	issue, _, err := client.GetIssue(repo.Owner, repo.Name, index)
+	issue, err := getIssue(opts.Factory, repo, index)
 	if err != nil {
-		return fmt.Errorf("getting issue: %w", err)
+		return err
 	}
 
 	if opts.Web {
 		return cmdutil.OpenInBrowser(issue.HTMLURL)
 	}
 
-	if opts.JSONOutput {
-		result := map[string]any{
-			"issue": issue,
+	if opts.JSONOutput.Enabled() {
+		data, err := issueJSON(opts.Factory, repo, issue, &opts.JSONOutput)
+		if err != nil {
+			return err
 		}
-		if opts.Comments {
-			comments, _, err := client.ListIssueComments(repo.Owner, repo.Name, index, forgejo.ListIssueCommentOptions{})
-			if err != nil {
-				return fmt.Errorf("listing comments: %w", err)
-			}
-			result["comments"] = comments
-		}
-		if opts.ShowTimeline {
+		if opts.ShowTimeline && opts.JSONOutput.Has("timeline") {
 			events, err := opts.Factory.Timeline(repo, index)
 			if err != nil {
 				return err
 			}
-			result["timeline"] = timeline.Apply(events)
+			data["timeline"] = timeline.Apply(events)
 		}
 		if opts.Download {
 			paths, dir, err := downloadIssueAttachments(opts.Factory, client, repo, index, opts.DownloadDir)
 			if err != nil {
 				return err
 			}
-			result["downloaded"] = map[string]any{
-				"dir":   dir,
-				"files": paths,
+			if paths == nil {
+				paths = []string{}
 			}
+			data["downloaded"] = map[string]any{"dir": dir, "files": paths}
 		}
-		return output.PrintJSON(os.Stdout, result)
+		return opts.JSONOutput.Write(os.Stdout, data)
 	}
 
 	// Text output

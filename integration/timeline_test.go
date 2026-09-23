@@ -109,7 +109,7 @@ func TestIssueViewTimelineJSON(t *testing.T) {
 	viewUntil(t, "referenced this issue from a commit",
 		"issue", "view", num, "-R", adminUser+"/test-repo")
 
-	stdout := mustRunFJ(t, "issue", "view", num, "-R", adminUser+"/test-repo", "--json")
+	stdout := mustRunFJ(t, "issue", "view", num, "-R", adminUser+"/test-repo", "--json", "timeline")
 
 	var result struct {
 		Timeline []struct {
@@ -135,7 +135,7 @@ func TestIssueViewTimelineJSON(t *testing.T) {
 	}
 
 	// --show-timeline=false must drop the key rather than emit an empty one.
-	off := mustRunFJ(t, "issue", "view", num, "-R", adminUser+"/test-repo", "--json", "--show-timeline=false")
+	off := mustRunFJ(t, "issue", "view", num, "-R", adminUser+"/test-repo", "--json", "timeline,title", "--show-timeline=false")
 	var raw map[string]any
 	if err := json.Unmarshal([]byte(off), &raw); err != nil {
 		t.Fatalf("invalid JSON: %v", err)

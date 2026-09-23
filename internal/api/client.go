@@ -65,6 +65,12 @@ func (c *Client) Get(path string) (*http.Response, error) {
 	return c.Raw(http.MethodGet, path, nil, "", nil)
 }
 
+// GetJSON performs an authenticated GET against /api/v1<path> and decodes
+// the JSON response into out, for types the SDK decodes only in part.
+func (c *Client) GetJSON(path string, out any) error {
+	return c.do(http.MethodGet, path, nil, out)
+}
+
 // Raw sends an authenticated request and returns the response whatever its
 // status, for callers that print the server's own answer (fj api). target
 // is resolved as newBodyRequest describes. Entries in header replace the
