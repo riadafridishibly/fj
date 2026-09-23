@@ -97,6 +97,7 @@ fj issue view 42 \
   --timeline-exclude commits              # Hide commit references (often the bulk)
 fj issue view 42 \
   --timeline-include refs                 # Show only what referenced this issue
+fj issue view 42 --json title,labels      # JSON with gh's field names
 fj issue create --title "Bug" --body "…"  # Create an issue
 fj issue close 42                         # Close an issue
 fj issue reopen 42                        # Reopen an issue
@@ -151,11 +152,18 @@ fj pr review comment delete 10 4081 --yes                     # Delete (needs --
 
 ### JSON Output
 
-Most commands support `--json` for machine-readable output:
+`fj issue list`, `view`, `create` and `edit` take gh's formatting flags: `--json <fields>`, `-q/--jq` and (list and view) `-t/--template`. Field names and shapes follow gh's, so a gh script reads the output unchanged. Each command's `--help` lists its fields, and `fj help formatting` covers the flags:
+
+```sh
+fj issue list --json number,title,labels
+fj issue view 42 --json author,state --jq '.author.login'
+fj issue list --json number,title --template '{{range .}}#{{.number}} {{.title}}{{"\n"}}{{end}}'
+```
+
+Other commands still take a bare `--json` and print Forgejo's own JSON:
 
 ```sh
 fj repo list --json
-fj issue view 42 --json
 fj pr list --json | jq '.[].title'
 ```
 

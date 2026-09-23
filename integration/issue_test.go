@@ -55,7 +55,7 @@ func TestIssueListByLabel(t *testing.T) {
 }
 
 func TestIssueListJSON(t *testing.T) {
-	stdout := mustRunFJ(t, "issue", "list", "-R", adminUser+"/test-repo", "--json")
+	stdout := mustRunFJ(t, "issue", "list", "-R", adminUser+"/test-repo", "--json", "number,title")
 
 	var issues []map[string]any
 	if err := json.Unmarshal([]byte(stdout), &issues); err != nil {
@@ -77,15 +77,11 @@ func TestIssueView(t *testing.T) {
 }
 
 func TestIssueViewJSON(t *testing.T) {
-	stdout := mustRunFJ(t, "issue", "view", "1", "-R", adminUser+"/test-repo", "--json")
+	stdout := mustRunFJ(t, "issue", "view", "1", "-R", adminUser+"/test-repo", "--json", "title")
 
-	var result map[string]any
-	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+	var issue map[string]any
+	if err := json.Unmarshal([]byte(stdout), &issue); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
-	}
-	issue, ok := result["issue"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected 'issue' key in response, got: %v", result)
 	}
 	if title, _ := issue["title"].(string); title != "First issue" {
 		t.Errorf("expected title 'First issue', got %q", title)
@@ -120,7 +116,7 @@ func TestIssueClose(t *testing.T) {
 		"--title", "Issue to close")
 
 	// Find its number from the JSON list
-	listOut := mustRunFJ(t, "issue", "list", "-R", adminUser+"/test-repo", "--json")
+	listOut := mustRunFJ(t, "issue", "list", "-R", adminUser+"/test-repo", "--json", "number,title")
 	var issues []map[string]any
 	if err := json.Unmarshal([]byte(listOut), &issues); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
@@ -156,7 +152,7 @@ func TestIssueClose(t *testing.T) {
 // matches, via the JSON issue list.
 func issueNumberByTitle(t *testing.T, repo, title string) string {
 	t.Helper()
-	out := mustRunFJ(t, "issue", "list", "-R", repo, "--json")
+	out := mustRunFJ(t, "issue", "list", "-R", repo, "--json", "number,title")
 	var issues []map[string]any
 	if err := json.Unmarshal([]byte(out), &issues); err != nil {
 		t.Fatalf("invalid JSON: %v", err)

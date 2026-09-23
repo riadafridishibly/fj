@@ -65,6 +65,45 @@ func NewCmdRoot(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(statusCmd.NewCmdStatus(f))
 	cmd.AddCommand(apiCmd.NewCmdAPI(f))
 
+	cmd.AddCommand(&cobra.Command{
+		Use:   "formatting",
+		Short: "Formatting options for JSON data exported from fj",
+		Long: `Commands with a JSON FIELDS section in their --help print JSON instead of
+text when given --json. Field names and shapes follow gh (GitHub CLI), so a
+script written for gh reads fj's output the same way. Fields GitHub has but
+Forgejo lacks are left out; fields only fj has are listed apart as fj-only.
+One difference: ids are Forgejo's numeric IDs, not GitHub's string node IDs.
+
+--json takes a comma-separated list of fields. Without one, fj lists the
+valid fields and exits 1. On a terminal the JSON is indented; otherwise it
+is printed on one line.
+
+-q/--jq filters the JSON with a jq expression. Strings print raw and other
+values as compact JSON, one result per line. jq need not be installed.
+
+-t/--template formats the JSON with a Go template (text/template). Both --jq
+and --template need --json; given both, --jq wins. The template can use
+these functions besides the standard ones:
+- autocolor <style> <input>: like color, but only colors on a terminal
+- color <style> <input>: colorize input, style being a color name such as green
+- join <sep> <list>: join the values in list with sep
+- pluck <field> <list>: collect field from every item in list
+- tablerow <fields>...: align fields vertically as a table
+- tablerender: print the rows added by tablerow so far
+- timeago <time>: render a timestamp relative to now
+- timefmt <format> <time>: format a timestamp with Go's Time.Format
+- truncate <length> <input>: shorten input to fit length
+- hyperlink <url> <text>: render a terminal hyperlink
+- contains <arg> <string>, hasPrefix <prefix> <string>,
+  hasSuffix <suffix> <string>, regexMatch <regex> <string>
+
+Examples:
+  $ fj issue list --json number,title,labels
+  $ fj issue list --json author --jq '.[].author.login'
+  $ fj issue list --json number,title,updatedAt --template \
+      '{{range .}}{{tablerow .number .title (timeago .updatedAt)}}{{end}}'`,
+	})
+
 	// Version command
 	cmd.AddCommand(&cobra.Command{
 		Use:   "version",

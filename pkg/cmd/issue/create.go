@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riadafridishibly/fj/internal/cmdutil"
-	"github.com/riadafridishibly/fj/internal/output"
 )
 
 type createOptions struct {
@@ -19,7 +18,7 @@ type createOptions struct {
 	Assignees  []string
 	Labels     []string
 	Milestone  string
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
@@ -32,7 +31,7 @@ func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
 		Example: `  $ fj issue create --title "Bug report" --body "Description of the bug"
   $ fj issue create --title "Feature" --label enhancement --assignee riad
   $ fj issue create --title "Bug" --body-file bug-report.md
-  $ fj issue create --title "Bug" --json`,
+  $ fj issue create --title "Bug" --json number,url`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if opts.Title == "" {
 				return cmdutil.FlagErrorf("--title is required")
@@ -54,7 +53,7 @@ func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringSliceVarP(&opts.Assignees, "assignee", "a", nil, "Assign users by their username")
 	cmd.Flags().StringSliceVarP(&opts.Labels, "label", "l", nil, "Add labels by name")
 	cmd.Flags().StringVarP(&opts.Milestone, "milestone", "m", "", "Add to a milestone by name")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, issueFields, nil, false)
 
 	return cmd
 }
@@ -97,8 +96,12 @@ func createRun(opts *createOptions) error {
 		return fmt.Errorf("creating issue: %w", err)
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, issue)
+	if opts.JSONOutput.Enabled() {
+		data, err := issueJSON(opts.Factory, repo, &apiIssue{Issue: *issue}, &opts.JSONOutput)
+		if err != nil {
+			return err
+		}
+		return opts.JSONOutput.Write(os.Stdout, data)
 	}
 
 	fmt.Fprintf(os.Stdout, "%s\n", issue.HTMLURL)

@@ -29,7 +29,7 @@ type listOptions struct {
 	Since      string
 	Before     string
 	Mention    string
-	JSONOutput bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdList(f *cmdutil.Factory) *cobra.Command {
@@ -45,7 +45,8 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
   $ fj issue list --assignee riad
   $ fj issue list --sort oldest
   $ fj issue list --since 7d
-  $ fj issue list --json`,
+  $ fj issue list --json number,title,labels
+  $ fj issue list --json title --jq '.[].title'`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return listRun(opts)
 		},
@@ -62,7 +63,7 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVar(&opts.Since, "since", "", "Only issues updated after this time (YYYY-MM-DD, RFC3339, or an age like 7d)")
 	cmd.Flags().StringVar(&opts.Before, "before", "", "Only issues updated before this time (YYYY-MM-DD, RFC3339, or an age like 7d)")
 	cmd.Flags().StringVar(&opts.Mention, "mention", "", "Filter by user mentioned in the issue")
-	cmdutil.AddJSONFlag(cmd, &opts.JSONOutput)
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, issueFields, nil, true)
 
 	return cmd
 }
@@ -104,7 +105,7 @@ func listRun(opts *listOptions) error {
 		listOpt.Milestones = []string{opts.Milestone}
 	}
 
-	var allIssues []*forgejo.Issue
+	var allIssues []*apiIssue
 	var totalCount int
 	page := 1
 	for len(allIssues) < opts.Limit {
@@ -129,8 +130,17 @@ func listRun(opts *listOptions) error {
 		allIssues = allIssues[:opts.Limit]
 	}
 
-	if opts.JSONOutput {
-		return output.PrintJSON(os.Stdout, allIssues)
+	if opts.JSONOutput.Enabled() {
+		data := make([]map[string]any, len(allIssues))
+		for i, issue := range allIssues {
+			// ponytail: comments cost one request per issue, up to --limit
+			// requests. The repo-wide /issues/comments listing could batch
+			// them, at the price of paging through every comment in the repo.
+			if data[i], err = issueJSON(opts.Factory, repo, issue, &opts.JSONOutput); err != nil {
+				return err
+			}
+		}
+		return opts.JSONOutput.Write(os.Stdout, data)
 	}
 
 	if len(allIssues) == 0 {
@@ -179,7 +189,7 @@ func listRun(opts *listOptions) error {
 // the SDK's ListRepoIssues here because its ListIssueOption has no field for
 // the "sort" query parameter; everything else is still encoded by the SDK's
 // QueryEncode. It returns the page and the unfiltered X-Total-Count header.
-func fetchIssues(f *cmdutil.Factory, repo cmdutil.Repo, opt forgejo.ListIssueOption, sortKey string) ([]*forgejo.Issue, int, error) {
+func fetchIssues(f *cmdutil.Factory, repo cmdutil.Repo, opt forgejo.ListIssueOption, sortKey string) ([]*apiIssue, int, error) {
 	query := opt.QueryEncode()
 	if sortKey != "" {
 		query += "&sort=" + url.QueryEscape(sortKey)
@@ -198,7 +208,7 @@ func fetchIssues(f *cmdutil.Factory, repo cmdutil.Repo, opt forgejo.ListIssueOpt
 		return nil, 0, fmt.Errorf("listing issues: %s: %s", resp.Status, strings.TrimSpace(string(body)))
 	}
 
-	var issues []*forgejo.Issue
+	var issues []*apiIssue
 	if err := json.NewDecoder(resp.Body).Decode(&issues); err != nil {
 		return nil, 0, fmt.Errorf("decoding issues: %w", err)
 	}
