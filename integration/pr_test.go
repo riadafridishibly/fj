@@ -99,6 +99,28 @@ func TestPRReady(t *testing.T) {
 	}
 	check("WIP: Ready test", true)
 
+	// --draft lists only drafts and --draft=false all but drafts, as in gh.
+	for flag, want := range map[string]bool{"--draft": true, "--draft=false": false} {
+		out := mustRunFJ(t, "pr", "list", "-R", repo, flag, "--json", "number,isDraft")
+		var prs []struct {
+			Number  int64 `json:"number"`
+			IsDraft bool  `json:"isDraft"`
+		}
+		if err := json.Unmarshal([]byte(out), &prs); err != nil {
+			t.Fatalf("pr list %s: invalid JSON: %v\n%s", flag, err, out)
+		}
+		listed := false
+		for _, pr := range prs {
+			listed = listed || pr.Number == created.Number
+			if pr.IsDraft != want {
+				t.Errorf("pr list %s listed #%d with isDraft %v", flag, pr.Number, pr.IsDraft)
+			}
+		}
+		if listed != want {
+			t.Errorf("pr list %s: draft #%d listed = %v, want %v", flag, created.Number, listed, want)
+		}
+	}
+
 	mustRunFJ(t, "pr", "ready", num, "-R", repo)
 	check("Ready test", false)
 

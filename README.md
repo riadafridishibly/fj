@@ -125,6 +125,7 @@ fj milestone delete v1.0 --yes            # Delete (needs --yes; --dry-run previ
 ```sh
 fj pr list                                # List open PRs
 fj pr list --state all                    # List all PRs
+fj pr list --draft                        # List draft PRs (--draft=false: all but drafts)
 fj pr view 10                             # View PR #10, with its timeline
 fj pr view 10 --show-timeline=false       # View PR #10 without events
 fj pr view 10 --timeline-exclude commits  # Hide commit references

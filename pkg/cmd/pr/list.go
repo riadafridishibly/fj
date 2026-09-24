@@ -25,11 +25,13 @@ type listOptions struct {
 	Assignee   string
 	Search     string
 	Sort       string
+	Draft      *bool
 	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 	opts := &listOptions{Factory: f}
+	var draft bool
 
 	cmd := &cobra.Command{
 		Use:     "list",
@@ -41,9 +43,13 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
   $ fj pr list --author riad
   $ fj pr list --head feature-1
   $ fj pr list --sort most-commented
+  $ fj pr list --draft
   $ fj pr list --json number,title,headRefName
   $ fj pr list --json number,isDraft --jq '.[] | select(.isDraft) | .number'`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if cmd.Flags().Changed("draft") {
+				opts.Draft = &draft
+			}
 			return listRun(opts)
 		},
 	}
@@ -56,6 +62,7 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVarP(&opts.Author, "author", "A", "", "Filter by author")
 	cmd.Flags().StringVarP(&opts.Assignee, "assignee", "a", "", "Filter by assignee")
 	cmd.Flags().StringVarP(&opts.Search, "search", "S", "", "Filter by title/body text")
+	cmd.Flags().BoolVarP(&draft, "draft", "d", false, "Filter by draft state")
 	cmd.Flags().StringVar(&opts.Sort, "sort", "", "Sort order: newest, oldest, recently-updated, most-commented, ...")
 	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, prFields, nil, true)
 
@@ -79,10 +86,10 @@ func listRun(opts *listOptions) error {
 	}
 
 	// The pulls API only filters by state/milestone/sort server-side, so head,
-	// author, assignee, label and search are applied client-side. When any of
+	// author, assignee, label, search and draft are applied client-side. When any of
 	// those is active we page through full pages to reduce round trips.
 	clientFilter := opts.Head != "" || opts.Author != "" || opts.Assignee != "" ||
-		len(opts.Labels) > 0 || opts.Search != ""
+		len(opts.Labels) > 0 || opts.Search != "" || opts.Draft != nil
 	pageSize := min(opts.Limit, 50)
 	if clientFilter {
 		pageSize = 50
@@ -118,7 +125,7 @@ func listRun(opts *listOptions) error {
 			break
 		}
 		for _, pr := range prs {
-			if !opts.matches(&pr.PullRequest) {
+			if !opts.matches(&pr.PullRequest) || (opts.Draft != nil && pr.Draft != *opts.Draft) {
 				continue
 			}
 			allPRs = append(allPRs, pr)
