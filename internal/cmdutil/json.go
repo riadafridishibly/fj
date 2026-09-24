@@ -42,7 +42,7 @@ func AddJSONFlags(cmd *cobra.Command, j *JSONFlags, fields, fjFields []string, w
 
 // AddJSONFlagsLong is AddJSONFlags with --jq and --template but without the
 // -q and -t shorthands, for commands that use them for something else: -t is
-// --show-token on gh auth status, and -q is --query on fj milestone list.
+// --show-token on gh auth status.
 func AddJSONFlagsLong(cmd *cobra.Command, j *JSONFlags, fields, fjFields []string) {
 	cmd.Flags().StringVar(&j.jq, "jq", "", jqUsage)
 	cmd.Flags().StringVar(&j.template, "template", "", templateUsage)
