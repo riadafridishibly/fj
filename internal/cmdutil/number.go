@@ -2,6 +2,7 @@ package cmdutil
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -167,7 +168,9 @@ func parentRepo(client *forgejo.Client, repo Repo) (*Repo, error) {
 }
 
 // findBranchPR searches base's open pull requests for the one whose head is
-// branch in head's repository. found is false when there is none.
+// branch in head's repository. found is false when there is none. Running
+// out of pages before a match is an error, since the older pull requests
+// were never searched.
 func findBranchPR(client *forgejo.Client, base, head Repo, branch string) (int64, bool, error) {
 	opt := forgejo.ListPullRequestsOptions{
 		ListOptions: forgejo.ListOptions{PageSize: branchPRPageSize},
@@ -188,8 +191,13 @@ func findBranchPR(client *forgejo.Client, base, head Repo, branch string) (int64
 		// short page does not mean the last page; trust the reported total
 		// or an empty page instead.
 		if total := TotalCount(resp); len(prs) == 0 || (total > 0 && seen >= total) {
-			break
+			return matches.pick(branch)
 		}
+	}
+	if len(matches) == 0 {
+		// Not "no pull request found": the older ones were never looked at.
+		return 0, false, fmt.Errorf("branch %q is not among the newest %d open pull requests in %s; specify a pull request number",
+			branch, seen, base.FullName())
 	}
 	return matches.pick(branch)
 }
@@ -206,7 +214,10 @@ type branchMatches []int64
 func (m *branchMatches) collect(prs []*forgejo.PullRequest, head Repo, branch string) {
 	for _, pr := range prs {
 		if pr.Head != nil && pr.Head.Ref == branch && pr.Head.Repository != nil &&
-			strings.EqualFold(pr.Head.Repository.FullName, head.FullName()) {
+			strings.EqualFold(pr.Head.Repository.FullName, head.FullName()) &&
+			// A pull request opened while paging shifts the list, so one
+			// already seen can come back on the next page.
+			!slices.Contains(*m, pr.Index) {
 			*m = append(*m, pr.Index)
 		}
 	}

@@ -1,8 +1,10 @@
 package cmdutil
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -39,7 +41,15 @@ func wrapArgs(validator cobra.PositionalArgs) cobra.PositionalArgs {
 func GroupDispatchArgs(cmd *cobra.Command, args []string) error {
 	if len(args) > 0 {
 		if _, err := strconv.ParseInt(args[0], 10, 64); err != nil {
-			return fmt.Errorf("unknown command %q for %q", args[0], cmd.CommandPath())
+			msg := fmt.Sprintf("unknown command %q for %q", args[0], cmd.CommandPath())
+			// Cobra applies its default distance only on its own lookup path.
+			if cmd.SuggestionsMinimumDistance <= 0 {
+				cmd.SuggestionsMinimumDistance = 2
+			}
+			if s := cmd.SuggestionsFor(args[0]); len(s) > 0 {
+				msg += "\n\nDid you mean this?\n\t" + strings.Join(s, "\n\t")
+			}
+			return errors.New(msg)
 		}
 	}
 	return MaximumNArgs(1)(cmd, args)

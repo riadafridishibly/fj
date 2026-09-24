@@ -59,13 +59,23 @@ func checkoutRun(opts *checkoutOptions) error {
 	}
 
 	branchName := pr.Head.Ref
+	headRef := fmt.Sprintf("pull/%d/head", index)
 	if current, err := git.CurrentBranch(); err == nil && current == branchName {
-		fmt.Fprintf(os.Stderr, "Branch '%s' is already checked out\n", branchName)
+		// git refuses to fetch into the checked-out branch, so fetch and
+		// fast-forward it instead. A branch that has diverged from the pull
+		// request fails here rather than being overwritten.
+		if err := git.Fetch("origin", headRef); err != nil {
+			return fmt.Errorf("fetching PR branch: %w", err)
+		}
+		if _, err := git.Run("merge", "--ff-only", "FETCH_HEAD"); err != nil {
+			return fmt.Errorf("updating branch %s: %w", branchName, err)
+		}
+		fmt.Fprintf(os.Stderr, "Updated branch '%s' to pull request #%d\n", branchName, index)
 		return nil
 	}
 
 	// Fetch the PR branch
-	refSpec := fmt.Sprintf("pull/%d/head:%s", index, branchName)
+	refSpec := headRef + ":" + branchName
 	if err := git.Fetch("origin", refSpec); err != nil {
 		return fmt.Errorf("fetching PR branch: %w", err)
 	}

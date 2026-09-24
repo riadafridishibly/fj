@@ -9,8 +9,10 @@ import (
 	"fmt"
 	"os/exec"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 )
@@ -45,13 +47,15 @@ func gitRepoOf(t *testing.T, fullName, branch string) string {
 	return dir
 }
 
-func gitIn(t *testing.T, dir string, args ...string) {
+func gitIn(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
-	if out, err := cmd.CombinedOutput(); err != nil {
+	out, err := cmd.CombinedOutput()
+	if err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
+	return strings.TrimSpace(string(out))
 }
 
 // openBranchPR commits a file to a new branch of owner/repo and opens a
@@ -168,19 +172,45 @@ func TestUsageErrorExitCodes(t *testing.T) {
 	}
 }
 
-// TestPRCheckoutCurrentBranch covers the short circuit: checking out the
-// pull request whose head is already the checked-out branch must not run
-// git fetch (which would exit 128 refusing to fetch into the current
-// branch).
-func TestPRCheckoutCurrentBranch(t *testing.T) {
-	dir := gitRepoOnBranch(t, "feature-1") // PR #4
-
-	stdout, stderr, err := runFJIn(dir, "pr", "checkout", "4")
-	if err != nil {
-		t.Fatalf("fj pr checkout 4 failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+// TestPRCheckoutUpdatesCurrentBranch: checking out the pull request whose
+// head is the checked-out branch fast-forwards that branch. git refuses to
+// fetch into the current branch, and returning early would leave it stale.
+func TestPRCheckoutUpdatesCurrentBranch(t *testing.T) {
+	repo := "pr-checkout-update"
+	if _, _, err := testClient.CreateRepo(forgejo.CreateRepoOption{Name: repo, AutoInit: true}); err != nil {
+		t.Fatalf("creating %s: %v", repo, err)
 	}
-	if !strings.Contains(stderr, "already checked out") {
-		t.Errorf("expected an already-checked-out notice, got: %s", stderr)
+	number := strconv.FormatInt(openBranchPR(t, adminUser, repo, "topic", adminUser), 10)
+
+	dir := t.TempDir()
+	gitIn(t, dir, "clone", "--quiet", forgejoURL+"/"+adminUser+"/"+repo+".git", ".")
+	if stdout, stderr, err := runFJIn(dir, "pr", "checkout", number); err != nil {
+		t.Fatalf("first checkout failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+
+	file, _, err := testClient.CreateFile(adminUser, repo, "more.txt", forgejo.CreateFileOptions{
+		FileOptions: forgejo.FileOptions{Message: "Add more", BranchName: "topic"},
+		Content:     base64.StdEncoding.EncodeToString([]byte("more\n")),
+	})
+	if err != nil {
+		t.Fatalf("pushing to topic: %v", err)
+	}
+	want := file.Commit.SHA
+	// The server moves refs/pull/N/head after the push, not during it.
+	pullRef := "refs/pull/" + number + "/head"
+	for deadline := time.Now().Add(20 * time.Second); !strings.HasPrefix(gitIn(t, dir, "ls-remote", "origin", pullRef), want); {
+		if time.Now().After(deadline) {
+			t.Fatalf("%s never moved to %s", pullRef, want)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	stdout, stderr, err := runFJIn(dir, "pr", "checkout", number)
+	if err != nil {
+		t.Fatalf("second checkout failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	if got := gitIn(t, dir, "rev-parse", "HEAD"); got != want {
+		t.Errorf("HEAD = %s after checkout, want the new pull request head %s\nstderr: %s", got, want, stderr)
 	}
 }
 
@@ -348,6 +378,28 @@ func TestPRCurrentBranchPastFirstPage(t *testing.T) {
 	}
 }
 
+// TestPRCurrentBranchSearchLimit: when the branch is older than every page
+// fj searches, the error says the search stopped short instead of claiming
+// there is no pull request. fj reads 10 pages, which the server clamps to
+// maxResponseItems each.
+func TestPRCurrentBranchSearchLimit(t *testing.T) {
+	repo := "branch-pr-limit"
+	if _, _, err := testClient.CreateRepo(forgejo.CreateRepoOption{Name: repo, AutoInit: true}); err != nil {
+		t.Fatalf("creating %s: %v", repo, err)
+	}
+	searched := 10 * maxResponseItems
+	openBranchPR(t, adminUser, repo, "target", adminUser)
+	for i := range searched {
+		openBranchPR(t, adminUser, repo, fmt.Sprintf("filler-%d", i), adminUser)
+	}
+
+	_, stderr, err := runFJIn(gitRepoOf(t, adminUser+"/"+repo, "target"), "pr", "view")
+	want := fmt.Sprintf("is not among the newest %d open pull requests", searched)
+	if code := exitCode(t, err); code != 1 || !strings.Contains(stderr, want) {
+		t.Errorf("exit %d, stderr %q; want exit 1 and %q", code, stderr, want)
+	}
+}
+
 // TestCommentGroupDispatch covers tier 0.1: the comment group accepts
 // gh's leaf-verb spelling while keeping its subcommands.
 func TestCommentGroupDispatch(t *testing.T) {
@@ -423,8 +475,10 @@ func TestGroupUnknownSubcommand(t *testing.T) {
 		if err == nil {
 			t.Fatalf("fj %s succeeded, want unknown-command error:\n%s", strings.Join(tc.args, " "), stdout)
 		}
-		if !strings.Contains(stderr, tc.want) {
-			t.Errorf("fj %s stderr = %q, want it to contain %q", strings.Join(tc.args, " "), stderr, tc.want)
+		for _, want := range []string{tc.want, "Did you mean this?\n\tlist"} {
+			if !strings.Contains(stderr, want) {
+				t.Errorf("fj %s stderr = %q, want it to contain %q", strings.Join(tc.args, " "), stderr, want)
+			}
 		}
 		// 1, not the 2 that TestUsageErrorExitCodes pins for arity errors:
 		// this matches what cobra already does for an unknown command at the

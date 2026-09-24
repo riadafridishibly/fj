@@ -135,6 +135,12 @@ func TestBranchMatchesPick(t *testing.T) {
 			wantErr: "#3, #7",
 		},
 		{
+			name:      "same pull request on two pages",
+			prs:       []*forgejo.PullRequest{pr(7, "feature", "example-org/example-repo"), pr(7, "feature", "example-org/example-repo")},
+			want:      7,
+			wantFound: true,
+		},
+		{
 			name: "missing head",
 			prs:  []*forgejo.PullRequest{{Index: 1}},
 		},
