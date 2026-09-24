@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -70,17 +71,27 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 
+	// Forgejo puts ROOT_URL in the URLs it returns, such as a release
+	// asset's browser_download_url, so ROOT_URL must name the port the
+	// tests reach. The host port is picked here and bound explicitly.
+	hostPort, err := freePort()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to pick a host port: %v\n", err)
+		os.Exit(1)
+	}
+
 	// Start Forgejo container
 	fmt.Fprintln(os.Stderr, "Starting Forgejo container...")
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
 			Image:        "codeberg.org/forgejo/forgejo:14",
-			ExposedPorts: []string{"3000/tcp"},
+			ExposedPorts: []string{hostPort + ":3000/tcp"},
 			Env: map[string]string{
 				"FORGEJO__security__INSTALL_LOCK":        "true",
 				"FORGEJO__database__DB_TYPE":             "sqlite3",
 				"FORGEJO__server__DOMAIN":                "localhost",
 				"FORGEJO__server__HTTP_PORT":             "3000",
+				"FORGEJO__server__ROOT_URL":              "http://localhost:" + hostPort + "/",
 				"FORGEJO__service__DISABLE_REGISTRATION": "true",
 				"FORGEJO__log__LEVEL":                    "Warn",
 				// Pinned so the attachment tests do not depend on the image's
@@ -177,6 +188,19 @@ func TestMain(m *testing.M) {
 
 	fmt.Fprintln(os.Stderr, "Running tests...")
 	os.Exit(m.Run())
+}
+
+// freePort returns a TCP port that is free on the host right now.
+// ponytail: another process can take the port before Docker binds it; the
+// container then fails to start and the run has to be repeated.
+func freePort() (string, error) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", err
+	}
+	defer l.Close()
+	_, port, err := net.SplitHostPort(l.Addr().String())
+	return port, err
 }
 
 // createAPIToken uses the REST API with basic auth to create an access token.
