@@ -281,11 +281,10 @@ func TestIssueViewTimelineFilter(t *testing.T) {
 		return mustRunFJ(t, append(append([]string{}, base...), extra...)...)
 	}
 
+	// Forgejo adds both references in the background, so wait for each.
 	fromPull := fmt.Sprintf("referenced this issue from a comment on pull request #%d", pull.Index)
-	stdout := viewUntil(t, fromPull, base...)
-	if !strings.Contains(stdout, "from a commit") {
-		t.Fatalf("expected a commit reference to filter out:\n%s", stdout)
-	}
+	viewUntil(t, "from a commit", base...)
+	viewUntil(t, fromPull, base...)
 
 	// The motivating case: commit references are the noise.
 	if got := view("--timeline-exclude", "commits"); strings.Contains(got, "from a commit") {
