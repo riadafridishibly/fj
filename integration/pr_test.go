@@ -129,7 +129,10 @@ func TestPRReady(t *testing.T) {
 		t.Errorf("ready on a ready PR: err = %v, stderr = %q; want exit 0 and already ready", err, stderr)
 	}
 
-	mustRunFJ(t, "pr", "ready", num, "-R", repo, "--undo")
+	// With no number, the pull request for the checked-out branch is used.
+	if _, stderr, err := runFJIn(gitRepoOnBranch(t, "pr-ready"), "pr", "ready", "--undo"); err != nil {
+		t.Fatalf("pr ready --undo on the current branch: %v\n%s", err, stderr)
+	}
 	check("WIP: Ready test", true)
 
 	mustRunFJ(t, "pr", "edit", num, "-R", repo, "--title", "[wip] Ready test")

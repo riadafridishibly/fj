@@ -3,7 +3,6 @@ package issue
 import (
 	"fmt"
 	"os"
-	"strconv"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 	"github.com/spf13/cobra"
@@ -13,7 +12,7 @@ import (
 
 type reopenOptions struct {
 	Factory *cmdutil.Factory
-	Number  string
+	Args    []string
 }
 
 func NewCmdReopen(f *cmdutil.Factory) *cobra.Command {
@@ -25,7 +24,7 @@ func NewCmdReopen(f *cmdutil.Factory) *cobra.Command {
 		Example: `  $ fj issue reopen 42`,
 		Args:    cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.Number = args[0]
+			opts.Args = args
 			return reopenRun(opts)
 		},
 	}
@@ -39,9 +38,9 @@ func reopenRun(opts *reopenOptions) error {
 		return err
 	}
 
-	index, err := strconv.ParseInt(opts.Number, 10, 64)
+	index, _, err := opts.Factory.IssueNumber(repo, opts.Args)
 	if err != nil {
-		return cmdutil.FlagErrorf("invalid issue number: %s", opts.Number)
+		return err
 	}
 
 	client, err := opts.Factory.ClientForRepo(repo)

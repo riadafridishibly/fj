@@ -9,8 +9,9 @@ import (
 
 func NewCmdComment(f *cmdutil.Factory) *cobra.Command {
 	return comment.NewCmdComment(f, comment.Kind{
-		Noun: "pull request",
-		CLI:  "fj pr comment",
-		Arg:  "pr",
+		Noun:     "pull request",
+		CLI:      "fj pr comment",
+		Arg:      "pr",
+		Resolver: cmdutil.PRNumberResolver(),
 	})
 }

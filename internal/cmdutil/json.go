@@ -63,8 +63,10 @@ func addJSONFlag(cmd *cobra.Command, j *JSONFlags, fields, fjFields []string) {
 		if err.Error() == "flag needs an argument: --json" {
 			return fmt.Errorf("Specify one or more comma-separated fields for `--json`:\n  %s", strings.Join(all, "\n  "))
 		}
-		if c.HasParent() {
-			return c.Parent().FlagErrorFunc()(c, err)
+		// Walk up from cmd, not c: a subcommand inherits this function, and
+		// c.Parent() would lead straight back here.
+		if cmd.HasParent() {
+			return cmd.Parent().FlagErrorFunc()(c, err)
 		}
 		return err
 	})
@@ -74,7 +76,11 @@ func addJSONFlag(cmd *cobra.Command, j *JSONFlags, fields, fjFields []string) {
 	help := cmd.HelpFunc()
 	cmd.SetHelpFunc(func(c *cobra.Command, args []string) {
 		help(c, args)
-		fmt.Fprint(c.OutOrStdout(), fieldsHelp(fields, fjFields))
+		// Subcommands inherit this function, as under fj pr comment, which
+		// doubles as its create subcommand. Only cmd has these fields.
+		if c == cmd {
+			fmt.Fprint(c.OutOrStdout(), fieldsHelp(fields, fjFields))
+		}
 	})
 }
 

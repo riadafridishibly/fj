@@ -1,10 +1,18 @@
 package cmdutil
 
-import "github.com/spf13/cobra"
+import (
+	"errors"
+	"fmt"
+	"strconv"
+	"strings"
 
-// ExactArgs wraps cobra.ExactArgs so usage is printed when the arg count
-// doesn't match. Default cobra behavior with SilenceUsage=true only shows
-// the bare "accepts N arg(s), received M" error, which is hard to act on.
+	"github.com/spf13/cobra"
+)
+
+// ExactArgs wraps cobra.ExactArgs so a count mismatch prints usage and is
+// reported as a usage error (exit code 2). Default cobra behavior with
+// SilenceUsage=true only shows the bare "accepts N arg(s), received M"
+// error, which is hard to act on.
 func ExactArgs(n int) cobra.PositionalArgs { return wrapArgs(cobra.ExactArgs(n)) }
 
 // MinimumNArgs wraps cobra.MinimumNArgs with usage-on-failure.
@@ -20,8 +28,29 @@ func wrapArgs(validator cobra.PositionalArgs) cobra.PositionalArgs {
 	return func(cmd *cobra.Command, args []string) error {
 		if err := validator(cmd, args); err != nil {
 			_ = cmd.Usage()
-			return err
+			return &FlagError{err: err}
 		}
 		return nil
 	}
+}
+
+// GroupDispatchArgs validates arguments for a group command that doubles as
+// its numeric leaf verb (`fj issue comment 42 --body x`): at most one
+// argument, which must look like a number — any other word is a mistyped
+// subcommand, reported the way cobra reports unknown commands.
+func GroupDispatchArgs(cmd *cobra.Command, args []string) error {
+	if len(args) > 0 {
+		if _, err := strconv.ParseInt(args[0], 10, 64); err != nil {
+			msg := fmt.Sprintf("unknown command %q for %q", args[0], cmd.CommandPath())
+			// Cobra applies its default distance only on its own lookup path.
+			if cmd.SuggestionsMinimumDistance <= 0 {
+				cmd.SuggestionsMinimumDistance = 2
+			}
+			if s := cmd.SuggestionsFor(args[0]); len(s) > 0 {
+				msg += "\n\nDid you mean this?\n\t" + strings.Join(s, "\n\t")
+			}
+			return errors.New(msg)
+		}
+	}
+	return MaximumNArgs(1)(cmd, args)
 }
