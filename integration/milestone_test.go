@@ -96,6 +96,12 @@ func TestMilestoneListJSON(t *testing.T) {
 	if !found {
 		t.Errorf("expected milestone %q in closed list", title)
 	}
+
+	// -S filters by name and -q is --jq, as on gh's list commands.
+	stdout = mustRunFJ(t, "milestone", "list", "-R", repo, "--state", "closed", "-S", title, "--json", "title", "-q", ".[].title")
+	if strings.TrimSpace(stdout) != title {
+		t.Errorf("-S %s -q .[].title = %q, want only %s", title, stdout, title)
+	}
 }
 
 // TestMilestoneView shows a milestone by title.

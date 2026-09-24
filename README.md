@@ -153,7 +153,7 @@ fj pr review comment delete 10 4081 --yes                     # Delete (needs --
 
 ### JSON Output
 
-Every command with a `--json` flag takes gh's formatting flags: `--json <fields>`, `-q/--jq` and (commands that only read) `-t/--template`. `fj auth status`, like gh's, takes `--jq` and `--template` without the `-q` and `-t` shorthands, and so does `fj milestone list`, where `-q` is `--query`. Field names and shapes follow gh's, so a gh script reads the output unchanged; commands gh lacks, such as `fj status` and `fj milestone`, use names in gh's style. Each command's `--help` lists its fields, and `fj help formatting` covers the flags:
+Every command with a `--json` flag takes gh's formatting flags: `--json <fields>`, `-q/--jq` and (commands that only read) `-t/--template`. `fj auth status`, like gh's, takes `--jq` and `--template` without the `-q` and `-t` shorthands. Field names and shapes follow gh's, so a gh script reads the output unchanged; commands gh lacks, such as `fj status` and `fj milestone`, use names in gh's style. Each command's `--help` lists its fields, and `fj help formatting` covers the flags:
 
 ```sh
 fj issue list --json number,title,labels

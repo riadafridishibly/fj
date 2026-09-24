@@ -16,7 +16,7 @@ type listOptions struct {
 	Factory    *cmdutil.Factory
 	Limit      int
 	State      string
-	Query      string
+	Search     string
 	JSONOutput cmdutil.JSONFlags
 }
 
@@ -29,7 +29,7 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 		Aliases: []string{"ls"},
 		Example: `  $ fj milestone list
   $ fj milestone list --state closed
-  $ fj milestone list --query v1
+  $ fj milestone list --search v1
   $ fj milestone list --json number,title,dueOn
   $ fj milestone list --json title --jq '.[].title'`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -39,9 +39,8 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 
 	cmd.Flags().IntVarP(&opts.Limit, "limit", "L", 30, "Maximum number of milestones to list")
 	cmd.Flags().StringVarP(&opts.State, "state", "s", "open", "Filter by state: open, closed, all")
-	cmd.Flags().StringVarP(&opts.Query, "query", "q", "", "Filter by milestone name")
-	// -q is --query here, so --jq and --template go without shorthands.
-	cmdutil.AddJSONFlagsLong(cmd, &opts.JSONOutput, milestoneFields, milestoneFJFields)
+	cmd.Flags().StringVarP(&opts.Search, "search", "S", "", "Filter by milestone name")
+	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, milestoneFields, milestoneFJFields, true)
 
 	return cmd
 }
@@ -66,7 +65,7 @@ func listRun(opts *listOptions) error {
 		milestones, resp, err := client.ListRepoMilestones(repo.Owner, repo.Name, forgejo.ListMilestoneOption{
 			ListOptions: forgejo.ListOptions{Page: page, PageSize: pageSize},
 			State:       forgejo.StateType(opts.State),
-			Name:        opts.Query,
+			Name:        opts.Search,
 		})
 		if err != nil {
 			return fmt.Errorf("listing milestones: %w", err)
