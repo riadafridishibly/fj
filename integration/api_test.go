@@ -10,10 +10,8 @@ import (
 	"testing"
 )
 
-// TestAPIPaginate walks the labels one per page. The container's Link
-// headers name its ROOT_URL (localhost:3000) while the test reaches it on a
-// mapped port, so this only passes if fj keeps every page on the host it
-// first reached.
+// TestAPIPaginate walks the labels one per page. Link headers that name
+// another host are covered by TestPaginateMergesArrays in pkg/cmd/api.
 func TestAPIPaginate(t *testing.T) {
 	repo := adminUser + "/test-repo"
 

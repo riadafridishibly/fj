@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -16,32 +15,23 @@ import (
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 )
 
-// fetchAttachment downloads an attachment URL from the test server. The
-// container advertises its own ROOT_URL (localhost:3000) in every URL it
-// hands out, while the test reaches it on a mapped port, so the host is
-// swapped for the one the test client uses before the request goes out.
+// fetchAttachment downloads an attachment URL from the test server.
 func fetchAttachment(t *testing.T, rawURL string) []byte {
 	t.Helper()
 
-	u, err := url.Parse(rawURL)
+	resp, err := http.Get(rawURL)
 	if err != nil {
-		t.Fatalf("parsing %q: %v", rawURL, err)
-	}
-	u.Scheme, u.Host = "http", forgejoHost
-
-	resp, err := http.Get(u.String())
-	if err != nil {
-		t.Fatalf("GET %s: %v", u, err)
+		t.Fatalf("GET %s: %v", rawURL, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		t.Fatalf("GET %s: status %s: %s", u, resp.Status, body)
+		t.Fatalf("GET %s: status %s: %s", rawURL, resp.Status, body)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		t.Fatalf("reading %s: %v", u, err)
+		t.Fatalf("reading %s: %v", rawURL, err)
 	}
 	return body
 }
