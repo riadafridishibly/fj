@@ -3,10 +3,13 @@
 package integration
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"strconv"
 	"strings"
 	"testing"
+
+	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 )
 
 func TestPRList(t *testing.T) {
@@ -55,6 +58,67 @@ func TestPRViewJSON(t *testing.T) {
 	}
 	if title, _ := pr["title"].(string); title != "Add feature-1" {
 		t.Errorf("expected title 'Add feature-1', got %q", title)
+	}
+}
+
+// TestPRReady converts a draft to ready and back. Forgejo has no draft flag,
+// so both directions edit the title's work-in-progress prefix.
+func TestPRReady(t *testing.T) {
+	repo := adminUser + "/test-repo"
+	if _, _, err := testClient.CreateFile(adminUser, "test-repo", "ready.txt", forgejo.CreateFileOptions{
+		FileOptions: forgejo.FileOptions{Message: "Add ready.txt", NewBranchName: "pr-ready"},
+		Content:     base64.StdEncoding.EncodeToString([]byte("ready\n")),
+	}); err != nil {
+		t.Fatalf("committing on pr-ready: %v", err)
+	}
+	out := mustRunFJ(t, "pr", "create", "-R", repo, "--title", "Ready test", "--head", "pr-ready",
+		"--base", "main", "--draft", "--json", "number")
+	var created struct {
+		Number int64 `json:"number"`
+	}
+	if err := json.Unmarshal([]byte(out), &created); err != nil || created.Number == 0 {
+		t.Fatalf("create = %s (%v), want a number", out, err)
+	}
+	num := strconv.FormatInt(created.Number, 10)
+	// Closed afterwards so later tests that pick an open PR do not get this one.
+	t.Cleanup(func() {
+		closed := forgejo.StateClosed
+		_, _, _ = testClient.EditPullRequest(adminUser, "test-repo", created.Number, forgejo.EditPullRequestOption{State: &closed})
+	})
+
+	check := func(wantTitle string, wantDraft bool) {
+		t.Helper()
+		out := mustRunFJ(t, "pr", "view", num, "-R", repo, "--json", "title,isDraft")
+		var got struct {
+			Title   string `json:"title"`
+			IsDraft bool   `json:"isDraft"`
+		}
+		if err := json.Unmarshal([]byte(out), &got); err != nil || got.Title != wantTitle || got.IsDraft != wantDraft {
+			t.Fatalf("view = %s (%v), want title %q and isDraft %v", out, err, wantTitle, wantDraft)
+		}
+	}
+	check("WIP: Ready test", true)
+
+	mustRunFJ(t, "pr", "ready", num, "-R", repo)
+	check("Ready test", false)
+
+	_, stderr, err := runFJ("pr", "ready", num, "-R", repo)
+	if err != nil || !strings.Contains(stderr, `is already "ready for review"`) {
+		t.Errorf("ready on a ready PR: err = %v, stderr = %q; want exit 0 and already ready", err, stderr)
+	}
+
+	mustRunFJ(t, "pr", "ready", num, "-R", repo, "--undo")
+	check("WIP: Ready test", true)
+
+	mustRunFJ(t, "pr", "edit", num, "-R", repo, "--title", "[wip] Ready test")
+	check("[wip] Ready test", true)
+	mustRunFJ(t, "pr", "ready", num, "-R", repo)
+	check("Ready test", false)
+
+	mustRunFJ(t, "pr", "close", num, "-R", repo)
+	_, stderr, err = runFJ("pr", "ready", num, "-R", repo, "--undo")
+	if err == nil || !strings.Contains(stderr, "is closed") {
+		t.Errorf("ready on a closed PR: err = %v, stderr = %q; want an error", err, stderr)
 	}
 }
 
