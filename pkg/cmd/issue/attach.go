@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 	"github.com/spf13/cobra"
@@ -56,9 +55,9 @@ command instead of leaving half the files attached.`,
 func attachRun(opts *attachOptions) error {
 	// Forgejo indexes issues from 1, so 0 and negatives are rejected here
 	// rather than sent as a path that can only 404 after the upload.
-	index, err := strconv.ParseInt(opts.Number, 10, 64)
-	if err != nil || index < 1 {
-		return cmdutil.FlagErrorf("invalid issue number: %s", opts.Number)
+	index, err := cmdutil.ParseNumber(opts.Number, "issue number")
+	if err != nil {
+		return err
 	}
 
 	if err := checkAttachableFiles(opts.Files); err != nil {

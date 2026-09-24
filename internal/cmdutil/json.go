@@ -74,7 +74,11 @@ func addJSONFlag(cmd *cobra.Command, j *JSONFlags, fields, fjFields []string) {
 	help := cmd.HelpFunc()
 	cmd.SetHelpFunc(func(c *cobra.Command, args []string) {
 		help(c, args)
-		fmt.Fprint(c.OutOrStdout(), fieldsHelp(fields, fjFields))
+		// Subcommands inherit this function, as under fj pr comment, which
+		// doubles as its create subcommand. Only cmd has these fields.
+		if c == cmd {
+			fmt.Fprint(c.OutOrStdout(), fieldsHelp(fields, fjFields))
+		}
 	})
 }
 

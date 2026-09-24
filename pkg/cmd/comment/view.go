@@ -3,7 +3,6 @@ package comment
 import (
 	"fmt"
 	"os"
-	"strconv"
 
 	"github.com/spf13/cobra"
 
@@ -46,9 +45,9 @@ func viewRun(opts *viewOptions) error {
 		return err
 	}
 
-	id, err := strconv.ParseInt(opts.ID, 10, 64)
+	id, err := cmdutil.ParseNumber(opts.ID, "comment id")
 	if err != nil {
-		return cmdutil.FlagErrorf("invalid comment id: %s", opts.ID)
+		return err
 	}
 
 	client, err := opts.Factory.ClientForRepo(repo)

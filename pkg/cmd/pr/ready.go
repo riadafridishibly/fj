@@ -3,7 +3,6 @@ package pr
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
@@ -22,7 +21,7 @@ const draftPrefix = "WIP: "
 
 type readyOptions struct {
 	Factory *cmdutil.Factory
-	Number  string
+	Args    []string
 	Undo    bool
 }
 
@@ -30,18 +29,21 @@ func NewCmdReady(f *cmdutil.Factory) *cobra.Command {
 	opts := &readyOptions{Factory: f}
 
 	cmd := &cobra.Command{
-		Use:   "ready <number>",
+		Use:   "ready [<number>]",
 		Short: "Mark a pull request as ready for review",
 		Long: `Mark a pull request as ready for review, or convert it to a draft with --undo.
 
 Forgejo has no separate draft flag: a pull request is a draft while its title
 starts with a work-in-progress prefix, WIP: or [WIP] by default. This command
-removes the prefix, or with --undo adds WIP: to the title.`,
+removes the prefix, or with --undo adds WIP: to the title.
+
+With no number, the pull request for the current branch is used.`,
 		Example: `  $ fj pr ready 42
-  $ fj pr ready 42 --undo`,
-		Args: cmdutil.ExactArgs(1),
+  $ fj pr ready 42 --undo
+  $ fj pr ready`,
+		Args: cmdutil.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.Number = args[0]
+			opts.Args = args
 			return readyRun(opts)
 		},
 	}
@@ -57,9 +59,9 @@ func readyRun(opts *readyOptions) error {
 		return err
 	}
 
-	index, err := strconv.ParseInt(opts.Number, 10, 64)
+	index, repo, err := opts.Factory.PRNumber(repo, opts.Args)
 	if err != nil {
-		return cmdutil.FlagErrorf("invalid pull request number: %s", opts.Number)
+		return err
 	}
 
 	client, err := opts.Factory.ClientForRepo(repo)

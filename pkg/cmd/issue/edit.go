@@ -3,7 +3,6 @@ package issue
 import (
 	"fmt"
 	"os"
-	"strconv"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 	"github.com/spf13/cobra"
@@ -13,7 +12,7 @@ import (
 
 type editOptions struct {
 	Factory         *cmdutil.Factory
-	Number          string
+	Args            []string
 	Title           string
 	Body            string
 	BodyFile        string
@@ -39,7 +38,7 @@ func NewCmdEdit(f *cmdutil.Factory) *cobra.Command {
   $ fj issue edit 42 --add-label bug --json labels`,
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.Number = args[0]
+			opts.Args = args
 			if opts.BodyFile != "" {
 				body, err := cmdutil.ReadBodyFromFile(opts.BodyFile)
 				if err != nil {
@@ -70,9 +69,9 @@ func editRun(opts *editOptions) error {
 		return err
 	}
 
-	index, err := strconv.ParseInt(opts.Number, 10, 64)
+	index, _, err := opts.Factory.IssueNumber(repo, opts.Args)
 	if err != nil {
-		return cmdutil.FlagErrorf("invalid issue number: %s", opts.Number)
+		return err
 	}
 
 	client, err := opts.Factory.ClientForRepo(repo)

@@ -3,7 +3,6 @@ package pr
 import (
 	"fmt"
 	"os"
-	"strconv"
 
 	"github.com/spf13/cobra"
 
@@ -13,7 +12,7 @@ import (
 
 type checkoutOptions struct {
 	Factory *cmdutil.Factory
-	Number  string
+	Args    []string
 }
 
 func NewCmdCheckout(f *cmdutil.Factory) *cobra.Command {
@@ -22,10 +21,11 @@ func NewCmdCheckout(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "checkout <number>",
 		Short:   "Check out a pull request locally",
+		Long:    "Check out a pull request locally.",
 		Example: `  $ fj pr checkout 42`,
 		Args:    cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.Number = args[0]
+			opts.Args = args
 			return checkoutRun(opts)
 		},
 	}
@@ -39,9 +39,9 @@ func checkoutRun(opts *checkoutOptions) error {
 		return err
 	}
 
-	index, err := strconv.ParseInt(opts.Number, 10, 64)
+	index, repo, err := opts.Factory.RequiredPRNumber(repo, opts.Args)
 	if err != nil {
-		return cmdutil.FlagErrorf("invalid pull request number: %s", opts.Number)
+		return err
 	}
 
 	client, err := opts.Factory.ClientForRepo(repo)
@@ -59,6 +59,10 @@ func checkoutRun(opts *checkoutOptions) error {
 	}
 
 	branchName := pr.Head.Ref
+	if current, err := git.CurrentBranch(); err == nil && current == branchName {
+		fmt.Fprintf(os.Stderr, "Branch '%s' is already checked out\n", branchName)
+		return nil
+	}
 
 	// Fetch the PR branch
 	refSpec := fmt.Sprintf("pull/%d/head:%s", index, branchName)

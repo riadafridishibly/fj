@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -36,6 +37,11 @@ var (
 	adminPass  = "T3stP@ssw0rd!"
 	adminEmail = "admin@test.local"
 )
+
+// maxResponseItems caps the container's page size below the 50 fj asks
+// for, so paging code meets a server that returns short pages before the
+// last one.
+const maxResponseItems = 10
 
 func projectRoot() string {
 	_, filename, _, ok := runtime.Caller(0)
@@ -99,6 +105,7 @@ func TestMain(m *testing.M) {
 				// accepted, and anything else is refused no matter what a
 				// later Forgejo release changes the default to.
 				"FORGEJO__attachment__ALLOWED_TYPES": ".txt,.png,.log",
+				"FORGEJO__api__MAX_RESPONSE_ITEMS":   strconv.Itoa(maxResponseItems),
 				"USER_UID":                           "1000",
 				"USER_GID":                           "1000",
 			},
@@ -383,6 +390,12 @@ func populateTestData() error {
 
 // runFJ executes the fj binary with the given args and returns stdout, stderr, and error.
 func runFJ(args ...string) (string, string, error) {
+	return runFJIn(os.TempDir(), args...) // temp dir avoids git remote detection
+}
+
+// runFJIn is runFJ with an explicit working directory, for commands whose
+// behaviour depends on the surrounding git repository.
+func runFJIn(dir string, args ...string) (string, string, error) {
 	cmd := exec.Command(fjBinary, args...)
 	cmd.Env = append(
 		os.Environ(),
@@ -390,7 +403,7 @@ func runFJ(args ...string) (string, string, error) {
 		"FJ_INSECURE=1",
 		"NO_COLOR=1",
 	)
-	cmd.Dir = os.TempDir() // avoid git remote detection
+	cmd.Dir = dir
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
