@@ -16,6 +16,10 @@ import (
 // set others, so readyRun checks the draft state again after the edit.
 var wipPrefixes = []string{"WIP:", "[WIP]"}
 
+// draftPrefix is what pr create --draft and pr ready --undo put before a
+// title to make the pull request a draft.
+const draftPrefix = "WIP: "
+
 type readyOptions struct {
 	Factory *cmdutil.Factory
 	Number  string
@@ -77,11 +81,15 @@ func readyRun(opts *readyOptions) error {
 		return nil
 	}
 
-	title := stripWIP(pr.Title)
-	if want {
-		title = "WIP: " + pr.Title
-	} else if title == pr.Title {
-		return fmt.Errorf("pull request %s#%d is a draft, but its title %q has no WIP: or [WIP] prefix to remove; the server sets its own WORK_IN_PROGRESS_PREFIXES, so change the title with fj pr edit", repo.FullName(), index, pr.Title)
+	title := draftPrefix + pr.Title
+	if !want {
+		title = stripWIP(pr.Title)
+		switch title {
+		case pr.Title:
+			return fmt.Errorf("pull request %s#%d is a draft, but its title %q has no WIP: or [WIP] prefix to remove; the server sets its own WORK_IN_PROGRESS_PREFIXES, so change the title with fj pr edit", repo.FullName(), index, pr.Title)
+		case "":
+			return fmt.Errorf("pull request %s#%d has no title besides %q; set one with fj pr edit %d --title", repo.FullName(), index, pr.Title, index)
+		}
 	}
 
 	if _, _, err := client.EditPullRequest(repo.Owner, repo.Name, index, forgejo.EditPullRequestOption{Title: title}); err != nil {

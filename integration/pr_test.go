@@ -137,6 +137,13 @@ func TestPRReady(t *testing.T) {
 	mustRunFJ(t, "pr", "ready", num, "-R", repo)
 	check("Ready test", false)
 
+	// A title that is only a prefix would be empty, which Forgejo ignores.
+	mustRunFJ(t, "pr", "edit", num, "-R", repo, "--title", "WIP:")
+	_, stderr, err = runFJ("pr", "ready", num, "-R", repo)
+	if err == nil || !strings.Contains(stderr, "has no title besides") {
+		t.Errorf("ready on a title that is only WIP:: err = %v, stderr = %q; want an error", err, stderr)
+	}
+
 	mustRunFJ(t, "pr", "close", num, "-R", repo)
 	_, stderr, err = runFJ("pr", "ready", num, "-R", repo, "--undo")
 	if err == nil || !strings.Contains(stderr, "is closed") {

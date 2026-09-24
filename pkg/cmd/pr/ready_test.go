@@ -11,6 +11,7 @@ func TestStripWIP(t *testing.T) {
 		{"Fix WIP: crash", "Fix WIP: crash"},
 		{"WIPE the cache", "WIPE the cache"},
 		{"WIP", "WIP"},
+		{"[WIP]", ""},
 	}
 	for _, tt := range tests {
 		if got := stripWIP(tt.title); got != tt.want {

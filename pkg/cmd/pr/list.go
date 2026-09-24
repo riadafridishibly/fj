@@ -125,7 +125,7 @@ func listRun(opts *listOptions) error {
 			break
 		}
 		for _, pr := range prs {
-			if !opts.matches(&pr.PullRequest) || (opts.Draft != nil && pr.Draft != *opts.Draft) {
+			if !opts.matches(pr) {
 				continue
 			}
 			allPRs = append(allPRs, pr)
@@ -207,19 +207,19 @@ func listRun(opts *listOptions) error {
 }
 
 // matches reports whether pr passes the client-side filters (head, author,
-// assignee, label, search). Comparisons are case-insensitive.
-func (opts *listOptions) matches(pr *forgejo.PullRequest) bool {
+// assignee, label, search, draft). Comparisons are case-insensitive.
+func (opts *listOptions) matches(pr *apiPullRequest) bool {
 	if opts.Head != "" && (pr.Head == nil || !strings.EqualFold(pr.Head.Ref, opts.Head)) {
 		return false
 	}
 	if opts.Author != "" && (pr.Poster == nil || !strings.EqualFold(pr.Poster.UserName, opts.Author)) {
 		return false
 	}
-	if opts.Assignee != "" && !hasAssignee(pr, opts.Assignee) {
+	if opts.Assignee != "" && !hasAssignee(&pr.PullRequest, opts.Assignee) {
 		return false
 	}
 	for _, label := range opts.Labels {
-		if !hasLabel(pr, label) {
+		if !hasLabel(&pr.PullRequest, label) {
 			return false
 		}
 	}
@@ -229,6 +229,9 @@ func (opts *listOptions) matches(pr *forgejo.PullRequest) bool {
 			!strings.Contains(strings.ToLower(pr.Body), needle) {
 			return false
 		}
+	}
+	if opts.Draft != nil && pr.Draft != *opts.Draft {
+		return false
 	}
 	return true
 }
