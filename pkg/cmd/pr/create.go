@@ -98,8 +98,7 @@ func createRun(opts *createOptions) error {
 
 	title := opts.Title
 	if opts.Draft {
-		// Forgejo uses WIP: prefix for draft PRs
-		title = "WIP: " + title
+		title = draftPrefix + title
 	}
 
 	createOpt := forgejo.CreatePullRequestOption{

@@ -125,11 +125,14 @@ fj milestone delete v1.0 --yes            # Delete (needs --yes; --dry-run previ
 ```sh
 fj pr list                                # List open PRs
 fj pr list --state all                    # List all PRs
+fj pr list --draft                        # List draft PRs (--draft=false: all but drafts)
 fj pr view 10                             # View PR #10, with its timeline
 fj pr view 10 --show-timeline=false       # View PR #10 without events
 fj pr view 10 --timeline-exclude commits  # Hide commit references
 fj pr view 10 --json state,mergeable      # JSON with gh's field names
 fj pr create --title "Fix" --body "…"     # Create a PR
+fj pr ready 10                            # Mark a draft PR ready for review
+fj pr ready 10 --undo                     # Convert it back to a draft
 fj pr merge 10                            # Merge a PR
 fj pr close 10                            # Close a PR
 fj pr diff 10                             # View PR diff
