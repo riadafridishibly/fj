@@ -9,10 +9,10 @@ description: Work with Forgejo repositories, issues, pull requests, reviews, rel
 
 ## Rules
 
-- Never run `fj auth login`. It is interactive. If a command fails on auth, ask the user to log in, or to set `FJ_HOST` and `FJ_TOKEN`.
-- `fj` finds the repository from the git remotes. Pass `-R OWNER/REPO` for another repository and `-C <path>` to run from another directory.
+- Don't log in yourself. If a command fails on auth, ask the user to run `fj auth login`, or to set `FJ_HOST` and `FJ_TOKEN`.
+- `fj` finds the repository from the git remotes. Pass `-R OWNER/REPO` for another repository, with `FJ_HOST=<host>` when it is on another host, and `-C <path>` to run from another directory.
 - Read with `--json <fields>` and filter with `--jq`. Bare `--json` prints the valid fields and exits 1.
-- Write bodies with `--body-file -` and a heredoc, not `--body`, so quotes and backticks survive the shell.
+- Pass a body with several lines, quotes or backticks through `--body-file -` and a quoted heredoc, so the shell leaves it alone. `--body` is fine for one plain line.
 - Delete commands need `--yes`. Run them with `--dry-run` first and confirm with the user.
 - Views include the issue or PR timeline. Add `--timeline-exclude commits` or `--show-timeline=false` when it is too long.
 - Forgejo marks a draft PR with a `WIP:` title prefix. Create one with `fj pr create --draft`, mark it ready with `fj pr ready N`, and make it a draft again with `fj pr ready N --undo`.
