@@ -188,6 +188,17 @@ fj pr view 10 --web
 fj repo view --web
 ```
 
+## Agent Skill
+
+[`SKILL.md`](SKILL.md) teaches a coding agent to use `fj`. For Claude Code:
+
+```sh
+mkdir -p ~/.claude/skills/fj
+curl -fsSL https://raw.githubusercontent.com/riadafridishibly/fj/dev/SKILL.md -o ~/.claude/skills/fj/SKILL.md
+```
+
+For another agent, copy the file into its skills directory, or paste it into the agent's instructions.
+
 ## Environment Variables
 
 | Variable | Description |
