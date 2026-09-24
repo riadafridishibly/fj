@@ -63,8 +63,10 @@ func addJSONFlag(cmd *cobra.Command, j *JSONFlags, fields, fjFields []string) {
 		if err.Error() == "flag needs an argument: --json" {
 			return fmt.Errorf("Specify one or more comma-separated fields for `--json`:\n  %s", strings.Join(all, "\n  "))
 		}
-		if c.HasParent() {
-			return c.Parent().FlagErrorFunc()(c, err)
+		// Walk up from cmd, not c: a subcommand inherits this function, and
+		// c.Parent() would lead straight back here.
+		if cmd.HasParent() {
+			return cmd.Parent().FlagErrorFunc()(c, err)
 		}
 		return err
 	})

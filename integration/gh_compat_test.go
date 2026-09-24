@@ -39,19 +39,19 @@ func gitRepoOnBranch(t *testing.T, branch string) string {
 func gitRepoOf(t *testing.T, fullName, branch string) string {
 	t.Helper()
 	dir := t.TempDir()
-	remote := forgejoURL + "/" + fullName + ".git"
-	for _, args := range [][]string{
-		{"init", "--quiet"},
-		{"remote", "add", "origin", remote},
-		{"checkout", "--quiet", "-b", branch},
-	} {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
+	gitIn(t, dir, "init", "--quiet")
+	gitIn(t, dir, "remote", "add", "origin", forgejoURL+"/"+fullName+".git")
+	gitIn(t, dir, "checkout", "--quiet", "-b", branch)
 	return dir
+}
+
+func gitIn(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
 }
 
 // openBranchPR commits a file to a new branch of owner/repo and opens a
@@ -278,6 +278,44 @@ func TestPRCurrentBranchFromFork(t *testing.T) {
 	if !strings.Contains(stderr, msg) {
 		t.Errorf("stderr = %q, want it to name both repositories: %s", stderr, msg)
 	}
+
+	// On the parent, a same-named branch only on other forks is somebody
+	// else's work, not the pull request for this checkout.
+	_, stderr, err = runFJIn(gitRepoOf(t, adminUser+"/"+repo, "feature"), "pr", "view")
+	if err == nil {
+		t.Fatal("fj pr view on the parent picked a pull request from another fork")
+	}
+	msg = fmt.Sprintf(`no open pull request found for branch "feature" in %s/%s`, adminUser, repo)
+	if !strings.Contains(stderr, msg) {
+		t.Errorf("stderr = %q, want %s", stderr, msg)
+	}
+}
+
+// TestPRRepoFlagNeedsNumber: -R names a repository the checkout may have
+// nothing to do with, so its branch cannot pick the pull request. The
+// checkout here is on feature-1, whose pull request the fallback would find.
+func TestPRRepoFlagNeedsNumber(t *testing.T) {
+	dir := gitRepoOnBranch(t, "feature-1")
+	for _, args := range [][]string{
+		{"pr", "view"},
+		{"pr", "comment", "--body", "must not be posted"},
+	} {
+		_, stderr, err := runFJIn(dir, append(args, "-R", adminUser+"/test-repo")...)
+		if code := exitCode(t, err); code != 2 || !strings.Contains(stderr, "argument required when using the --repo flag") {
+			t.Errorf("fj %s -R: exit %d, stderr %q; want exit 2 and argument required", strings.Join(args, " "), code, stderr)
+		}
+	}
+}
+
+func TestPRCurrentBranchDetachedHead(t *testing.T) {
+	dir := gitRepoOnBranch(t, "feature-1")
+	gitIn(t, dir, "-c", "user.name=fj", "-c", "user.email=fj@example.com", "commit", "--quiet", "--allow-empty", "-m", "init")
+	gitIn(t, dir, "checkout", "--quiet", "--detach")
+
+	_, stderr, err := runFJIn(dir, "pr", "view")
+	if code := exitCode(t, err); code != 2 || !strings.Contains(stderr, "not on any branch; specify a pull request number") {
+		t.Errorf("exit %d, stderr %q; want exit 2 and not on any branch", code, stderr)
+	}
 }
 
 // TestPRCurrentBranchPastFirstPage covers a server that clamps the page
@@ -394,6 +432,23 @@ func TestGroupUnknownSubcommand(t *testing.T) {
 		// of issue #5.
 		if code := exitCode(t, err); code != 1 {
 			t.Errorf("fj %s exit code = %d, want 1", strings.Join(tc.args, " "), code)
+		}
+	}
+}
+
+// TestGroupSubcommandBadFlag: subcommands of a group that takes --json
+// inherit its flag-error handler, which used to call itself until the stack
+// overflowed. A bad flag must stay an ordinary error.
+func TestGroupSubcommandBadFlag(t *testing.T) {
+	for _, args := range [][]string{
+		{"issue", "comment", "list", "1", "--bogus"},
+		{"pr", "comment", "delete", "1", "--bogus"},
+		{"pr", "review", "list", "1", "--bogus"},
+		{"pr", "review", "comment", "list", "1", "--bogus"},
+	} {
+		_, stderr, err := runFJ(args...)
+		if code := exitCode(t, err); code != 1 || !strings.Contains(stderr, "unknown flag: --bogus") {
+			t.Errorf("fj %s: exit %d, stderr %.200q; want exit 1 and unknown flag", strings.Join(args, " "), code, stderr)
 		}
 	}
 }

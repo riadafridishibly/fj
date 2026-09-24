@@ -77,7 +77,7 @@ omitted, `pr view`, `pr diff`, `pr edit`, `pr merge`, `pr close`, `pr ready`,
 pull request for the checked-out branch.
 In that implicit form, `pr merge` and `pr close` report the pull request they
 resolved and require `--yes` to act on it. `pr checkout` always requires the
-number.
+number, and so does every command given `-R`.
 
 When a command needs a host but its arguments name none, fj uses, in order: `--hostname` on commands that have it, `FJ_HOST`, the host of the current checkout's git remote, and the only configured host. With several hosts configured and none of these set, the command fails rather than guess.
 

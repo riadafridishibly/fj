@@ -112,27 +112,17 @@ func TestBranchMatchesPick(t *testing.T) {
 			wantFound: true,
 		},
 		{
-			name:      "deleted fork head counts as foreign and loses to local",
-			prs:       []*forgejo.PullRequest{pr(3, "feature", ""), pr(7, "feature", "example-org/example-repo")},
-			want:      7,
-			wantFound: true,
+			name: "deleted fork head is not ours",
+			prs:  []*forgejo.PullRequest{pr(3, "feature", "")},
 		},
 		{
-			name:      "deleted fork head used when nothing local matches",
-			prs:       []*forgejo.PullRequest{pr(3, "feature", "")},
-			want:      3,
-			wantFound: true,
+			name: "same branch on another fork is not ours",
+			prs:  []*forgejo.PullRequest{pr(3, "feature", "someone/fork")},
 		},
 		{
-			name:      "base repo wins over fork",
+			name:      "ours among other forks",
 			prs:       []*forgejo.PullRequest{pr(3, "feature", "someone/fork"), pr(7, "feature", "example-org/example-repo")},
 			want:      7,
-			wantFound: true,
-		},
-		{
-			name:      "fork used when nothing local matches",
-			prs:       []*forgejo.PullRequest{pr(3, "feature", "someone/fork")},
-			want:      3,
 			wantFound: true,
 		},
 		{
@@ -142,11 +132,6 @@ func TestBranchMatchesPick(t *testing.T) {
 		{
 			name:    "ambiguous",
 			prs:     []*forgejo.PullRequest{pr(3, "feature", "example-org/example-repo"), pr(7, "feature", "example-org/example-repo")},
-			wantErr: "#3, #7",
-		},
-		{
-			name:    "ambiguous among foreign matches",
-			prs:     []*forgejo.PullRequest{pr(3, "feature", ""), pr(7, "feature", "someone/fork")},
 			wantErr: "#3, #7",
 		},
 		{

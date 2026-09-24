@@ -85,6 +85,10 @@ func (f *Factory) PRNumber(repo Repo, args []string) (int64, Repo, error) {
 		index, err := ParseNumber(args[0], "pull request number")
 		return index, repo, err
 	}
+	// The checkout's branch says nothing about another repository.
+	if f.RepoOverride != "" {
+		return 0, repo, FlagErrorf("argument required when using the --repo flag")
+	}
 	return f.currentBranchPR(repo)
 }
 
@@ -103,7 +107,7 @@ func ParseNumber(arg, label string) (int64, error) {
 func (f *Factory) currentBranchPR(repo Repo) (int64, Repo, error) {
 	branch, err := git.CurrentBranch()
 	if err != nil {
-		return 0, repo, fmt.Errorf("could not determine the current branch: %w", err)
+		return 0, repo, FlagErrorf("not on any branch; specify a pull request number")
 	}
 
 	client, err := f.ClientForRepo(repo)
@@ -125,10 +129,10 @@ func branchPR(client *forgejo.Client, repo Repo, branch string) (int64, Repo, er
 		return index, repo, nil
 	}
 
-	// The fork fallback is best-effort: when the parent lookup fails there is
-	// no parent to search, which is the stable no-pull-request message rather
-	// than an unrelated API error.
-	parent := parentRepo(client, repo)
+	parent, err := parentRepo(client, repo)
+	if err != nil {
+		return 0, repo, err
+	}
 	if parent == nil {
 		return 0, repo, noBranchPRError(branch, repo.FullName())
 	}
@@ -150,18 +154,20 @@ func noBranchPRError(branch, searched string) error {
 }
 
 // parentRepo returns the repository repo was forked from, or nil when it is
-// not a fork or the lookup failed.
-func parentRepo(client *forgejo.Client, repo Repo) *Repo {
+// not a fork.
+func parentRepo(client *forgejo.Client, repo Repo) (*Repo, error) {
 	r, _, err := client.GetRepo(repo.Owner, repo.Name)
-	if err != nil || r.Parent == nil || r.Parent.Owner == nil {
-		return nil
+	if err != nil {
+		return nil, fmt.Errorf("getting repository %s: %w", repo.FullName(), err)
 	}
-	return &Repo{Host: repo.Host, Owner: r.Parent.Owner.UserName, Name: r.Parent.Name}
+	if r.Parent == nil || r.Parent.Owner == nil {
+		return nil, nil
+	}
+	return &Repo{Host: repo.Host, Owner: r.Parent.Owner.UserName, Name: r.Parent.Name}, nil
 }
 
 // findBranchPR searches base's open pull requests for the one whose head is
-// branch, preferring heads that live in head's repository. found is false
-// when the branch has no open pull request there.
+// branch in head's repository. found is false when there is none.
 func findBranchPR(client *forgejo.Client, base, head Repo, branch string) (int64, bool, error) {
 	opt := forgejo.ListPullRequestsOptions{
 		ListOptions: forgejo.ListOptions{PageSize: branchPRPageSize},
@@ -188,42 +194,35 @@ func findBranchPR(client *forgejo.Client, base, head Repo, branch string) (int64
 	return matches.pick(branch)
 }
 
-// branchMatches accumulates the open pull requests whose head is the
-// current branch, split by where the head lives: pull requests from the
-// preferred head repository win over same-named branches on other forks,
-// which are somebody else's work. A head with no repository (the fork was
-// deleted) is a stale fork pull request, so it counts as foreign too.
-type branchMatches struct {
-	local, foreign []int64
-}
+// branchMatches collects the open pull requests whose head is the branch in
+// the head repository. A same-named branch on another fork is somebody
+// else's work, and a head whose fork was deleted cannot be traced to anyone,
+// so neither counts.
+// ponytail: only the checkout's own repository counts as ours, so a branch
+// pushed to a second fork remote is not found; read branch.<name>.pushRemote
+// if that workflow matters.
+type branchMatches []int64
 
 func (m *branchMatches) collect(prs []*forgejo.PullRequest, head Repo, branch string) {
 	for _, pr := range prs {
-		switch {
-		case pr.Head == nil || pr.Head.Ref != branch:
-		case pr.Head.Repository != nil && strings.EqualFold(pr.Head.Repository.FullName, head.FullName()):
-			m.local = append(m.local, pr.Index)
-		default:
-			m.foreign = append(m.foreign, pr.Index)
+		if pr.Head != nil && pr.Head.Ref == branch && pr.Head.Repository != nil &&
+			strings.EqualFold(pr.Head.Repository.FullName, head.FullName()) {
+			*m = append(*m, pr.Index)
 		}
 	}
 }
 
-// pick chooses the match; two or more equally good candidates are an error
-// the user must break by passing a number.
-func (m *branchMatches) pick(branch string) (int64, bool, error) {
-	matches := m.local
-	if len(matches) == 0 {
-		matches = m.foreign
-	}
-	switch len(matches) {
+// pick chooses the match; two or more are an error the user must break by
+// passing a number.
+func (m branchMatches) pick(branch string) (int64, bool, error) {
+	switch len(m) {
 	case 0:
 		return 0, false, nil
 	case 1:
-		return matches[0], true, nil
+		return m[0], true, nil
 	}
 	return 0, false, fmt.Errorf("branch %q has %d open pull requests (%s); specify one by number",
-		branch, len(matches), joinNumbers(matches))
+		branch, len(m), joinNumbers(m))
 }
 
 func joinNumbers(numbers []int64) string {
