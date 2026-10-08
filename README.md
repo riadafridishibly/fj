@@ -91,10 +91,10 @@ fj repo delete owner/repo --yes           # Delete (needs --yes; --dry-run previ
 fj issue list                             # List open issues
 fj issue list --state closed              # List closed issues
 fj issue list --label bug --assignee me   # Filter by label/assignee
-fj issue view 42                          # View issue #42, with its timeline
-fj issue view 42 --show-timeline=false    # View issue #42 without events
+fj issue view 42                          # View issue #42
+fj issue view 42 --show-timeline          # Add its events (commit refs, labels, …)
 fj issue view 42 \
-  --timeline-exclude commits              # Hide commit references (often the bulk)
+  --timeline-exclude commits              # Events minus commit references (often the bulk)
 fj issue view 42 \
   --timeline-include refs                 # Show only what referenced this issue
 fj issue view 42 --json title,labels      # JSON with gh's field names
@@ -126,9 +126,9 @@ fj milestone delete v1.0 --yes            # Delete (needs --yes; --dry-run previ
 fj pr list                                # List open PRs
 fj pr list --state all                    # List all PRs
 fj pr list --draft                        # List draft PRs (--draft=false: all but drafts)
-fj pr view 10                             # View PR #10, with its timeline
-fj pr view 10 --show-timeline=false       # View PR #10 without events
-fj pr view 10 --timeline-exclude commits  # Hide commit references
+fj pr view 10                             # View PR #10
+fj pr view 10 --show-timeline             # Add its events (commit refs, labels, …)
+fj pr view 10 --timeline-exclude commits  # Events minus commit references
 fj pr view 10 --json state,mergeable      # JSON with gh's field names
 fj pr create --title "Fix" --body "…"     # Create a PR
 fj pr ready 10                            # Mark a draft PR ready for review

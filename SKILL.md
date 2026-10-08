@@ -14,7 +14,7 @@ description: Work with Forgejo repositories, issues, pull requests, reviews, rel
 - Read with `--json <fields>` and filter with `--jq`. Bare `--json` prints the valid fields and exits 1.
 - Pass a body with several lines, quotes or backticks through `--body-file -` and a quoted heredoc, so the shell leaves it alone. `--body` is fine for one plain line.
 - Delete commands need `--yes`. Run them with `--dry-run` first and confirm with the user.
-- Views include the issue or PR timeline. Add `--timeline-exclude commits` or `--show-timeline=false` when it is too long.
+- Views leave out the issue or PR timeline. Add `--show-timeline`, or `--timeline-exclude commits` to skip commit references, which are often the bulk of it.
 - Forgejo marks a draft PR with a `WIP:` title prefix. Create one with `fj pr create --draft`, mark it ready with `fj pr ready N`, and make it a draft again with `fj pr ready N --undo`.
 - For anything no command covers, use `fj api`. It works like `gh api` and fills `{owner}` and `{repo}` from the current repository.
 

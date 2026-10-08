@@ -32,7 +32,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 		Short: "View a pull request",
 		Example: `  $ fj pr view 42
   $ fj pr view 42 --comments
-  $ fj pr view 42 --show-timeline=false
+  $ fj pr view 42 --show-timeline
   $ fj pr view 42 --timeline-exclude commits
   $ fj pr view 42 --timeline-include refs --timeline-exclude commits
   $ fj pr view 42 --web
@@ -41,12 +41,17 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
+			// The timeline is off by default. Asking for part of it, or for its JSON
+			// field, turns it on unless --show-timeline=false says otherwise.
+			if fl := cmd.Flags(); !fl.Changed("show-timeline") {
+				opts.ShowTimeline = fl.Changed("timeline-include") || fl.Changed("timeline-exclude") || opts.JSONOutput.Has("timeline")
+			}
 			return viewRun(opts)
 		},
 	}
 
 	cmd.Flags().BoolVarP(&opts.Comments, "comments", "c", false, "View pull request comments")
-	cmd.Flags().BoolVar(&opts.ShowTimeline, "show-timeline", true, "Show pull request events, such as commit references and label changes")
+	cmd.Flags().BoolVar(&opts.ShowTimeline, "show-timeline", false, "Show pull request events, such as commit references and label changes")
 	cmdutil.AddTimelineFilterFlags(cmd, &opts.TimelineInclude, &opts.TimelineExclude, cmdutil.SubjectPull)
 	cmdutil.AddWebFlag(cmd, &opts.Web)
 	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, prFields, []string{"timeline"}, true)

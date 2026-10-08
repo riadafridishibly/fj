@@ -37,7 +37,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 		Short: "View an issue",
 		Example: `  $ fj issue view 42
   $ fj issue view 42 --comments
-  $ fj issue view 42 --show-timeline=false
+  $ fj issue view 42 --show-timeline
   $ fj issue view 42 --timeline-exclude commits
   $ fj issue view 42 --timeline-include refs --timeline-exclude commits
   $ fj issue view 42 --web
@@ -48,12 +48,17 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
+			// The timeline is off by default. Asking for part of it, or for its JSON
+			// field, turns it on unless --show-timeline=false says otherwise.
+			if fl := cmd.Flags(); !fl.Changed("show-timeline") {
+				opts.ShowTimeline = fl.Changed("timeline-include") || fl.Changed("timeline-exclude") || opts.JSONOutput.Has("timeline")
+			}
 			return viewRun(opts)
 		},
 	}
 
 	cmd.Flags().BoolVarP(&opts.Comments, "comments", "c", false, "View issue comments")
-	cmd.Flags().BoolVar(&opts.ShowTimeline, "show-timeline", true, "Show issue events, such as commit references and label changes")
+	cmd.Flags().BoolVar(&opts.ShowTimeline, "show-timeline", false, "Show issue events, such as commit references and label changes")
 	cmdutil.AddTimelineFilterFlags(cmd, &opts.TimelineInclude, &opts.TimelineExclude, cmdutil.SubjectIssue)
 	cmd.Flags().BoolVar(&opts.Download, "download", false, "Download issue attachments")
 	cmd.Flags().StringVarP(&opts.DownloadDir, "download-dir", "D", "", "Directory to download attachments into (default: ./issue-<number>)")
