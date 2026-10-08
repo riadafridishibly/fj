@@ -39,7 +39,7 @@ var renderedEvents = []api.TimelineEvent{
 
 // TestRenderedEventsHaveACategory guards the two switches against drifting
 // apart. An event fj phrases but cannot categorise would vanish from any
-// --timeline-include, which is the failure this catches.
+// --timeline that names categories, which is the failure this catches.
 func TestRenderedEventsHaveACategory(t *testing.T) {
 	for _, event := range renderedEvents {
 		t.Run(event.Type, func(t *testing.T) {
@@ -47,7 +47,7 @@ func TestRenderedEventsHaveACategory(t *testing.T) {
 				t.Fatalf("fixture for %q renders no phrase, so it proves nothing", event.Type)
 			}
 			if got := eventCategory(&event); got == "" {
-				t.Errorf("%q renders but has no category: --timeline-include would drop it", event.Type)
+				t.Errorf("%q renders but has no category: --timeline=<category> would drop it", event.Type)
 			}
 		})
 	}
@@ -108,20 +108,26 @@ func TestRefCategoryUsesSourceNotType(t *testing.T) {
 	}
 }
 
-func TestNewTimelineFilterRejectsUnknownNames(t *testing.T) {
-	_, err := NewTimelineFilter(nil, []string{"commit"})
+func TestParseTimelineFilterRejectsUnknownNames(t *testing.T) {
+	_, err := ParseTimelineFilter([]string{"-commit"})
 	if err == nil {
 		t.Fatal("expected an error for an unknown category, got nil")
 	}
-	if !strings.Contains(err.Error(), "--timeline-exclude") {
+	if !strings.Contains(err.Error(), "--timeline") {
 		t.Errorf("error should name the flag, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "commits") {
+	if !strings.Contains(err.Error(), "commits") || !strings.Contains(err.Error(), "all") {
 		t.Errorf("error should list the valid names, got: %v", err)
 	}
 	var flagErr *FlagError
 	if !errors.As(err, &flagErr) {
 		t.Errorf("expected a FlagError so usage is shown, got %T", err)
+	}
+
+	for _, terms := range [][]string{{}, {""}, {"-"}, {"labels", ""}, {"all", "labels"}} {
+		if _, err := ParseTimelineFilter(terms); err == nil {
+			t.Errorf("%q should be an error", terms)
+		}
 	}
 }
 
@@ -135,58 +141,61 @@ func TestTimelineFilter(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		include []string
-		exclude []string
-		want    []string
+		name  string
+		terms []string
+		want  []string
 	}{
 		{
 			name: "no filter keeps everything",
 			want: []string{api.EventCommitRef, api.EventPullRef, api.EventCommentRef, api.EventLabel, api.EventComment},
 		},
 		{
-			name:    "excluding commits is the motivating case",
-			exclude: []string{"commits"},
-			want:    []string{api.EventPullRef, api.EventCommentRef, api.EventLabel, api.EventComment},
+			name:  "all keeps everything",
+			terms: []string{"all"},
+			want:  []string{api.EventCommitRef, api.EventPullRef, api.EventCommentRef, api.EventLabel, api.EventComment},
 		},
 		{
-			name:    "excluding prs drops a pr reference made in a comment",
-			exclude: []string{"prs"},
-			want:    []string{api.EventCommitRef, api.EventCommentRef, api.EventLabel, api.EventComment},
+			name:  "excluding commits is the motivating case",
+			terms: []string{"-commits"},
+			want:  []string{api.EventPullRef, api.EventCommentRef, api.EventLabel, api.EventComment},
 		},
 		{
-			name:    "include narrows and drops uncategorised events",
-			include: []string{"labels"},
-			want:    []string{api.EventLabel},
+			name:  "excluding prs drops a pr reference made in a comment",
+			terms: []string{"-prs"},
+			want:  []string{api.EventCommitRef, api.EventCommentRef, api.EventLabel, api.EventComment},
 		},
 		{
-			name:    "the refs group stands for every source",
-			include: []string{"refs"},
-			want:    []string{api.EventCommitRef, api.EventPullRef, api.EventCommentRef},
+			name:  "a plain name narrows and drops uncategorised events",
+			terms: []string{"labels"},
+			want:  []string{api.EventLabel},
 		},
 		{
-			name:    "exclude subtracts from include",
-			include: []string{"refs"},
-			exclude: []string{"commits"},
-			want:    []string{api.EventPullRef, api.EventCommentRef},
+			name:  "the refs group stands for every source",
+			terms: []string{"refs"},
+			want:  []string{api.EventCommitRef, api.EventPullRef, api.EventCommentRef},
 		},
 		{
-			name:    "names are case and space insensitive",
-			exclude: []string{" Commits "},
-			want:    []string{api.EventPullRef, api.EventCommentRef, api.EventLabel, api.EventComment},
+			name:  "a - name subtracts from a plain one",
+			terms: []string{"refs", "-commits"},
+			want:  []string{api.EventPullRef, api.EventCommentRef},
 		},
 		{
-			name:    "an empty value is not a filter",
-			exclude: []string{""},
-			want:    []string{api.EventCommitRef, api.EventPullRef, api.EventCommentRef, api.EventLabel, api.EventComment},
+			name:  "names are case and space insensitive",
+			terms: []string{" -Commits "},
+			want:  []string{api.EventPullRef, api.EventCommentRef, api.EventLabel, api.EventComment},
+		},
+		{
+			name:  "all with a - name drops from everything",
+			terms: []string{"all", "-commits"},
+			want:  []string{api.EventPullRef, api.EventCommentRef, api.EventLabel, api.EventComment},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			filter, err := NewTimelineFilter(tt.include, tt.exclude)
+			filter, err := ParseTimelineFilter(tt.terms)
 			if err != nil {
-				t.Fatalf("NewTimelineFilter() error = %v", err)
+				t.Fatalf("ParseTimelineFilter() error = %v", err)
 			}
 			var got []string
 			for _, e := range filter.Apply(events) {

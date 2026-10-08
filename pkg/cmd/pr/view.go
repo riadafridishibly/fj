@@ -14,14 +14,12 @@ import (
 )
 
 type viewOptions struct {
-	Factory         *cmdutil.Factory
-	Number          string
-	Comments        bool
-	ShowTimeline    bool
-	TimelineInclude []string
-	TimelineExclude []string
-	Web             bool
-	JSONOutput      cmdutil.JSONFlags
+	Factory    *cmdutil.Factory
+	Number     string
+	Comments   bool
+	Timeline   []string
+	Web        bool
+	JSONOutput cmdutil.JSONFlags
 }
 
 func NewCmdView(f *cmdutil.Factory) *cobra.Command {
@@ -32,9 +30,9 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 		Short: "View a pull request",
 		Example: `  $ fj pr view 42
   $ fj pr view 42 --comments
-  $ fj pr view 42 --show-timeline=false
-  $ fj pr view 42 --timeline-exclude commits
-  $ fj pr view 42 --timeline-include refs --timeline-exclude commits
+  $ fj pr view 42 --timeline all
+  $ fj pr view 42 --timeline -commits
+  $ fj pr view 42 --timeline refs,-commits
   $ fj pr view 42 --web
   $ fj pr view 42 --json title,state,headRefName,mergeable
   $ fj pr view 42 --json files --jq '.files[].path'`,
@@ -46,8 +44,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 	}
 
 	cmd.Flags().BoolVarP(&opts.Comments, "comments", "c", false, "View pull request comments")
-	cmd.Flags().BoolVar(&opts.ShowTimeline, "show-timeline", true, "Show pull request events, such as commit references and label changes")
-	cmdutil.AddTimelineFilterFlags(cmd, &opts.TimelineInclude, &opts.TimelineExclude, cmdutil.SubjectPull)
+	cmdutil.AddTimelineFlag(cmd, &opts.Timeline, cmdutil.SubjectPull)
 	cmdutil.AddWebFlag(cmd, &opts.Web)
 	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, prFields, []string{"timeline"}, true)
 
@@ -65,7 +62,7 @@ func viewRun(opts *viewOptions) error {
 		return cmdutil.FlagErrorf("invalid pull request number: %s", opts.Number)
 	}
 
-	timeline, err := cmdutil.NewTimelineFilter(opts.TimelineInclude, opts.TimelineExclude)
+	timeline, err := cmdutil.ParseTimelineFilter(opts.Timeline)
 	if err != nil {
 		return err
 	}
@@ -89,7 +86,7 @@ func viewRun(opts *viewOptions) error {
 		if err != nil {
 			return err
 		}
-		if opts.ShowTimeline && opts.JSONOutput.Has("timeline") {
+		if opts.JSONOutput.Has("timeline") {
 			events, err := opts.Factory.Timeline(repo, index)
 			if err != nil {
 				return err
@@ -170,7 +167,7 @@ func viewRun(opts *viewOptions) error {
 		}
 	}
 
-	if opts.ShowTimeline {
+	if opts.Timeline != nil {
 		events, err := opts.Factory.Timeline(repo, index)
 		if err != nil {
 			return err

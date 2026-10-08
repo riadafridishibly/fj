@@ -111,19 +111,38 @@ type TimelineFilter struct {
 	exclude map[TimelineCategory]bool
 }
 
-// NewTimelineFilter builds a filter from --timeline-include and
-// --timeline-exclude. Include narrows the timeline to the categories named;
-// exclude then removes from whatever is left, so --timeline-include=refs with
-// --timeline-exclude=commits shows issue and pull request references only.
-//
-// An unknown name is a flag error listing the valid ones, rather than a filter
-// that silently matches nothing.
-func NewTimelineFilter(include, exclude []string) (TimelineFilter, error) {
-	inc, err := resolveCategories(include, "--timeline-include")
+// ParseTimelineFilter builds a filter from --timeline. Plain names narrow to
+// those categories, "-" names drop theirs: "refs,-commits" keeps issue and pull
+// request references. "all" narrows nothing.
+func ParseTimelineFilter(terms []string) (TimelineFilter, error) {
+	// pflag stores --timeline "" as an empty, non-nil slice.
+	if terms != nil && len(terms) == 0 {
+		return TimelineFilter{}, FlagErrorf("--timeline needs a value: all, or categories")
+	}
+	var include, exclude []string
+	var all bool
+	for _, t := range terms {
+		t = strings.TrimSpace(t)
+		name, minus := strings.CutPrefix(t, "-")
+		switch {
+		case name == "":
+			return TimelineFilter{}, FlagErrorf("invalid --timeline value %q: name a category, or all", t)
+		case minus:
+			exclude = append(exclude, name)
+		case strings.EqualFold(t, "all"):
+			all = true
+		default:
+			include = append(include, t)
+		}
+	}
+	if all && len(include) > 0 {
+		return TimelineFilter{}, FlagErrorf("--timeline all cannot be combined with %[1]s: use %[1]s alone, or all with - names", strings.Join(include, ","))
+	}
+	inc, err := resolveCategories(include)
 	if err != nil {
 		return TimelineFilter{}, err
 	}
-	exc, err := resolveCategories(exclude, "--timeline-exclude")
+	exc, err := resolveCategories(exclude)
 	if err != nil {
 		return TimelineFilter{}, err
 	}
@@ -133,7 +152,7 @@ func NewTimelineFilter(include, exclude []string) (TimelineFilter, error) {
 // Allows reports whether an event survives the filter.
 //
 // An event fj has no category for has no way to match an include, so narrowing
-// drops it; excluding a category leaves it alone. That keeps --timeline-exclude
+// drops it; excluding a category leaves it alone. That keeps "-" names
 // subtractive over the whole timeline, including the raw types only --json
 // shows.
 func (f TimelineFilter) Allows(e *api.TimelineEvent) bool {
@@ -163,7 +182,7 @@ func (f TimelineFilter) Apply(events []*api.TimelineEvent) []*api.TimelineEvent 
 // resolveCategories turns flag values into a category set, expanding group
 // shorthands. It returns nil for an empty selection so the caller can tell it
 // apart from a selection of nothing.
-func resolveCategories(names []string, flag string) (map[TimelineCategory]bool, error) {
+func resolveCategories(names []string) (map[TimelineCategory]bool, error) {
 	set := make(map[TimelineCategory]bool)
 	for _, name := range names {
 		name = strings.ToLower(strings.TrimSpace(name))
@@ -179,8 +198,8 @@ func resolveCategories(names []string, flag string) (map[TimelineCategory]bool, 
 		cat := TimelineCategory(name)
 		if !validCategory(cat) {
 			return nil, FlagErrorf(
-				"invalid %s value %q (valid: %s)",
-				flag, name, strings.Join(TimelineFilterValues(), ", "),
+				"invalid --timeline value %q (valid: all, %s)",
+				name, strings.Join(TimelineFilterValues(), ", "),
 			)
 		}
 		set[cat] = true
@@ -195,18 +214,14 @@ func validCategory(c TimelineCategory) bool {
 	return slices.Contains(timelineCategories, c)
 }
 
-// AddTimelineFilterFlags adds the --timeline-include and --timeline-exclude
-// flags shared by the issue and pull request views. subject names what is
-// being viewed, so the help reads "issue" or "pull request" accordingly.
-func AddTimelineFilterFlags(cmd *cobra.Command, include, exclude *[]string, subject TimelineSubject) {
-	values := strings.Join(TimelineFilterValues(), ", ")
-	cmd.Flags().StringSliceVar(include, "timeline-include", nil,
-		fmt.Sprintf("Show only these %s timeline categories: %s", subject, values))
-	cmd.Flags().StringSliceVar(exclude, "timeline-exclude", nil,
-		fmt.Sprintf("Hide these %s timeline categories: %s", subject, values))
+// AddTimelineFlag adds --timeline to a view. terms stays nil unless it is given.
+func AddTimelineFlag(cmd *cobra.Command, terms *[]string, subject TimelineSubject) {
+	cmd.Flags().StringSliceVar(terms, "timeline", nil, fmt.Sprintf(
+		"Show %s events: all, or the `categories` named; prefix one with - to hide it (%s)",
+		subject, strings.Join(TimelineFilterValues(), ", ")))
 }
 
-// TimelineFilterValues returns every name the timeline filter flags accept,
+// TimelineFilterValues returns every name the --timeline flag accepts,
 // sorted for stable help and error output.
 func TimelineFilterValues() []string {
 	vals := make([]string, 0, len(timelineCategories)+len(timelineGroups))
