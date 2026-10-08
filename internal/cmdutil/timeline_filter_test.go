@@ -116,7 +116,7 @@ func TestParseTimelineFilterRejectsUnknownNames(t *testing.T) {
 	if !strings.Contains(err.Error(), "--timeline") {
 		t.Errorf("error should name the flag, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "commits") {
+	if !strings.Contains(err.Error(), "commits") || !strings.Contains(err.Error(), "all") {
 		t.Errorf("error should list the valid names, got: %v", err)
 	}
 	var flagErr *FlagError
@@ -124,8 +124,10 @@ func TestParseTimelineFilterRejectsUnknownNames(t *testing.T) {
 		t.Errorf("expected a FlagError so usage is shown, got %T", err)
 	}
 
-	if _, err := ParseTimelineFilter([]string{"-"}); err == nil {
-		t.Error("a lone - should be an error, not an empty filter")
+	for _, terms := range [][]string{{}, {""}, {"-"}, {"labels", ""}, {"all", "labels"}} {
+		if _, err := ParseTimelineFilter(terms); err == nil {
+			t.Errorf("%q should be an error", terms)
+		}
 	}
 }
 
@@ -183,9 +185,9 @@ func TestTimelineFilter(t *testing.T) {
 			want:  []string{api.EventPullRef, api.EventCommentRef, api.EventLabel, api.EventComment},
 		},
 		{
-			name:  "an empty value is not a filter",
-			terms: []string{""},
-			want:  []string{api.EventCommitRef, api.EventPullRef, api.EventCommentRef, api.EventLabel, api.EventComment},
+			name:  "all with a - name drops from everything",
+			terms: []string{"all", "-commits"},
+			want:  []string{api.EventPullRef, api.EventCommentRef, api.EventLabel, api.EventComment},
 		},
 	}
 

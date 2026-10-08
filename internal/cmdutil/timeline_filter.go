@@ -115,17 +115,28 @@ type TimelineFilter struct {
 // those categories, "-" names drop theirs: "refs,-commits" keeps issue and pull
 // request references. "all" narrows nothing.
 func ParseTimelineFilter(terms []string) (TimelineFilter, error) {
+	// pflag stores --timeline "" as an empty, non-nil slice.
+	if terms != nil && len(terms) == 0 {
+		return TimelineFilter{}, FlagErrorf("--timeline needs a value: all, or categories")
+	}
 	var include, exclude []string
+	var all bool
 	for _, t := range terms {
 		t = strings.TrimSpace(t)
-		if name, ok := strings.CutPrefix(t, "-"); ok {
-			if name == "" {
-				return TimelineFilter{}, FlagErrorf("invalid --timeline value %q: name a category after -", t)
-			}
+		name, minus := strings.CutPrefix(t, "-")
+		switch {
+		case name == "":
+			return TimelineFilter{}, FlagErrorf("invalid --timeline value %q: name a category, or all", t)
+		case minus:
 			exclude = append(exclude, name)
-		} else if !strings.EqualFold(t, "all") {
+		case strings.EqualFold(t, "all"):
+			all = true
+		default:
 			include = append(include, t)
 		}
+	}
+	if all && len(include) > 0 {
+		return TimelineFilter{}, FlagErrorf("--timeline all cannot be combined with %[1]s: use %[1]s alone, or all with - names", strings.Join(include, ","))
 	}
 	inc, err := resolveCategories(include)
 	if err != nil {
@@ -187,7 +198,7 @@ func resolveCategories(names []string) (map[TimelineCategory]bool, error) {
 		cat := TimelineCategory(name)
 		if !validCategory(cat) {
 			return nil, FlagErrorf(
-				"invalid --timeline value %q (valid: %s)",
+				"invalid --timeline value %q (valid: all, %s)",
 				name, strings.Join(TimelineFilterValues(), ", "),
 			)
 		}
