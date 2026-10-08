@@ -17,16 +17,14 @@ import (
 )
 
 type viewOptions struct {
-	Factory         *cmdutil.Factory
-	Number          string
-	Comments        bool
-	ShowTimeline    bool
-	TimelineInclude []string
-	TimelineExclude []string
-	Web             bool
-	JSONOutput      cmdutil.JSONFlags
-	Download        bool
-	DownloadDir     string
+	Factory     *cmdutil.Factory
+	Number      string
+	Comments    bool
+	Timeline    []string
+	Web         bool
+	JSONOutput  cmdutil.JSONFlags
+	Download    bool
+	DownloadDir string
 }
 
 func NewCmdView(f *cmdutil.Factory) *cobra.Command {
@@ -37,9 +35,9 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 		Short: "View an issue",
 		Example: `  $ fj issue view 42
   $ fj issue view 42 --comments
-  $ fj issue view 42 --show-timeline
-  $ fj issue view 42 --timeline-exclude commits
-  $ fj issue view 42 --timeline-include refs --timeline-exclude commits
+  $ fj issue view 42 --timeline
+  $ fj issue view 42 --timeline=-commits
+  $ fj issue view 42 --timeline=refs,-commits
   $ fj issue view 42 --web
   $ fj issue view 42 --json title,state,labels
   $ fj issue view 42 --json timeline --jq '.timeline[].type'
@@ -48,18 +46,12 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Number = args[0]
-			// The timeline is off by default. Asking for part of it, or for its JSON
-			// field, turns it on unless --show-timeline=false says otherwise.
-			if fl := cmd.Flags(); !fl.Changed("show-timeline") {
-				opts.ShowTimeline = fl.Changed("timeline-include") || fl.Changed("timeline-exclude") || opts.JSONOutput.Has("timeline")
-			}
 			return viewRun(opts)
 		},
 	}
 
 	cmd.Flags().BoolVarP(&opts.Comments, "comments", "c", false, "View issue comments")
-	cmd.Flags().BoolVar(&opts.ShowTimeline, "show-timeline", false, "Show issue events, such as commit references and label changes")
-	cmdutil.AddTimelineFilterFlags(cmd, &opts.TimelineInclude, &opts.TimelineExclude, cmdutil.SubjectIssue)
+	cmdutil.AddTimelineFlag(cmd, &opts.Timeline, cmdutil.SubjectIssue)
 	cmd.Flags().BoolVar(&opts.Download, "download", false, "Download issue attachments")
 	cmd.Flags().StringVarP(&opts.DownloadDir, "download-dir", "D", "", "Directory to download attachments into (default: ./issue-<number>)")
 	cmdutil.AddWebFlag(cmd, &opts.Web)
@@ -79,7 +71,7 @@ func viewRun(opts *viewOptions) error {
 		return cmdutil.FlagErrorf("invalid issue number: %s", opts.Number)
 	}
 
-	timeline, err := cmdutil.NewTimelineFilter(opts.TimelineInclude, opts.TimelineExclude)
+	timeline, err := cmdutil.ParseTimelineFilter(opts.Timeline)
 	if err != nil {
 		return err
 	}
@@ -103,7 +95,7 @@ func viewRun(opts *viewOptions) error {
 		if err != nil {
 			return err
 		}
-		if opts.ShowTimeline && opts.JSONOutput.Has("timeline") {
+		if opts.JSONOutput.Has("timeline") {
 			events, err := opts.Factory.Timeline(repo, index)
 			if err != nil {
 				return err
@@ -180,7 +172,7 @@ func viewRun(opts *viewOptions) error {
 		}
 	}
 
-	if opts.ShowTimeline {
+	if opts.Timeline != nil {
 		events, err := opts.Factory.Timeline(repo, index)
 		if err != nil {
 			return err

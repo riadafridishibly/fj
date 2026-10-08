@@ -70,7 +70,7 @@ func TestIssueViewTimelineCommitRef(t *testing.T) {
 	num := strconv.FormatInt(index, 10)
 
 	stdout := viewUntil(t, "referenced this issue from a commit",
-		"issue", "view", num, "-R", adminUser+"/test-repo", "--show-timeline")
+		"issue", "view", num, "-R", adminUser+"/test-repo", "--timeline")
 
 	if !strings.Contains(stdout, "--- Timeline") {
 		t.Errorf("expected a Timeline section:\n%s", stdout)
@@ -80,25 +80,21 @@ func TestIssueViewTimelineCommitRef(t *testing.T) {
 	}
 }
 
-// TestIssueViewTimelineDisabled checks the timeline is off unless asked for, and
-// that --show-timeline=false wins over a filter flag that would turn it on.
+// TestIssueViewTimelineDisabled checks the timeline is off unless asked for.
 func TestIssueViewTimelineDisabled(t *testing.T) {
 	index := commitReferencing(t, "Timeline opt-out target")
 	num := strconv.FormatInt(index, 10)
 
 	// Only meaningful once the event exists, so wait for it to show first.
 	viewUntil(t, "referenced this issue from a commit",
-		"issue", "view", num, "-R", adminUser+"/test-repo", "--show-timeline")
+		"issue", "view", num, "-R", adminUser+"/test-repo", "--timeline")
 
-	for _, extra := range [][]string{nil, {"--show-timeline=false", "--timeline-exclude", "labels"}} {
-		args := append([]string{"issue", "view", num, "-R", adminUser + "/test-repo"}, extra...)
-		stdout := mustRunFJ(t, args...)
-		if strings.Contains(stdout, "--- Timeline") || strings.Contains(stdout, "referenced this issue") {
-			t.Errorf("%v should leave out the timeline:\n%s", extra, stdout)
-		}
-		if !strings.Contains(stdout, "Timeline opt-out target") {
-			t.Errorf("the issue itself should still render:\n%s", stdout)
-		}
+	stdout := mustRunFJ(t, "issue", "view", num, "-R", adminUser+"/test-repo")
+	if strings.Contains(stdout, "--- Timeline") || strings.Contains(stdout, "referenced this issue") {
+		t.Errorf("the timeline should be off by default:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "Timeline opt-out target") {
+		t.Errorf("the issue itself should still render:\n%s", stdout)
 	}
 }
 
@@ -109,9 +105,8 @@ func TestIssueViewTimelineJSON(t *testing.T) {
 	num := strconv.FormatInt(index, 10)
 
 	viewUntil(t, "referenced this issue from a commit",
-		"issue", "view", num, "-R", adminUser+"/test-repo", "--show-timeline")
+		"issue", "view", num, "-R", adminUser+"/test-repo", "--timeline")
 
-	// Asking for the field is asking for the timeline; no --show-timeline needed.
 	stdout := mustRunFJ(t, "issue", "view", num, "-R", adminUser+"/test-repo", "--json", "timeline")
 
 	var result struct {
@@ -137,14 +132,10 @@ func TestIssueViewTimelineJSON(t *testing.T) {
 		t.Errorf("expected a commit_ref event in the JSON timeline:\n%s", stdout)
 	}
 
-	// --show-timeline=false must drop the key rather than emit an empty one.
-	off := mustRunFJ(t, "issue", "view", num, "-R", adminUser+"/test-repo", "--json", "timeline,title", "--show-timeline=false")
-	var raw map[string]any
-	if err := json.Unmarshal([]byte(off), &raw); err != nil {
-		t.Fatalf("invalid JSON: %v", err)
-	}
-	if _, ok := raw["timeline"]; ok {
-		t.Errorf("--show-timeline=false should omit the timeline key:\n%s", off)
+	// --timeline filters the JSON timeline too.
+	filtered := mustRunFJ(t, "issue", "view", num, "-R", adminUser+"/test-repo", "--json", "timeline", "--timeline=-commits")
+	if strings.Contains(filtered, "commit_ref") {
+		t.Errorf("--timeline=-commits should drop commit_ref from the JSON:\n%s", filtered)
 	}
 }
 
@@ -161,7 +152,7 @@ func TestIssueViewTimelineClose(t *testing.T) {
 
 	mustRunFJ(t, "issue", "close", num, "-R", adminUser+"/test-repo")
 
-	stdout := viewUntil(t, "closed this issue", "issue", "view", num, "-R", adminUser+"/test-repo", "--show-timeline")
+	stdout := viewUntil(t, "closed this issue", "issue", "view", num, "-R", adminUser+"/test-repo", "--timeline")
 	if !strings.Contains(stdout, adminUser+" closed this issue") {
 		t.Errorf("expected %q to close the issue in the timeline:\n%s", adminUser, stdout)
 	}
@@ -222,7 +213,7 @@ func TestIssueViewTimelineRefSources(t *testing.T) {
 
 	num := strconv.FormatInt(target.Index, 10)
 	wantPull := fmt.Sprintf(`referenced this issue from pull request #%d "Ref source pull request"`, pull.Index)
-	stdout := viewUntil(t, wantPull, "issue", "view", num, "-R", owner+"/"+repo, "--show-timeline")
+	stdout := viewUntil(t, wantPull, "issue", "view", num, "-R", owner+"/"+repo, "--timeline")
 
 	for _, want := range []string{
 		wantPull,
@@ -284,46 +275,48 @@ func TestIssueViewTimelineFilter(t *testing.T) {
 		return mustRunFJ(t, append(append([]string{}, base...), extra...)...)
 	}
 
-	// Forgejo adds both references in the background, so wait for each. The
-	// filter flags below turn the timeline on by themselves; waiting asks for it.
+	// Forgejo adds both references in the background, so wait for each.
 	fromPull := fmt.Sprintf("referenced this issue from a comment on pull request #%d", pull.Index)
-	wait := append(append([]string{}, base...), "--show-timeline")
+	wait := append(append([]string{}, base...), "--timeline")
 	viewUntil(t, "from a commit", wait...)
 	viewUntil(t, fromPull, wait...)
 
 	// The motivating case: commit references are the noise.
-	if got := view("--timeline-exclude", "commits"); strings.Contains(got, "from a commit") {
-		t.Errorf("--timeline-exclude commits should drop commit references:\n%s", got)
+	if got := view("--timeline=-commits"); strings.Contains(got, "from a commit") {
+		t.Errorf("--timeline=-commits should drop commit references:\n%s", got)
 	} else if !strings.Contains(got, fromPull) {
-		t.Errorf("--timeline-exclude commits should keep other references:\n%s", got)
+		t.Errorf("--timeline=-commits should keep other references:\n%s", got)
 	}
 
 	// The design case: comment_ref, but its source is a pull request.
-	noPulls := view("--timeline-exclude", "prs")
+	noPulls := view("--timeline=-prs")
 	if strings.Contains(noPulls, fromPull) {
-		t.Errorf("--timeline-exclude prs must drop a reference made in a comment on a pull request:\n%s", noPulls)
+		t.Errorf("--timeline=-prs must drop a reference made in a comment on a pull request:\n%s", noPulls)
 	}
 	if !strings.Contains(noPulls, "from a commit") {
-		t.Errorf("--timeline-exclude prs should leave commit references alone:\n%s", noPulls)
+		t.Errorf("--timeline=-prs should leave commit references alone:\n%s", noPulls)
 	}
 
-	// Include narrows, and exclude then subtracts from it.
-	only := view("--timeline-include", "refs", "--timeline-exclude", "commits")
+	only := view("--timeline=refs,-commits")
 	if !strings.Contains(only, fromPull) {
-		t.Errorf("--timeline-include refs should keep the pull request reference:\n%s", only)
+		t.Errorf("--timeline=refs,-commits should keep the pull request reference:\n%s", only)
 	}
 	if strings.Contains(only, "from a commit") {
-		t.Errorf("--timeline-exclude commits should subtract from --timeline-include refs:\n%s", only)
+		t.Errorf("--timeline=refs,-commits should drop commit references:\n%s", only)
 	}
 
-	// A misspelled category is a flag error, not a filter that quietly
-	// matches nothing.
-	_, stderr, err := runFJ(append(append([]string{}, base...), "--timeline-exclude", "commit")...)
+	// A misspelled category is a flag error, not a filter that matches nothing.
+	_, stderr, err := runFJ(append(append([]string{}, base...), "--timeline=-commit")...)
 	if err == nil {
 		t.Error("an unknown category should fail rather than be ignored")
 	}
 	if !strings.Contains(stderr, "commits") {
 		t.Errorf("the error should list the valid categories, got: %s", stderr)
+	}
+
+	_, stderr, err = runFJ(append(append([]string{}, base...), "--timeline", "commits")...)
+	if err == nil || !strings.Contains(stderr, "--timeline=") {
+		t.Errorf("a space-separated --timeline value should fail with a hint, got: %v %s", err, stderr)
 	}
 }
 
@@ -349,7 +342,7 @@ func TestIssueViewTimelineWidth(t *testing.T) {
 	}
 
 	num := strconv.FormatInt(target.Index, 10)
-	args := []string{"issue", "view", num, "-R", owner + "/" + repo, "--show-timeline"}
+	args := []string{"issue", "view", num, "-R", owner + "/" + repo, "--timeline"}
 
 	// Piped, with no width override: the whole title must survive.
 	stdout := viewUntil(t, "referenced this issue from issue", args...)
@@ -376,8 +369,8 @@ func TestIssueViewTimelineWidth(t *testing.T) {
 	}
 }
 
-// TestPRViewTimeline checks pull requests behave the same, with events that say
-// "pull request" rather than "issue".
+// TestPRViewTimeline checks the same default holds for pull requests, whose
+// events say "pull request" rather than "issue".
 func TestPRViewTimeline(t *testing.T) {
 	prs, _, err := testClient.ListRepoPullRequests(adminUser, "test-repo", forgejo.ListPullRequestsOptions{})
 	if err != nil {
@@ -392,7 +385,7 @@ func TestPRViewTimeline(t *testing.T) {
 	// A label change is an event fj renders, and needs no push to produce.
 	mustRunFJ(t, "pr", "edit", num, "-R", adminUser+"/test-repo", "--add-label", "bug")
 
-	stdout := viewUntil(t, "--- Timeline", "pr", "view", num, "-R", adminUser+"/test-repo", "--show-timeline")
+	stdout := viewUntil(t, "--- Timeline", "pr", "view", num, "-R", adminUser+"/test-repo", "--timeline")
 	if !strings.Contains(stdout, "added the bug label") {
 		t.Errorf("expected the label event in the pull request timeline:\n%s", stdout)
 	}

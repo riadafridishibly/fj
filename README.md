@@ -92,11 +92,9 @@ fj issue list                             # List open issues
 fj issue list --state closed              # List closed issues
 fj issue list --label bug --assignee me   # Filter by label/assignee
 fj issue view 42                          # View issue #42
-fj issue view 42 --show-timeline          # Add its events (commit refs, labels, …)
-fj issue view 42 \
-  --timeline-exclude commits              # Events minus commit references (often the bulk)
-fj issue view 42 \
-  --timeline-include refs                 # Show only what referenced this issue
+fj issue view 42 --timeline               # Add its events (commit refs, labels, …)
+fj issue view 42 --timeline=-commits      # Events minus commit references (often the bulk)
+fj issue view 42 --timeline=refs          # Only what referenced this issue
 fj issue view 42 --json title,labels      # JSON with gh's field names
 fj issue create --title "Bug" --body "…"  # Create an issue
 fj issue close 42                         # Close an issue
@@ -127,8 +125,8 @@ fj pr list                                # List open PRs
 fj pr list --state all                    # List all PRs
 fj pr list --draft                        # List draft PRs (--draft=false: all but drafts)
 fj pr view 10                             # View PR #10
-fj pr view 10 --show-timeline             # Add its events (commit refs, labels, …)
-fj pr view 10 --timeline-exclude commits  # Events minus commit references
+fj pr view 10 --timeline                  # Add its events (commit refs, labels, …)
+fj pr view 10 --timeline=-commits         # Events minus commit references
 fj pr view 10 --json state,mergeable      # JSON with gh's field names
 fj pr create --title "Fix" --body "…"     # Create a PR
 fj pr ready 10                            # Mark a draft PR ready for review
