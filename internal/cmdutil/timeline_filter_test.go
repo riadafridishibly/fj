@@ -123,6 +123,10 @@ func TestParseTimelineFilterRejectsUnknownNames(t *testing.T) {
 	if !errors.As(err, &flagErr) {
 		t.Errorf("expected a FlagError so usage is shown, got %T", err)
 	}
+
+	if _, err := ParseTimelineFilter([]string{"-"}); err == nil {
+		t.Error("a lone - should be an error, not an empty filter")
+	}
 }
 
 func TestTimelineFilter(t *testing.T) {
@@ -144,7 +148,7 @@ func TestTimelineFilter(t *testing.T) {
 			want: []string{api.EventCommitRef, api.EventPullRef, api.EventCommentRef, api.EventLabel, api.EventComment},
 		},
 		{
-			name:  "a bare --timeline means all, which keeps everything",
+			name:  "all keeps everything",
 			terms: []string{"all"},
 			want:  []string{api.EventCommitRef, api.EventPullRef, api.EventCommentRef, api.EventLabel, api.EventComment},
 		},

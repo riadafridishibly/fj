@@ -35,9 +35,9 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 		Short: "View an issue",
 		Example: `  $ fj issue view 42
   $ fj issue view 42 --comments
-  $ fj issue view 42 --timeline
-  $ fj issue view 42 --timeline=-commits
-  $ fj issue view 42 --timeline=refs,-commits
+  $ fj issue view 42 --timeline all
+  $ fj issue view 42 --timeline -commits
+  $ fj issue view 42 --timeline refs,-commits
   $ fj issue view 42 --web
   $ fj issue view 42 --json title,state,labels
   $ fj issue view 42 --json timeline --jq '.timeline[].type'

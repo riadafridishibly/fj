@@ -113,12 +113,15 @@ type TimelineFilter struct {
 
 // ParseTimelineFilter builds a filter from --timeline. Plain names narrow to
 // those categories, "-" names drop theirs: "refs,-commits" keeps issue and pull
-// request references. "all" (a bare --timeline) narrows nothing.
+// request references. "all" narrows nothing.
 func ParseTimelineFilter(terms []string) (TimelineFilter, error) {
 	var include, exclude []string
 	for _, t := range terms {
 		t = strings.TrimSpace(t)
 		if name, ok := strings.CutPrefix(t, "-"); ok {
+			if name == "" {
+				return TimelineFilter{}, FlagErrorf("invalid --timeline value %q: name a category after -", t)
+			}
 			exclude = append(exclude, name)
 		} else if !strings.EqualFold(t, "all") {
 			include = append(include, t)
@@ -203,19 +206,8 @@ func validCategory(c TimelineCategory) bool {
 // AddTimelineFlag adds --timeline to a view. terms stays nil unless it is given.
 func AddTimelineFlag(cmd *cobra.Command, terms *[]string, subject TimelineSubject) {
 	cmd.Flags().StringSliceVar(terms, "timeline", nil, fmt.Sprintf(
-		"Show %s events, or only the `categories` named; prefix one with - to hide it (%s)",
+		"Show %s events: all, or the `categories` named; prefix one with - to hide it (%s)",
 		subject, strings.Join(TimelineFilterValues(), ", ")))
-	cmd.Flags().Lookup("timeline").NoOptDefVal = "all"
-
-	// An optional value needs "=": "--timeline commits" makes commits an argument.
-	args := cmd.Args
-	cmd.Args = func(c *cobra.Command, a []string) error {
-		err := args(c, a)
-		if err != nil && c.Flags().Changed("timeline") {
-			return fmt.Errorf("%w (--timeline takes its value after =, as in --timeline=-commits)", err)
-		}
-		return err
-	}
 }
 
 // TimelineFilterValues returns every name the --timeline flag accepts,

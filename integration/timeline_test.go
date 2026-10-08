@@ -70,7 +70,7 @@ func TestIssueViewTimelineCommitRef(t *testing.T) {
 	num := strconv.FormatInt(index, 10)
 
 	stdout := viewUntil(t, "referenced this issue from a commit",
-		"issue", "view", num, "-R", adminUser+"/test-repo", "--timeline")
+		"issue", "view", num, "-R", adminUser+"/test-repo", "--timeline", "all")
 
 	if !strings.Contains(stdout, "--- Timeline") {
 		t.Errorf("expected a Timeline section:\n%s", stdout)
@@ -87,7 +87,7 @@ func TestIssueViewTimelineDisabled(t *testing.T) {
 
 	// Only meaningful once the event exists, so wait for it to show first.
 	viewUntil(t, "referenced this issue from a commit",
-		"issue", "view", num, "-R", adminUser+"/test-repo", "--timeline")
+		"issue", "view", num, "-R", adminUser+"/test-repo", "--timeline", "all")
 
 	stdout := mustRunFJ(t, "issue", "view", num, "-R", adminUser+"/test-repo")
 	if strings.Contains(stdout, "--- Timeline") || strings.Contains(stdout, "referenced this issue") {
@@ -105,7 +105,7 @@ func TestIssueViewTimelineJSON(t *testing.T) {
 	num := strconv.FormatInt(index, 10)
 
 	viewUntil(t, "referenced this issue from a commit",
-		"issue", "view", num, "-R", adminUser+"/test-repo", "--timeline")
+		"issue", "view", num, "-R", adminUser+"/test-repo", "--timeline", "all")
 
 	stdout := mustRunFJ(t, "issue", "view", num, "-R", adminUser+"/test-repo", "--json", "timeline")
 
@@ -152,7 +152,7 @@ func TestIssueViewTimelineClose(t *testing.T) {
 
 	mustRunFJ(t, "issue", "close", num, "-R", adminUser+"/test-repo")
 
-	stdout := viewUntil(t, "closed this issue", "issue", "view", num, "-R", adminUser+"/test-repo", "--timeline")
+	stdout := viewUntil(t, "closed this issue", "issue", "view", num, "-R", adminUser+"/test-repo", "--timeline", "all")
 	if !strings.Contains(stdout, adminUser+" closed this issue") {
 		t.Errorf("expected %q to close the issue in the timeline:\n%s", adminUser, stdout)
 	}
@@ -213,7 +213,7 @@ func TestIssueViewTimelineRefSources(t *testing.T) {
 
 	num := strconv.FormatInt(target.Index, 10)
 	wantPull := fmt.Sprintf(`referenced this issue from pull request #%d "Ref source pull request"`, pull.Index)
-	stdout := viewUntil(t, wantPull, "issue", "view", num, "-R", owner+"/"+repo, "--timeline")
+	stdout := viewUntil(t, wantPull, "issue", "view", num, "-R", owner+"/"+repo, "--timeline", "all")
 
 	for _, want := range []string{
 		wantPull,
@@ -277,32 +277,32 @@ func TestIssueViewTimelineFilter(t *testing.T) {
 
 	// Forgejo adds both references in the background, so wait for each.
 	fromPull := fmt.Sprintf("referenced this issue from a comment on pull request #%d", pull.Index)
-	wait := append(append([]string{}, base...), "--timeline")
+	wait := append(append([]string{}, base...), "--timeline", "all")
 	viewUntil(t, "from a commit", wait...)
 	viewUntil(t, fromPull, wait...)
 
 	// The motivating case: commit references are the noise.
-	if got := view("--timeline=-commits"); strings.Contains(got, "from a commit") {
-		t.Errorf("--timeline=-commits should drop commit references:\n%s", got)
+	if got := view("--timeline", "-commits"); strings.Contains(got, "from a commit") {
+		t.Errorf("--timeline -commits should drop commit references:\n%s", got)
 	} else if !strings.Contains(got, fromPull) {
-		t.Errorf("--timeline=-commits should keep other references:\n%s", got)
+		t.Errorf("--timeline -commits should keep other references:\n%s", got)
 	}
 
 	// The design case: comment_ref, but its source is a pull request.
-	noPulls := view("--timeline=-prs")
+	noPulls := view("--timeline", "-prs")
 	if strings.Contains(noPulls, fromPull) {
-		t.Errorf("--timeline=-prs must drop a reference made in a comment on a pull request:\n%s", noPulls)
+		t.Errorf("--timeline -prs must drop a reference made in a comment on a pull request:\n%s", noPulls)
 	}
 	if !strings.Contains(noPulls, "from a commit") {
-		t.Errorf("--timeline=-prs should leave commit references alone:\n%s", noPulls)
+		t.Errorf("--timeline -prs should leave commit references alone:\n%s", noPulls)
 	}
 
-	only := view("--timeline=refs,-commits")
+	only := view("--timeline", "refs,-commits")
 	if !strings.Contains(only, fromPull) {
-		t.Errorf("--timeline=refs,-commits should keep the pull request reference:\n%s", only)
+		t.Errorf("--timeline refs,-commits should keep the pull request reference:\n%s", only)
 	}
 	if strings.Contains(only, "from a commit") {
-		t.Errorf("--timeline=refs,-commits should drop commit references:\n%s", only)
+		t.Errorf("--timeline refs,-commits should drop commit references:\n%s", only)
 	}
 
 	// A misspelled category is a flag error, not a filter that matches nothing.
@@ -314,10 +314,6 @@ func TestIssueViewTimelineFilter(t *testing.T) {
 		t.Errorf("the error should list the valid categories, got: %s", stderr)
 	}
 
-	_, stderr, err = runFJ(append(append([]string{}, base...), "--timeline", "commits")...)
-	if err == nil || !strings.Contains(stderr, "--timeline=") {
-		t.Errorf("a space-separated --timeline value should fail with a hint, got: %v %s", err, stderr)
-	}
 }
 
 // TestIssueViewTimelineWidth checks the width contract end to end through the
@@ -342,7 +338,7 @@ func TestIssueViewTimelineWidth(t *testing.T) {
 	}
 
 	num := strconv.FormatInt(target.Index, 10)
-	args := []string{"issue", "view", num, "-R", owner + "/" + repo, "--timeline"}
+	args := []string{"issue", "view", num, "-R", owner + "/" + repo, "--timeline", "all"}
 
 	// Piped, with no width override: the whole title must survive.
 	stdout := viewUntil(t, "referenced this issue from issue", args...)
@@ -385,7 +381,7 @@ func TestPRViewTimeline(t *testing.T) {
 	// A label change is an event fj renders, and needs no push to produce.
 	mustRunFJ(t, "pr", "edit", num, "-R", adminUser+"/test-repo", "--add-label", "bug")
 
-	stdout := viewUntil(t, "--- Timeline", "pr", "view", num, "-R", adminUser+"/test-repo", "--timeline")
+	stdout := viewUntil(t, "--- Timeline", "pr", "view", num, "-R", adminUser+"/test-repo", "--timeline", "all")
 	if !strings.Contains(stdout, "added the bug label") {
 		t.Errorf("expected the label event in the pull request timeline:\n%s", stdout)
 	}

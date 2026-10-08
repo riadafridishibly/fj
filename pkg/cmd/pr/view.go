@@ -30,9 +30,9 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 		Short: "View a pull request",
 		Example: `  $ fj pr view 42
   $ fj pr view 42 --comments
-  $ fj pr view 42 --timeline
-  $ fj pr view 42 --timeline=-commits
-  $ fj pr view 42 --timeline=refs,-commits
+  $ fj pr view 42 --timeline all
+  $ fj pr view 42 --timeline -commits
+  $ fj pr view 42 --timeline refs,-commits
   $ fj pr view 42 --web
   $ fj pr view 42 --json title,state,headRefName,mergeable
   $ fj pr view 42 --json files --jq '.files[].path'`,
