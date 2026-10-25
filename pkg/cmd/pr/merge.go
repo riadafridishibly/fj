@@ -94,7 +94,7 @@ func mergeRun(opts *mergeOptions) error {
 		return cmdutil.FlagErrorf("invalid pull request number: %s", opts.Number)
 	}
 
-	client, err := opts.Factory.ClientForRepo(repo)
+	client, err := opts.Factory.APIClient(repo)
 	if err != nil {
 		return err
 	}
@@ -108,9 +108,12 @@ func mergeRun(opts *mergeOptions) error {
 		MergeWhenChecksSucceed: opts.Auto,
 	}
 
-	merged, _, err := client.MergePullRequest(repo.Owner, repo.Name, index, mergeOpt)
+	merged, err := client.MergePullRequest(repo.Owner, repo.Name, index, mergeOpt)
 	if err != nil {
 		return fmt.Errorf("merging pull request: %w", err)
+	}
+	if !merged && !opts.Auto {
+		return fmt.Errorf("pull request #%d was not merged", index)
 	}
 
 	if opts.JSONOutput.Enabled() {
@@ -119,10 +122,8 @@ func mergeRun(opts *mergeOptions) error {
 
 	if opts.Auto {
 		fmt.Fprintf(os.Stderr, "✓ Pull request #%d will be merged automatically when all checks pass\n", index)
-	} else if merged {
-		fmt.Fprintf(os.Stderr, "✓ Merged pull request #%d\n", index)
 	} else {
-		fmt.Fprintf(os.Stderr, "Pull request #%d was not merged\n", index)
+		fmt.Fprintf(os.Stderr, "✓ Merged pull request #%d\n", index)
 	}
 
 	return nil
