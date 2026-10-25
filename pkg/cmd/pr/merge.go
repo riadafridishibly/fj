@@ -12,14 +12,15 @@ import (
 )
 
 type mergeOptions struct {
-	Factory      *cmdutil.Factory
-	Number       string
-	Method       string
-	Title        string
-	Message      string
-	DeleteBranch bool
-	Auto         bool
-	JSONOutput   cmdutil.JSONFlags
+	Factory         *cmdutil.Factory
+	Number          string
+	Method          string
+	Title           string
+	Message         string
+	MatchHeadCommit string
+	DeleteBranch    bool
+	Auto            bool
+	JSONOutput      cmdutil.JSONFlags
 }
 
 func NewCmdMerge(f *cmdutil.Factory) *cobra.Command {
@@ -34,6 +35,7 @@ func NewCmdMerge(f *cmdutil.Factory) *cobra.Command {
   $ fj pr merge 42 --delete-branch
   $ fj pr merge 42 --merge --title "Merge feature" --message "Detailed description"
   $ fj pr merge 42 --auto
+  $ fj pr merge 42 --match-head-commit 0123456789abcdef0123456789abcdef01234567
   $ fj pr merge 42 --squash --json state,mergeCommit`,
 		Args: cmdutil.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -73,6 +75,7 @@ func NewCmdMerge(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().Bool("rebase", false, "Rebase and merge")
 	cmd.Flags().StringVar(&opts.Title, "title", "", "Title for the merge commit")
 	cmd.Flags().StringVar(&opts.Message, "message", "", "Message for the merge commit")
+	cmd.Flags().StringVar(&opts.MatchHeadCommit, "match-head-commit", "", "Commit SHA that the pull request head must match to allow merge")
 	cmd.Flags().BoolVarP(&opts.DeleteBranch, "delete-branch", "d", false, "Delete the branch after merge")
 	cmd.Flags().BoolVar(&opts.Auto, "auto", false, "Merge when all checks pass")
 	cmdutil.AddJSONFlags(cmd, &opts.JSONOutput, prFields, nil, false)
@@ -100,6 +103,7 @@ func mergeRun(opts *mergeOptions) error {
 		Style:                  forgejo.MergeStyle(opts.Method),
 		Title:                  opts.Title,
 		Message:                opts.Message,
+		HeadCommitId:           opts.MatchHeadCommit,
 		DeleteBranchAfterMerge: opts.DeleteBranch,
 		MergeWhenChecksSucceed: opts.Auto,
 	}

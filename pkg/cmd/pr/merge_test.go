@@ -1,0 +1,78 @@
+package pr
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
+
+	"github.com/riadafridishibly/fj/internal/cmdutil"
+	"github.com/riadafridishibly/fj/internal/config"
+)
+
+func TestMergeMatchHeadCommit(t *testing.T) {
+	const sha = "0123456789abcdef0123456789abcdef01234567"
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"matching head", []string{"--match-head-commit", sha}, sha},
+		{"empty flag", []string{"--match-head-commit", ""}, ""},
+		{"omitted flag", nil, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got forgejo.MergePullRequestOption
+			requests := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == "/api/v1/version" {
+					w.Header().Set("Content-Type", "application/json")
+					_, _ = w.Write([]byte(`{"version":"14.0.0"}`))
+					return
+				}
+				if r.Method != http.MethodPost || r.URL.Path != "/api/v1/repos/owner/repo/pulls/42/merge" {
+					t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+					http.NotFound(w, r)
+					return
+				}
+				requests++
+				if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+					t.Errorf("decoding merge options: %v", err)
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer server.Close()
+
+			host := strings.TrimPrefix(server.URL, "http://")
+			t.Setenv("FJ_INSECURE", "1")
+			t.Setenv("FJ_HOST", host)
+			t.Setenv("FJ_TOKEN", "test-token")
+			f := &cmdutil.Factory{
+				RepoOverride: "owner/repo",
+				Config: func() (*config.Config, error) {
+					return &config.Config{}, nil
+				},
+			}
+			cmd := NewCmdMerge(f)
+			cmd.SetArgs(append([]string{"42"}, tt.args...))
+			if err := cmd.Execute(); err != nil {
+				t.Fatal(err)
+			}
+			if requests != 1 {
+				t.Fatalf("merge requests = %d, want 1", requests)
+			}
+			if got.HeadCommitId != tt.want {
+				t.Errorf("HeadCommitId = %q, want %q", got.HeadCommitId, tt.want)
+			}
+			if got.Style != forgejo.MergeStyleMerge {
+				t.Errorf("Style = %q, want merge", got.Style)
+			}
+		})
+	}
+}
