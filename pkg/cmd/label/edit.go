@@ -57,9 +57,9 @@ func editRun(opts *editOptions) error {
 	}
 
 	// Find label by name
-	labels, _, err := client.ListRepoLabels(repo.Owner, repo.Name, forgejo.ListLabelsOptions{})
+	labels, err := cmdutil.ListAllRepoLabels(client, repo.Owner, repo.Name)
 	if err != nil {
-		return fmt.Errorf("listing labels: %w", err)
+		return err
 	}
 
 	var labelID int64

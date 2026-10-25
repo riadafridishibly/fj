@@ -163,15 +163,44 @@ func (f *Factory) ClientForRepo(repo Repo) (*forgejo.Client, error) {
 	return f.Client(repo.Host)
 }
 
+// ListAllRepoLabels returns every label in a repository, across all pages.
+func ListAllRepoLabels(client *forgejo.Client, owner, repo string) ([]*forgejo.Label, error) {
+	var all []*forgejo.Label
+	for page := 1; ; page++ {
+		labels, resp, err := client.ListRepoLabels(owner, repo, forgejo.ListLabelsOptions{
+			ListOptions: forgejo.ListOptions{Page: page, PageSize: 50},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("listing labels: %w", err)
+		}
+		all = append(all, labels...)
+		// The server caps the page size at its MAX_RESPONSE_ITEMS, so a page
+		// shorter than 50 can still have more after it.
+		if total := TotalCount(resp); len(labels) == 0 || (total > 0 && len(all) >= total) {
+			return all, nil
+		}
+	}
+}
+
 // ResolveLabelIDs converts label names to IDs for a repository.
 // If a label does not exist, it is automatically created.
 func ResolveLabelIDs(client *forgejo.Client, owner, repo string, names []string) ([]int64, error) {
+	return labelIDs(client, owner, repo, names, true)
+}
+
+// LookupLabelIDs converts label names to IDs for a repository, and fails on a
+// name the repository does not have.
+func LookupLabelIDs(client *forgejo.Client, owner, repo string, names []string) ([]int64, error) {
+	return labelIDs(client, owner, repo, names, false)
+}
+
+func labelIDs(client *forgejo.Client, owner, repo string, names []string, create bool) ([]int64, error) {
 	if len(names) == 0 {
 		return nil, nil
 	}
-	labels, _, err := client.ListRepoLabels(owner, repo, forgejo.ListLabelsOptions{})
+	labels, err := ListAllRepoLabels(client, owner, repo)
 	if err != nil {
-		return nil, fmt.Errorf("listing labels: %w", err)
+		return nil, err
 	}
 	nameToID := make(map[string]int64)
 	for _, l := range labels {
@@ -180,6 +209,9 @@ func ResolveLabelIDs(client *forgejo.Client, owner, repo string, names []string)
 	var ids []int64
 	for _, name := range names {
 		id, ok := nameToID[strings.ToLower(name)]
+		if !ok && !create {
+			return nil, fmt.Errorf("label not found: %s", name)
+		}
 		if !ok {
 			label, _, err := client.CreateLabel(owner, repo, forgejo.CreateLabelOption{
 				Name:  name,

@@ -142,7 +142,7 @@ func editRun(opts *editOptions) error {
 	}
 
 	if len(opts.RemoveLabels) > 0 {
-		removeLabelIDs, err := cmdutil.ResolveLabelIDs(client, repo.Owner, repo.Name, opts.RemoveLabels)
+		removeLabelIDs, err := cmdutil.LookupLabelIDs(client, repo.Owner, repo.Name, opts.RemoveLabels)
 		if err != nil {
 			return err
 		}

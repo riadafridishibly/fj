@@ -126,7 +126,7 @@ func editRun(opts *editOptions) error {
 		}
 
 		if len(opts.RemoveLabels) > 0 {
-			removeIDs, err := cmdutil.ResolveLabelIDs(client, repo.Owner, repo.Name, opts.RemoveLabels)
+			removeIDs, err := cmdutil.LookupLabelIDs(client, repo.Owner, repo.Name, opts.RemoveLabels)
 			if err != nil {
 				return err
 			}

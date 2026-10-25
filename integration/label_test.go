@@ -3,6 +3,8 @@
 package integration
 
 import (
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -63,5 +65,88 @@ func TestLabelDelete(t *testing.T) {
 	}
 	if labelExists(t, name) {
 		t.Errorf("expected label %q to be deleted", name)
+	}
+}
+
+// TestLabelLookupPastFirstPage gives a repository more labels than the
+// server's default page of 30 and uses the one that sorts last. fj must find
+// it on a later page instead of creating a duplicate.
+func TestLabelLookupPastFirstPage(t *testing.T) {
+	name := "label-lookup"
+	if _, _, err := testClient.CreateRepo(forgejo.CreateRepoOption{Name: name, AutoInit: true}); err != nil {
+		t.Fatalf("creating repo: %v", err)
+	}
+	repo := adminUser + "/" + name
+	for i := range 31 {
+		if _, _, err := testClient.CreateLabel(adminUser, name, forgejo.CreateLabelOption{
+			Name:  fmt.Sprintf("filler-%02d", i),
+			Color: "#cccccc",
+		}); err != nil {
+			t.Fatalf("creating label: %v", err)
+		}
+	}
+	late, _, err := testClient.CreateLabel(adminUser, name, forgejo.CreateLabelOption{Name: "zz-late", Color: "#ee0701"})
+	if err != nil {
+		t.Fatalf("creating label: %v", err)
+	}
+
+	labelCount := func() int {
+		t.Helper()
+		labels, _, err := testClient.ListRepoLabels(adminUser, name, forgejo.ListLabelsOptions{
+			ListOptions: forgejo.ListOptions{Page: 1, PageSize: 50},
+		})
+		if err != nil {
+			t.Fatalf("listing labels: %v", err)
+		}
+		return len(labels)
+	}
+	issueLabels := func(num string) []int64 {
+		t.Helper()
+		var index int64
+		fmt.Sscan(num, &index)
+		issue, _, err := testClient.GetIssue(adminUser, name, index)
+		if err != nil {
+			t.Fatalf("getting issue %s: %v", num, err)
+		}
+		var ids []int64
+		for _, l := range issue.Labels {
+			ids = append(ids, l.ID)
+		}
+		return ids
+	}
+
+	num := strings.TrimSpace(mustRunFJ(t, "issue", "create", "-R", repo, "--title", "late label",
+		"--label", "zz-late", "--json", "number", "--jq", ".number"))
+	if got := issueLabels(num); !slices.Equal(got, []int64{late.ID}) {
+		t.Errorf("issue create --label zz-late: issue labels = %v, want [%d]", got, late.ID)
+	}
+	if n := labelCount(); n != 32 {
+		t.Fatalf("issue create --label zz-late: repo has %d labels, want 32", n)
+	}
+
+	mustRunFJ(t, "issue", "edit", num, "-R", repo, "--remove-label", "zz-late")
+	if got := issueLabels(num); len(got) != 0 {
+		t.Errorf("issue edit --remove-label zz-late: issue labels = %v, want none", got)
+	}
+	mustRunFJ(t, "issue", "edit", num, "-R", repo, "--add-label", "zz-late")
+	if got := issueLabels(num); !slices.Equal(got, []int64{late.ID}) {
+		t.Errorf("issue edit --add-label zz-late: issue labels = %v, want [%d]", got, late.ID)
+	}
+	if n := labelCount(); n != 32 {
+		t.Fatalf("issue edit --add-label zz-late: repo has %d labels, want 32", n)
+	}
+
+	_, stderr, err := runFJ("issue", "edit", num, "-R", repo, "--remove-label", "no-such-label")
+	if err == nil || !strings.Contains(stderr, "label not found: no-such-label") {
+		t.Errorf("issue edit --remove-label no-such-label: err = %v, stderr = %q, want label not found", err, stderr)
+	}
+	if n := labelCount(); n != 32 {
+		t.Errorf("issue edit --remove-label no-such-label: repo has %d labels, want 32", n)
+	}
+
+	mustRunFJ(t, "label", "edit", "zz-late", "-R", repo, "--description", "sorts last")
+	mustRunFJ(t, "label", "delete", "zz-late", "-R", repo, "--yes")
+	if n := labelCount(); n != 31 {
+		t.Errorf("label delete zz-late: repo has %d labels, want 31", n)
 	}
 }
