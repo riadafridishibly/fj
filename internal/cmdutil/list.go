@@ -7,10 +7,12 @@ import (
 	"strings"
 	"time"
 
+	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 	"github.com/riadafridishibly/fj/internal/api"
 )
 
-// ListAll pages through a list endpoint until a short page.
+// ListAll pages through a list endpoint until an empty page or the total count
+// is reached. A short page may reflect the server's MAX_RESPONSE_ITEMS cap.
 func ListAll[T any](client *api.Client, path string) ([]T, error) {
 	const limit = 50
 	sep := "?"
@@ -20,11 +22,12 @@ func ListAll[T any](client *api.Client, path string) ([]T, error) {
 	var all []T
 	for page := 1; ; page++ {
 		var items []T
-		if err := client.GetJSON(fmt.Sprintf("%s%spage=%d&limit=%d", path, sep, page, limit), &items); err != nil {
+		resp, err := client.GetJSONWithResponse(fmt.Sprintf("%s%spage=%d&limit=%d", path, sep, page, limit), &items)
+		if err != nil {
 			return nil, err
 		}
 		all = append(all, items...)
-		if len(items) < limit {
+		if PagingDone(len(items), len(all), TotalCount(&forgejo.Response{Response: resp})) {
 			return all, nil
 		}
 	}
