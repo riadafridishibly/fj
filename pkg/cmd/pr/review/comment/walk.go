@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	forgejo "codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
+	"github.com/riadafridishibly/fj/internal/cmdutil"
 )
 
 const reviewPageSize = 50
@@ -22,11 +23,8 @@ func listAllReviews(client *forgejo.Client, owner, repo string, index int64) ([]
 			}
 			return nil, fmt.Errorf("listing reviews on pr #%d: %w", index, err)
 		}
-		if len(reviews) == 0 {
-			break
-		}
 		all = append(all, reviews...)
-		if len(reviews) < reviewPageSize {
+		if cmdutil.PagingDone(len(reviews), len(all), cmdutil.TotalCount(resp)) {
 			break
 		}
 	}

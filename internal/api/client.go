@@ -71,6 +71,16 @@ func (c *Client) GetJSON(path string, out any) error {
 	return c.do(http.MethodGet, path, nil, out)
 }
 
+// GetJSONWithResponse is GetJSON with response metadata for callers that need
+// pagination headers. The response body is closed before returning.
+func (c *Client) GetJSONWithResponse(path string, out any) (*http.Response, error) {
+	req, err := c.newRequest(http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	return c.sendWithResponse(req, out)
+}
+
 // Raw sends an authenticated request and returns the response whatever its
 // status, for callers that print the server's own answer (fj api). target
 // is resolved as newBodyRequest describes. Entries in header replace the
@@ -166,19 +176,24 @@ func (c *Client) do(method, path string, body, out any) error {
 // Callers that build their own request — a multipart upload — use this
 // directly, so every response this package handles takes one path.
 func (c *Client) send(req *http.Request, out any) error {
+	_, err := c.sendWithResponse(req, out)
+	return err
+}
+
+func (c *Client) sendWithResponse(req *http.Request, out any) (*http.Response, error) {
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return statusError(resp)
+		return resp, statusError(resp)
 	}
 	if out == nil {
-		return nil
+		return resp, nil
 	}
-	return json.NewDecoder(resp.Body).Decode(out)
+	return resp, json.NewDecoder(resp.Body).Decode(out)
 }
 
 func statusError(resp *http.Response) error {
