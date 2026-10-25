@@ -5,6 +5,7 @@ package integration
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -100,20 +101,7 @@ func TestLabelLookupPastFirstPage(t *testing.T) {
 		}
 		return len(labels)
 	}
-	issueLabels := func(num string) []int64 {
-		t.Helper()
-		var index int64
-		fmt.Sscan(num, &index)
-		issue, _, err := testClient.GetIssue(adminUser, name, index)
-		if err != nil {
-			t.Fatalf("getting issue %s: %v", num, err)
-		}
-		var ids []int64
-		for _, l := range issue.Labels {
-			ids = append(ids, l.ID)
-		}
-		return ids
-	}
+	issueLabels := func(num string) []int64 { return issueLabelIDs(t, adminUser, name, num) }
 
 	num := strings.TrimSpace(mustRunFJ(t, "issue", "create", "-R", repo, "--title", "late label",
 		"--label", "zz-late", "--json", "number", "--jq", ".number"))
@@ -185,6 +173,20 @@ func TestLabelUnknownName(t *testing.T) {
 		t.Error("issue edit applied the title before failing on the unknown label")
 	}
 
+	for _, flag := range []string{"--add-label", "--remove-label"} {
+		_, stderr, err := runFJ("pr", "edit", "4", "-R", repo, "--title", "edited title", flag, "no-such-label")
+		if err == nil || !strings.Contains(stderr, "'no-such-label' not found") {
+			t.Errorf("pr edit %s: err = %v, stderr = %q, want gh's not found", flag, err, stderr)
+		}
+	}
+	pr, _, err := testClient.GetPullRequest(adminUser, "test-repo", 4)
+	if err != nil {
+		t.Fatalf("getting pull request: %v", err)
+	}
+	if pr.Title == "edited title" {
+		t.Error("pr edit applied the title before failing on the unknown label")
+	}
+
 	if n := len(listTestRepoLabels(t)); n != labelsBefore {
 		t.Errorf("repo has %d labels after the failed commands, want %d", n, labelsBefore)
 	}
@@ -199,4 +201,69 @@ func listTestRepoLabels(t *testing.T) []*forgejo.Label {
 		t.Fatalf("listing labels: %v", err)
 	}
 	return labels
+}
+
+// TestLabelOrgLabels uses labels in an organization's repository. An
+// organization label resolves when the repository has no label of that name,
+// and a repository label wins over an organization label with the same name.
+func TestLabelOrgLabels(t *testing.T) {
+	org, name := "label-org", "app"
+	if _, _, err := testClient.CreateOrg(forgejo.CreateOrgOption{Name: org}); err != nil {
+		t.Fatalf("creating org: %v", err)
+	}
+	if _, _, err := testClient.CreateOrgRepo(org, forgejo.CreateRepoOption{Name: name, AutoInit: true}); err != nil {
+		t.Fatalf("creating repo: %v", err)
+	}
+	repo := org + "/" + name
+	repoShared, _, err := testClient.CreateLabel(org, name, forgejo.CreateLabelOption{Name: "shared", Color: "#0075ca"})
+	if err != nil {
+		t.Fatalf("creating label: %v", err)
+	}
+	orgLabel := func(label string) int64 {
+		t.Helper()
+		out := mustRunFJ(t, "api", "orgs/"+org+"/labels", "-f", "name="+label, "-f", "color=#5319e7", "--jq", ".id")
+		id, err := strconv.ParseInt(strings.TrimSpace(out), 10, 64)
+		if err != nil {
+			t.Fatalf("creating org label %s: id %q: %v", label, out, err)
+		}
+		return id
+	}
+	orgSharedID := orgLabel("shared")
+	orgOnlyID := orgLabel("org-only")
+
+	num := strings.TrimSpace(mustRunFJ(t, "issue", "create", "-R", repo, "--title", "org labels",
+		"--label", "org-only", "--label", "shared", "--json", "number", "--jq", ".number"))
+	want := []int64{repoShared.ID, orgOnlyID}
+	slices.Sort(want)
+	if got := issueLabelIDs(t, org, name, num); !slices.Equal(got, want) {
+		t.Errorf("issue create: labels = %v, want %v (repo shared, org org-only; org shared is %d)", got, want, orgSharedID)
+	}
+
+	mustRunFJ(t, "issue", "edit", num, "-R", repo, "--remove-label", "org-only")
+	if got := issueLabelIDs(t, org, name, num); !slices.Equal(got, []int64{repoShared.ID}) {
+		t.Errorf("issue edit --remove-label org-only: labels = %v, want [%d]", got, repoShared.ID)
+	}
+	mustRunFJ(t, "issue", "edit", num, "-R", repo, "--add-label", "org-only")
+	if got := issueLabelIDs(t, org, name, num); !slices.Equal(got, want) {
+		t.Errorf("issue edit --add-label org-only: labels = %v, want %v", got, want)
+	}
+}
+
+// issueLabelIDs returns the sorted label IDs of issue num in owner/repo.
+func issueLabelIDs(t *testing.T, owner, repo, num string) []int64 {
+	t.Helper()
+	index, err := strconv.ParseInt(num, 10, 64)
+	if err != nil {
+		t.Fatalf("issue number %q: %v", num, err)
+	}
+	issue, _, err := testClient.GetIssue(owner, repo, index)
+	if err != nil {
+		t.Fatalf("getting issue %s: %v", num, err)
+	}
+	var ids []int64
+	for _, l := range issue.Labels {
+		ids = append(ids, l.ID)
+	}
+	slices.Sort(ids)
+	return ids
 }

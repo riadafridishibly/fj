@@ -163,6 +163,14 @@ func (f *Factory) ClientForRepo(repo Repo) (*forgejo.Client, error) {
 	return f.Client(repo.Host)
 }
 
+// PagingDone reports whether a paged listing is complete, given the length of
+// the last page, the count so far and the X-Total-Count header (0 when
+// absent). A page shorter than requested does not end it: the server caps the
+// page size at its MAX_RESPONSE_ITEMS.
+func PagingDone(pageLen, sofar, total int) bool {
+	return pageLen == 0 || (total > 0 && sofar >= total)
+}
+
 // ListAllRepoLabels returns every label in a repository, across all pages.
 func ListAllRepoLabels(client *forgejo.Client, owner, repo string) ([]*forgejo.Label, error) {
 	var all []*forgejo.Label
@@ -174,37 +182,85 @@ func ListAllRepoLabels(client *forgejo.Client, owner, repo string) ([]*forgejo.L
 			return nil, fmt.Errorf("listing labels: %w", err)
 		}
 		all = append(all, labels...)
-		// The server caps the page size at its MAX_RESPONSE_ITEMS, so a page
-		// shorter than 50 can still have more after it.
-		if total := TotalCount(resp); len(labels) == 0 || (total > 0 && len(all) >= total) {
+		if PagingDone(len(labels), len(all), TotalCount(resp)) {
 			return all, nil
 		}
 	}
 }
 
-// ResolveLabelIDs converts label names to IDs for a repository, and fails with
-// gh's message on a name the repository does not have.
-func ResolveLabelIDs(client *forgejo.Client, owner, repo string, names []string) ([]int64, error) {
-	if len(names) == 0 {
-		return nil, nil
+// listAllOrgLabels returns every label of an organization, or none when owner
+// is a user.
+func listAllOrgLabels(client *api.Client, owner string) ([]*forgejo.Label, error) {
+	var all []*forgejo.Label
+	for page := 1; ; page++ {
+		labels, resp, err := client.ListOrgLabels(owner, forgejo.ListOptions{Page: page, PageSize: 50})
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, fmt.Errorf("listing organization labels: %w", err)
+		}
+		all = append(all, labels...)
+		if PagingDone(len(labels), len(all), TotalCount(&forgejo.Response{Response: resp})) {
+			return all, nil
+		}
 	}
-	labels, err := ListAllRepoLabels(client, owner, repo)
+}
+
+// LabelSet maps lowercased label names to IDs.
+type LabelSet map[string]int64
+
+// IssueLabels returns the labels an issue or pull request in repo can carry:
+// the repository's own, then its organization's. When two labels share a
+// name, the first one wins, as in gh, so a repository label shadows an
+// organization label.
+func (f *Factory) IssueLabels(client *forgejo.Client, repo Repo) (LabelSet, error) {
+	repoLabels, err := ListAllRepoLabels(client, repo.Owner, repo.Name)
 	if err != nil {
 		return nil, err
 	}
-	nameToID := make(map[string]int64)
-	for _, l := range labels {
-		nameToID[strings.ToLower(l.Name)] = l.ID
+	apiClient, err := f.APIClient(repo)
+	if err != nil {
+		return nil, err
 	}
+	orgLabels, err := listAllOrgLabels(apiClient, repo.Owner)
+	if err != nil {
+		return nil, err
+	}
+	set := LabelSet{}
+	for _, l := range append(repoLabels, orgLabels...) {
+		if _, ok := set[strings.ToLower(l.Name)]; !ok {
+			set[strings.ToLower(l.Name)] = l.ID
+		}
+	}
+	return set, nil
+}
+
+// IDs converts label names to IDs, and fails with gh's message on a name the
+// set lacks.
+func (s LabelSet) IDs(names []string) ([]int64, error) {
 	var ids []int64
 	for _, name := range names {
-		id, ok := nameToID[strings.ToLower(name)]
+		id, ok := s[strings.ToLower(name)]
 		if !ok {
 			return nil, fmt.Errorf("'%s' not found", name)
 		}
 		ids = append(ids, id)
 	}
 	return ids, nil
+}
+
+// ResolveLabelIDs converts label names to IDs for an issue or pull request in
+// repo, as IssueLabels and IDs do.
+func (f *Factory) ResolveLabelIDs(client *forgejo.Client, repo Repo, names []string) ([]int64, error) {
+	if len(names) == 0 {
+		return nil, nil
+	}
+	labels, err := f.IssueLabels(client, repo)
+	if err != nil {
+		return nil, err
+	}
+	return labels.IDs(names)
 }
 
 // RandomLabelColor returns a random hex color suitable for labels.

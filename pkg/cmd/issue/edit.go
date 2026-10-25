@@ -123,13 +123,18 @@ func editRun(opts *editOptions) error {
 	}
 
 	// Resolve labels before any write, so an unknown name leaves the issue as it was.
-	addLabelIDs, err := cmdutil.ResolveLabelIDs(client, repo.Owner, repo.Name, opts.AddLabels)
-	if err != nil {
-		return err
-	}
-	removeLabelIDs, err := cmdutil.ResolveLabelIDs(client, repo.Owner, repo.Name, opts.RemoveLabels)
-	if err != nil {
-		return err
+	var addLabelIDs, removeLabelIDs []int64
+	if len(opts.AddLabels) > 0 || len(opts.RemoveLabels) > 0 {
+		labels, err := opts.Factory.IssueLabels(client, repo)
+		if err != nil {
+			return err
+		}
+		if addLabelIDs, err = labels.IDs(opts.AddLabels); err != nil {
+			return err
+		}
+		if removeLabelIDs, err = labels.IDs(opts.RemoveLabels); err != nil {
+			return err
+		}
 	}
 
 	issue, _, err := client.EditIssue(repo.Owner, repo.Name, index, editOpt)
