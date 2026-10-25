@@ -122,35 +122,40 @@ func editRun(opts *editOptions) error {
 		editOpt.Assignees = assignees
 	}
 
+	// Resolve labels before any write, so an unknown name leaves the issue as it was.
+	var addLabelIDs, removeLabelIDs []int64
+	if len(opts.AddLabels) > 0 || len(opts.RemoveLabels) > 0 {
+		labels, err := opts.Factory.IssueLabels(client, repo)
+		if err != nil {
+			return err
+		}
+		if addLabelIDs, err = labels.IDs(opts.AddLabels); err != nil {
+			return err
+		}
+		if removeLabelIDs, err = labels.IDs(opts.RemoveLabels); err != nil {
+			return err
+		}
+	}
+
 	issue, _, err := client.EditIssue(repo.Owner, repo.Name, index, editOpt)
 	if err != nil {
 		return fmt.Errorf("editing issue: %w", err)
 	}
 
 	// Handle label changes separately via label APIs
-	if len(opts.AddLabels) > 0 {
-		labelIDs, err := cmdutil.ResolveLabelIDs(client, repo.Owner, repo.Name, opts.AddLabels)
-		if err != nil {
-			return err
-		}
+	if len(addLabelIDs) > 0 {
 		_, _, err = client.AddIssueLabels(repo.Owner, repo.Name, index, forgejo.IssueLabelsOption{
-			Labels: labelIDs,
+			Labels: addLabelIDs,
 		})
 		if err != nil {
 			return fmt.Errorf("adding labels: %w", err)
 		}
 	}
 
-	if len(opts.RemoveLabels) > 0 {
-		removeLabelIDs, err := cmdutil.ResolveLabelIDs(client, repo.Owner, repo.Name, opts.RemoveLabels)
+	for _, id := range removeLabelIDs {
+		_, err := client.DeleteIssueLabel(repo.Owner, repo.Name, index, id)
 		if err != nil {
-			return err
-		}
-		for _, id := range removeLabelIDs {
-			_, err := client.DeleteIssueLabel(repo.Owner, repo.Name, index, id)
-			if err != nil {
-				return fmt.Errorf("removing label: %w", err)
-			}
+			return fmt.Errorf("removing label: %w", err)
 		}
 	}
 

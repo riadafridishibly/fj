@@ -115,24 +115,23 @@ func editRun(opts *editOptions) error {
 			labelSet[l.ID] = true
 		}
 
-		if len(opts.AddLabels) > 0 {
-			addIDs, err := cmdutil.ResolveLabelIDs(client, repo.Owner, repo.Name, opts.AddLabels)
-			if err != nil {
-				return err
-			}
-			for _, id := range addIDs {
-				labelSet[id] = true
-			}
+		labels, err := opts.Factory.IssueLabels(client, repo)
+		if err != nil {
+			return err
 		}
-
-		if len(opts.RemoveLabels) > 0 {
-			removeIDs, err := cmdutil.ResolveLabelIDs(client, repo.Owner, repo.Name, opts.RemoveLabels)
-			if err != nil {
-				return err
-			}
-			for _, id := range removeIDs {
-				delete(labelSet, id)
-			}
+		addIDs, err := labels.IDs(opts.AddLabels)
+		if err != nil {
+			return err
+		}
+		for _, id := range addIDs {
+			labelSet[id] = true
+		}
+		removeIDs, err := labels.IDs(opts.RemoveLabels)
+		if err != nil {
+			return err
+		}
+		for _, id := range removeIDs {
+			delete(labelSet, id)
 		}
 
 		var labelIDs []int64

@@ -55,9 +55,9 @@ func deleteRun(opts *deleteOptions) error {
 	}
 
 	// Find label by name (case-insensitive).
-	labels, _, err := client.ListRepoLabels(repo.Owner, repo.Name, forgejo.ListLabelsOptions{})
+	labels, err := cmdutil.ListAllRepoLabels(client, repo.Owner, repo.Name)
 	if err != nil {
-		return fmt.Errorf("listing labels: %w", err)
+		return err
 	}
 
 	var label *forgejo.Label

@@ -54,17 +54,14 @@ func listRun(opts *listOptions) error {
 	var allLabels []*forgejo.Label
 	page := 1
 	for len(allLabels) < opts.Limit {
-		labels, _, err := client.ListRepoLabels(repo.Owner, repo.Name, forgejo.ListLabelsOptions{
+		labels, resp, err := client.ListRepoLabels(repo.Owner, repo.Name, forgejo.ListLabelsOptions{
 			ListOptions: forgejo.ListOptions{Page: page, PageSize: pageSize},
 		})
 		if err != nil {
 			return fmt.Errorf("listing labels: %w", err)
 		}
-		if len(labels) == 0 {
-			break
-		}
 		allLabels = append(allLabels, labels...)
-		if len(labels) < pageSize {
+		if cmdutil.PagingDone(len(labels), len(allLabels), cmdutil.TotalCount(resp)) {
 			break
 		}
 		page++
