@@ -182,19 +182,9 @@ func ListAllRepoLabels(client *forgejo.Client, owner, repo string) ([]*forgejo.L
 	}
 }
 
-// ResolveLabelIDs converts label names to IDs for a repository.
-// If a label does not exist, it is automatically created.
+// ResolveLabelIDs converts label names to IDs for a repository, and fails with
+// gh's message on a name the repository does not have.
 func ResolveLabelIDs(client *forgejo.Client, owner, repo string, names []string) ([]int64, error) {
-	return labelIDs(client, owner, repo, names, true)
-}
-
-// LookupLabelIDs converts label names to IDs for a repository, and fails on a
-// name the repository does not have.
-func LookupLabelIDs(client *forgejo.Client, owner, repo string, names []string) ([]int64, error) {
-	return labelIDs(client, owner, repo, names, false)
-}
-
-func labelIDs(client *forgejo.Client, owner, repo string, names []string, create bool) ([]int64, error) {
 	if len(names) == 0 {
 		return nil, nil
 	}
@@ -209,18 +199,8 @@ func labelIDs(client *forgejo.Client, owner, repo string, names []string, create
 	var ids []int64
 	for _, name := range names {
 		id, ok := nameToID[strings.ToLower(name)]
-		if !ok && !create {
-			return nil, fmt.Errorf("label not found: %s", name)
-		}
 		if !ok {
-			label, _, err := client.CreateLabel(owner, repo, forgejo.CreateLabelOption{
-				Name:  name,
-				Color: RandomLabelColor(),
-			})
-			if err != nil {
-				return nil, fmt.Errorf("creating label %q: %w", name, err)
-			}
-			id = label.ID
+			return nil, fmt.Errorf("'%s' not found", name)
 		}
 		ids = append(ids, id)
 	}

@@ -136,17 +136,67 @@ func TestLabelLookupPastFirstPage(t *testing.T) {
 		t.Fatalf("issue edit --add-label zz-late: repo has %d labels, want 32", n)
 	}
 
-	_, stderr, err := runFJ("issue", "edit", num, "-R", repo, "--remove-label", "no-such-label")
-	if err == nil || !strings.Contains(stderr, "label not found: no-such-label") {
-		t.Errorf("issue edit --remove-label no-such-label: err = %v, stderr = %q, want label not found", err, stderr)
-	}
-	if n := labelCount(); n != 32 {
-		t.Errorf("issue edit --remove-label no-such-label: repo has %d labels, want 32", n)
-	}
-
 	mustRunFJ(t, "label", "edit", "zz-late", "-R", repo, "--description", "sorts last")
 	mustRunFJ(t, "label", "delete", "zz-late", "-R", repo, "--yes")
 	if n := labelCount(); n != 31 {
 		t.Errorf("label delete zz-late: repo has %d labels, want 31", n)
 	}
+}
+
+// TestLabelUnknownName pins gh's errors for a label the repository lacks: fj
+// creates no label, no issue, and no partial edit.
+func TestLabelUnknownName(t *testing.T) {
+	repo := adminUser + "/test-repo"
+	labelsBefore := len(listTestRepoLabels(t))
+
+	_, stderr, err := runFJ("issue", "create", "-R", repo, "--title", "unknown label", "--label", "no-such-label")
+	if err == nil || !strings.Contains(stderr, "could not add label: 'no-such-label' not found") {
+		t.Errorf("issue create: err = %v, stderr = %q, want gh's could not add label", err, stderr)
+	}
+	for page := 1; ; page++ {
+		issues, _, err := testClient.ListRepoIssues(adminUser, "test-repo", forgejo.ListIssueOption{
+			ListOptions: forgejo.ListOptions{Page: page, PageSize: 50},
+			State:       forgejo.StateAll,
+		})
+		if err != nil {
+			t.Fatalf("listing issues: %v", err)
+		}
+		if len(issues) == 0 {
+			break
+		}
+		for _, i := range issues {
+			if i.Title == "unknown label" {
+				t.Errorf("issue create with an unknown label created issue #%d", i.Index)
+			}
+		}
+	}
+
+	for _, flag := range []string{"--add-label", "--remove-label"} {
+		_, stderr, err := runFJ("issue", "edit", "1", "-R", repo, "--title", "edited title", flag, "no-such-label")
+		if err == nil || !strings.Contains(stderr, "'no-such-label' not found") {
+			t.Errorf("issue edit %s: err = %v, stderr = %q, want gh's not found", flag, err, stderr)
+		}
+	}
+	issue, _, err := testClient.GetIssue(adminUser, "test-repo", 1)
+	if err != nil {
+		t.Fatalf("getting issue: %v", err)
+	}
+	if issue.Title == "edited title" {
+		t.Error("issue edit applied the title before failing on the unknown label")
+	}
+
+	if n := len(listTestRepoLabels(t)); n != labelsBefore {
+		t.Errorf("repo has %d labels after the failed commands, want %d", n, labelsBefore)
+	}
+}
+
+func listTestRepoLabels(t *testing.T) []*forgejo.Label {
+	t.Helper()
+	labels, _, err := testClient.ListRepoLabels(adminUser, "test-repo", forgejo.ListLabelsOptions{
+		ListOptions: forgejo.ListOptions{Page: 1, PageSize: 50},
+	})
+	if err != nil {
+		t.Fatalf("listing labels: %v", err)
+	}
+	return labels
 }

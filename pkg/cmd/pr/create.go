@@ -112,7 +112,7 @@ func createRun(opts *createOptions) error {
 	if len(opts.Labels) > 0 {
 		labelIDs, err := cmdutil.ResolveLabelIDs(client, repo.Owner, repo.Name, opts.Labels)
 		if err != nil {
-			return err
+			return fmt.Errorf("could not add label: %w", err)
 		}
 		createOpt.Labels = labelIDs
 	}
