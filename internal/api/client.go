@@ -1,5 +1,5 @@
 // Package api provides SDK-style wrappers for Forgejo API endpoints that
-// the upstream forgejo-sdk does not cover. Methods mirror the SDK's shape
+// the upstream forgejo-sdk does not fully cover. Methods mirror the SDK's shape
 // (owner/repo/index arguments, SDK types for payloads) so call sites read
 // the same whether they use the SDK or this package.
 package api
